@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { Button } from "@/components/ui/button";
@@ -13,16 +13,39 @@ import { useToast } from "@/hooks/use-toast";
 const SignIn = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [isSignUp, setIsSignUp] = useState(false);
+  const [email, setEmail] = useState("");
   const { toast } = useToast();
+  const navigate = useNavigate();
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Demo: redirect based on email for testing admin panels
+    if (email.includes("admin@")) {
+      toast({
+        title: "Welcome Admin!",
+        description: "Redirecting to admin dashboard...",
+      });
+      navigate("/admin");
+      return;
+    }
+    
+    if (email.includes("super@") || email.includes("superadmin@")) {
+      toast({
+        title: "Welcome Super Admin!",
+        description: "Redirecting to super admin dashboard...",
+      });
+      navigate("/superadmin");
+      return;
+    }
+    
     toast({
       title: isSignUp ? "Account Created!" : "Welcome Back!",
       description: isSignUp 
         ? "Your account has been created successfully." 
         : "You have signed in successfully.",
     });
+    navigate("/");
   };
 
   return (
@@ -67,8 +90,18 @@ const SignIn = () => {
                   <Label htmlFor="email">Email</Label>
                   <div className="relative">
                     <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input id="email" type="email" placeholder="you@example.com" className="pl-10" />
+                    <Input 
+                      id="email" 
+                      type="email" 
+                      placeholder="you@example.com" 
+                      className="pl-10"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                    />
                   </div>
+                  <p className="text-xs text-muted-foreground">
+                    Demo: Use "admin@" for admin panel, "super@" for superadmin
+                  </p>
                 </div>
 
                 <div className="space-y-2">
