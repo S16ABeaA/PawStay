@@ -4,7 +4,7 @@ import { Calendar, DollarSign, Star, Users, TrendingUp, Clock } from "lucide-rea
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 
 const recentBookings = [
   { id: 1, pet: "Max", owner: "John Smith", service: "Boarding", date: "Jan 30", status: "confirmed" },
@@ -21,42 +21,52 @@ const upcomingCheckIns = [
 ];
 
 const AdminDashboard = () => {
+  const navigate = useNavigate();
+
   return (
     <AdminLayout title="Dashboard" subtitle="Welcome back! Here's your business overview.">
       {/* Stats Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        <StatsCard
-          title="Total Bookings"
-          value="156"
-          change="+12% from last month"
-          changeType="positive"
-          icon={Calendar}
-          iconColor="text-primary"
-        />
-        <StatsCard
-          title="Revenue"
-          value="$12,450"
-          change="+8% from last month"
-          changeType="positive"
-          icon={DollarSign}
-          iconColor="text-success"
-        />
-        <StatsCard
-          title="Avg. Rating"
-          value="4.8"
-          change="Based on 89 reviews"
-          changeType="neutral"
-          icon={Star}
-          iconColor="text-rating"
-        />
-        <StatsCard
-          title="Occupancy"
-          value="78%"
-          change="+5% from last week"
-          changeType="positive"
-          icon={TrendingUp}
-          iconColor="text-accent"
-        />
+        <div onClick={() => navigate('/admin/bookings')} className="cursor-pointer">
+          <StatsCard
+            title="Total Bookings"
+            value="156"
+            change="+12% from last month"
+            changeType="positive"
+            icon={Calendar}
+            iconColor="text-primary"
+          />
+        </div>
+        <div onClick={() => navigate('/admin/settings')} className="cursor-pointer">
+          <StatsCard
+            title="Revenue"
+            value="$12,450"
+            change="+8% from last month"
+            changeType="positive"
+            icon={DollarSign}
+            iconColor="text-success"
+          />
+        </div>
+        <div onClick={() => navigate('/admin/reviews')} className="cursor-pointer">
+          <StatsCard
+            title="Avg. Rating"
+            value="4.8"
+            change="Based on 89 reviews"
+            changeType="neutral"
+            icon={Star}
+            iconColor="text-rating"
+          />
+        </div>
+        <div onClick={() => navigate('/admin/services')} className="cursor-pointer">
+          <StatsCard
+            title="Occupancy"
+            value="78%"
+            change="+5% from last week"
+            changeType="positive"
+            icon={TrendingUp}
+            iconColor="text-accent"
+          />
+        </div>
       </div>
 
       <div className="grid lg:grid-cols-3 gap-6">
@@ -73,7 +83,8 @@ const AdminDashboard = () => {
               {recentBookings.map((booking) => (
                 <div
                   key={booking.id}
-                  className="flex items-center justify-between p-3 rounded-lg bg-secondary/50"
+                  className="flex items-center justify-between p-3 rounded-lg bg-secondary/50 cursor-pointer hover:bg-secondary/70 transition-colors"
+                  onClick={() => navigate('/admin/bookings')}
                 >
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
@@ -127,9 +138,11 @@ const AdminDashboard = () => {
                 </div>
               ))}
             </div>
-            <Button variant="outline" className="w-full mt-4">
-              View Full Schedule
-            </Button>
+            <Link to="/admin/bookings">
+              <Button variant="outline" className="w-full mt-4">
+                View Full Schedule
+              </Button>
+            </Link>
           </CardContent>
         </Card>
       </div>

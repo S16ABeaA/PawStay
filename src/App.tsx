@@ -28,6 +28,8 @@ import SuperAdminDashboard from "./pages/superadmin/Dashboard";
 import SuperAdminUsers from "./pages/superadmin/Users";
 import SuperAdminProperties from "./pages/superadmin/Properties";
 import SuperAdminAnalytics from "./pages/superadmin/Analytics";
+import SuperAdminRevenue from "./pages/superadmin/Revenue";
+import SuperAdminSupport from "./pages/superadmin/Support";
 import SuperAdminSettings from "./pages/superadmin/Settings";
 
 const queryClient = new QueryClient();
@@ -64,6 +66,8 @@ const App = () => (
           <Route path="/superadmin/users" element={<SuperAdminUsers />} />
           <Route path="/superadmin/properties" element={<SuperAdminProperties />} />
           <Route path="/superadmin/analytics" element={<SuperAdminAnalytics />} />
+          <Route path="/superadmin/revenue" element={<SuperAdminRevenue />} />
+          <Route path="/superadmin/support" element={<SuperAdminSupport />} />
           <Route path="/superadmin/settings" element={<SuperAdminSettings />} />
           
           <Route path="*" element={<NotFound />} />

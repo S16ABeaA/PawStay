@@ -11,13 +11,13 @@ import {
   ArrowDownRight,
   Activity,
 } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 
 const stats = [
-  { label: "Total Users", value: "52,481", change: "+12.5%", trend: "up", icon: Users },
-  { label: "Active Properties", value: "2,847", change: "+8.2%", trend: "up", icon: Building2 },
-  { label: "Monthly Revenue", value: "$847,250", change: "+23.1%", trend: "up", icon: DollarSign },
-  { label: "Bookings Today", value: "1,284", change: "-2.4%", trend: "down", icon: Activity },
+  { label: "Total Users", value: "52,481", change: "+12.5%", trend: "up", icon: Users, link: "/superadmin/users" },
+  { label: "Active Properties", value: "2,847", change: "+8.2%", trend: "up", icon: Building2, link: "/superadmin/properties" },
+  { label: "Monthly Revenue", value: "$847,250", change: "+23.1%", trend: "up", icon: DollarSign, link: "/superadmin/revenue" },
+  { label: "Bookings Today", value: "1,284", change: "-2.4%", trend: "down", icon: Activity, link: "/superadmin/analytics" },
 ];
 
 const recentProperties = [
@@ -35,12 +35,18 @@ const topPerformers = [
 ];
 
 const SuperAdminDashboard = () => {
+  const navigate = useNavigate();
+
   return (
     <SuperAdminLayout title="Dashboard" subtitle="Platform overview and key metrics">
       {/* Stats Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         {stats.map((stat) => (
-          <Card key={stat.label} className="bg-slate-900 border-slate-800">
+          <Card 
+            key={stat.label} 
+            className="bg-slate-900 border-slate-800 cursor-pointer hover:bg-slate-800/50 transition-colors"
+            onClick={() => navigate(stat.link)}
+          >
             <CardContent className="p-5">
               <div className="flex items-start justify-between">
                 <div>
@@ -83,7 +89,8 @@ const SuperAdminDashboard = () => {
               {recentProperties.map((property, i) => (
                 <div
                   key={i}
-                  className="flex items-center justify-between p-3 rounded-lg bg-slate-800/50"
+                  className="flex items-center justify-between p-3 rounded-lg bg-slate-800/50 cursor-pointer hover:bg-slate-800 transition-colors"
+                  onClick={() => navigate('/superadmin/properties')}
                 >
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-lg bg-violet-600/20 flex items-center justify-center">
@@ -127,7 +134,8 @@ const SuperAdminDashboard = () => {
               {topPerformers.map((property, i) => (
                 <div
                   key={i}
-                  className="flex items-center justify-between p-3 rounded-lg bg-slate-800/50"
+                  className="flex items-center justify-between p-3 rounded-lg bg-slate-800/50 cursor-pointer hover:bg-slate-800 transition-colors"
+                  onClick={() => navigate('/superadmin/analytics')}
                 >
                   <div className="flex items-center gap-3">
                     <div className="w-8 h-8 rounded-full bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center text-sm font-bold text-white">

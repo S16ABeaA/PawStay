@@ -1,6 +1,7 @@
 import SuperAdminLayout from "@/components/superadmin/SuperAdminLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import {
   Table,
@@ -17,6 +18,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Search, Download, MoreHorizontal, UserPlus } from "lucide-react";
 import {
   DropdownMenu,
@@ -24,8 +32,10 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { useState } from "react";
+import { useToast } from "@/hooks/use-toast";
 
-const users = [
+const initialUsers = [
   { id: 1, name: "John Smith", email: "john@email.com", role: "customer", status: "active", joined: "2025-12-15", bookings: 8 },
   { id: 2, name: "Sarah Johnson", email: "sarah@hotel.com", role: "admin", status: "active", joined: "2025-11-20", bookings: 0 },
   { id: 3, name: "Happy Paws Hotel", email: "contact@happypaws.com", role: "admin", status: "active", joined: "2025-10-05", bookings: 0 },
@@ -36,6 +46,63 @@ const users = [
 ];
 
 const SuperAdminUsers = () => {
+  const [users, setUsers] = useState(initialUsers);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [roleFilter, setRoleFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [addUserDialogOpen, setAddUserDialogOpen] = useState(false);
+  const [viewUserDialogOpen, setViewUserDialogOpen] = useState(false);
+  const [selectedUser, setSelectedUser] = useState<typeof initialUsers[0] | null>(null);
+  const [newUser, setNewUser] = useState({ name: "", email: "", role: "customer" });
+  const { toast } = useToast();
+
+  const toggleUserStatus = (id: number) => {
+    setUsers(users.map(u => {
+      if (u.id === id) {
+        const newStatus = u.status === "active" ? "inactive" : "active";
+        toast({ title: `User ${newStatus === "active" ? "Activated" : "Deactivated"}`, description: `${u.name} has been ${newStatus === "active" ? "activated" : "deactivated"}.` });
+        return { ...u, status: newStatus };
+      }
+      return u;
+    }));
+  };
+
+  const deleteUser = (id: number) => {
+    const user = users.find(u => u.id === id);
+    setUsers(users.filter(u => u.id !== id));
+    toast({ title: "User Deleted", description: `${user?.name} has been removed.`, variant: "destructive" });
+  };
+
+  const handleAddUser = () => {
+    if (newUser.name && newUser.email) {
+      const user = {
+        id: users.length + 1,
+        name: newUser.name,
+        email: newUser.email,
+        role: newUser.role,
+        status: "active",
+        joined: new Date().toISOString().split('T')[0],
+        bookings: 0,
+      };
+      setUsers([...users, user]);
+      toast({ title: "User Added", description: `${user.name} has been added successfully.` });
+      setAddUserDialogOpen(false);
+      setNewUser({ name: "", email: "", role: "customer" });
+    }
+  };
+
+  const handleExport = () => {
+    toast({ title: "Export Started", description: "User data is being exported to CSV." });
+  };
+
+  const filteredUsers = users.filter(u => {
+    const matchesSearch = u.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      u.email.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesRole = roleFilter === "all" || u.role === roleFilter;
+    const matchesStatus = statusFilter === "all" || u.status === statusFilter;
+    return matchesSearch && matchesRole && matchesStatus;
+  });
+
   return (
     <SuperAdminLayout title="Users" subtitle="Manage platform users and property owners">
       {/* Filters */}
@@ -45,9 +112,11 @@ const SuperAdminUsers = () => {
           <Input 
             placeholder="Search users..." 
             className="pl-10 bg-slate-900 border-slate-700 text-white placeholder:text-slate-500"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
           />
         </div>
-        <Select defaultValue="all">
+        <Select value={roleFilter} onValueChange={setRoleFilter}>
           <SelectTrigger className="w-full md:w-40 bg-slate-900 border-slate-700 text-white">
             <SelectValue placeholder="Role" />
           </SelectTrigger>
@@ -57,7 +126,7 @@ const SuperAdminUsers = () => {
             <SelectItem value="admin">Admins</SelectItem>
           </SelectContent>
         </Select>
-        <Select defaultValue="all">
+        <Select value={statusFilter} onValueChange={setStatusFilter}>
           <SelectTrigger className="w-full md:w-40 bg-slate-900 border-slate-700 text-white">
             <SelectValue placeholder="Status" />
           </SelectTrigger>
@@ -68,11 +137,11 @@ const SuperAdminUsers = () => {
             <SelectItem value="pending">Pending</SelectItem>
           </SelectContent>
         </Select>
-        <Button variant="outline" className="gap-2 border-slate-700 text-slate-300 hover:bg-slate-800">
+        <Button variant="outline" className="gap-2 border-slate-700 text-slate-300 hover:bg-slate-800" onClick={handleExport}>
           <Download className="h-4 w-4" />
           Export
         </Button>
-        <Button className="gap-2 bg-violet-600 hover:bg-violet-700">
+        <Button className="gap-2 bg-violet-600 hover:bg-violet-700" onClick={() => setAddUserDialogOpen(true)}>
           <UserPlus className="h-4 w-4" />
           Add User
         </Button>
@@ -92,7 +161,7 @@ const SuperAdminUsers = () => {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {users.map((user) => (
+            {filteredUsers.map((user) => (
               <TableRow key={user.id} className="border-slate-800 hover:bg-slate-800/50">
                 <TableCell>
                   <div className="flex items-center gap-3">
@@ -140,12 +209,15 @@ const SuperAdminUsers = () => {
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="bg-slate-900 border-slate-700">
-                      <DropdownMenuItem className="text-slate-300 focus:bg-slate-800">View Details</DropdownMenuItem>
-                      <DropdownMenuItem className="text-slate-300 focus:bg-slate-800">Edit User</DropdownMenuItem>
-                      <DropdownMenuItem className="text-slate-300 focus:bg-slate-800">
+                      <DropdownMenuItem className="text-slate-300 focus:bg-slate-800" onClick={() => { setSelectedUser(user); setViewUserDialogOpen(true); }}>
+                        View Details
+                      </DropdownMenuItem>
+                      <DropdownMenuItem className="text-slate-300 focus:bg-slate-800" onClick={() => toggleUserStatus(user.id)}>
                         {user.status === "active" ? "Deactivate" : "Activate"}
                       </DropdownMenuItem>
-                      <DropdownMenuItem className="text-red-400 focus:bg-slate-800">Delete</DropdownMenuItem>
+                      <DropdownMenuItem className="text-red-400 focus:bg-slate-800" onClick={() => deleteUser(user.id)}>
+                        Delete
+                      </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </TableCell>
@@ -157,7 +229,7 @@ const SuperAdminUsers = () => {
 
       {/* Pagination */}
       <div className="flex items-center justify-between mt-4">
-        <p className="text-sm text-slate-400">Showing 1-7 of 52,481 users</p>
+        <p className="text-sm text-slate-400">Showing {filteredUsers.length} of {users.length} users</p>
         <div className="flex gap-2">
           <Button variant="outline" size="sm" disabled className="border-slate-700 text-slate-500">
             Previous
@@ -167,6 +239,102 @@ const SuperAdminUsers = () => {
           </Button>
         </div>
       </div>
+
+      {/* Add User Dialog */}
+      <Dialog open={addUserDialogOpen} onOpenChange={setAddUserDialogOpen}>
+        <DialogContent className="bg-slate-900 border-slate-700">
+          <DialogHeader>
+            <DialogTitle className="text-white">Add New User</DialogTitle>
+            <DialogDescription className="text-slate-400">Create a new user account</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label className="text-slate-300">Name</Label>
+              <Input 
+                value={newUser.name}
+                onChange={(e) => setNewUser({ ...newUser, name: e.target.value })}
+                className="bg-slate-800 border-slate-600 text-white"
+                placeholder="Enter name"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-slate-300">Email</Label>
+              <Input 
+                value={newUser.email}
+                onChange={(e) => setNewUser({ ...newUser, email: e.target.value })}
+                className="bg-slate-800 border-slate-600 text-white"
+                placeholder="Enter email"
+                type="email"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-slate-300">Role</Label>
+              <Select value={newUser.role} onValueChange={(v) => setNewUser({ ...newUser, role: v })}>
+                <SelectTrigger className="bg-slate-800 border-slate-600 text-white">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="bg-slate-900 border-slate-700">
+                  <SelectItem value="customer">Customer</SelectItem>
+                  <SelectItem value="admin">Admin</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex gap-2 justify-end pt-4">
+              <Button variant="outline" onClick={() => setAddUserDialogOpen(false)} className="border-slate-600 text-slate-300">
+                Cancel
+              </Button>
+              <Button onClick={handleAddUser} className="bg-violet-600 hover:bg-violet-700">
+                Add User
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* View User Dialog */}
+      <Dialog open={viewUserDialogOpen} onOpenChange={setViewUserDialogOpen}>
+        <DialogContent className="bg-slate-900 border-slate-700">
+          <DialogHeader>
+            <DialogTitle className="text-white">User Details</DialogTitle>
+          </DialogHeader>
+          {selectedUser && (
+            <div className="space-y-4">
+              <div className="flex items-center gap-4">
+                <div className="w-16 h-16 rounded-full bg-violet-600/20 flex items-center justify-center">
+                  <span className="text-2xl font-bold text-violet-400">{selectedUser.name[0]}</span>
+                </div>
+                <div>
+                  <p className="text-lg font-medium text-white">{selectedUser.name}</p>
+                  <p className="text-slate-400">{selectedUser.email}</p>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4 pt-4 border-t border-slate-700">
+                <div>
+                  <p className="text-sm text-slate-500">Role</p>
+                  <p className="text-white capitalize">{selectedUser.role}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-slate-500">Status</p>
+                  <p className="text-white capitalize">{selectedUser.status}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-slate-500">Joined</p>
+                  <p className="text-white">{selectedUser.joined}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-slate-500">Total Bookings</p>
+                  <p className="text-white">{selectedUser.bookings}</p>
+                </div>
+              </div>
+              <div className="flex gap-2 pt-4">
+                <Button variant="outline" onClick={() => setViewUserDialogOpen(false)} className="border-slate-600 text-slate-300">
+                  Close
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </SuperAdminLayout>
   );
 };
