@@ -7,8 +7,9 @@ import Index from "./pages/Index";
 import Hotels from "./pages/Hotels";
 import HotelDetail from "./pages/HotelDetail";
 import Grooming from "./pages/Grooming";
+import GroomingDetail from "./pages/GroomingDetail";
 import Veterinary from "./pages/Veterinary";
-import ShopDetail from "./pages/ShopDetail";
+import VeterinaryDetail from "./pages/VeterinaryDetail";
 import About from "./pages/About";
 import SignIn from "./pages/SignIn";
 import ListProperty from "./pages/ListProperty";
@@ -46,9 +47,10 @@ const App = () => (
           <Route path="/" element={<Index />} />
           <Route path="/hotels" element={<Hotels />} />
           <Route path="/hotels/:id" element={<HotelDetail />} />
-          <Route path="/shops/:id" element={<ShopDetail />} />
           <Route path="/grooming" element={<Grooming />} />
+          <Route path="/grooming/:id" element={<GroomingDetail />} />
           <Route path="/veterinary" element={<Veterinary />} />
+          <Route path="/veterinary/:id" element={<VeterinaryDetail />} />
           <Route path="/about" element={<About />} />
           <Route path="/signin" element={<SignIn />} />
           <Route path="/list-property" element={<ListProperty />} />
