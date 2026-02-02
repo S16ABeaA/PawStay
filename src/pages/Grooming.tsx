@@ -120,18 +120,20 @@ const Grooming = () => {
     <div className="min-h-screen bg-background">
       <Header />
        {/* Hero Section */}
-        <section className="py-16 md:py-24 bg-gradient-to-b from-accent/10 to-background">
+        <section className="py-16 md:py-24 bg-gradient-to-b from-orange-100/20 to-background">
           <div className="container">
             <div className="grid lg:grid-cols-2 gap-12 items-center">
               
               {/* Left Content */}
               <div>
-                <Badge className="bg-accent/10 text-accent border-accent/20 mb-4">
+                <Badge className="bg-orange-100 text-orange-600 border-orange-200 mb-4">
                   Professional Pet Grooming
                 </Badge>
                 <h1 className="font-display text-4xl md:text-5xl lg:text-6xl font-bold text-foreground mb-4">
                   Find Grooming Services for Your{" "}
-                  <span className="text-gradient">Furry Friend</span>
+                  <span className="text-gradient bg-gradient-to-r from-orange-400 via-pink-500 to-purple-500 bg-clip-text text-transparent">
+                    Furry Friend
+                  </span>
                 </h1>
                 <p className="text-lg text-muted-foreground mb-8 max-w-xl">
                   Connect with certified grooming salons offering top-quality services to keep your 
@@ -140,12 +142,12 @@ const Grooming = () => {
 
                 <div className="flex flex-wrap gap-4 mb-8">
                   <Link to="#salons">
-                    <Button variant="hero" size="xl" className="gap-2">
+                    <Button variant="hero" size="xl" className="gap-2 bg-orange-500 hover:bg-orange-600">
                       Browse Salons
                       <ArrowRight className="h-5 w-5" />
                     </Button>
                   </Link>
-                  <Button variant="outline" size="xl" className="gap-2">
+                  <Button variant="outline" size="xl" className="gap-2 border-orange-500 text-orange-600 hover:bg-orange-50">
                     View Gallery
                   </Button>
                 </div>
@@ -175,10 +177,10 @@ const Grooming = () => {
                   className="rounded-2xl shadow-elevated"
                 />
                 {/* Floating Info Card */}
-                <div className="absolute -bottom-6 -right-6 bg-card rounded-xl p-4 shadow-elevated">
+                <div className="absolute -bottom-6 -right-6 bg-card rounded-xl p-4 shadow-elevated border border-orange-200">
                   <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-full bg-accent/10 flex items-center justify-center">
-                      <Star className="h-6 w-6 text-accent" />
+                    <div className="w-12 h-12 rounded-full bg-orange-100 flex items-center justify-center">
+                      <Star className="h-6 w-6 text-orange-500" />
                     </div>
                     <div>
                       <p className="font-semibold">Featured Salons</p>
@@ -191,6 +193,7 @@ const Grooming = () => {
             </div>
           </div>
         </section>
+
 
         
       <main className="py-8">
