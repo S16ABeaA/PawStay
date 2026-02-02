@@ -2,11 +2,13 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import GroomingCard from "@/components/GroomingCard";
 import { Button } from "@/components/ui/button";
-import { SlidersHorizontal, ArrowUpDown, Grid3X3, List, MapPin, Star } from "lucide-react";
+import { SlidersHorizontal, ArrowUpDown, Grid3X3, List, MapPin, Star, ArrowRight } from "lucide-react";
 import { useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Slider } from "@/components/ui/slider";
+import { Badge } from "@/components/ui/badge";
+import { Link } from "react-router-dom";
 
 const groomingShops = [
   {
@@ -117,6 +119,80 @@ const Grooming = () => {
   return (
     <div className="min-h-screen bg-background">
       <Header />
+       {/* Hero Section */}
+        <section className="py-16 md:py-24 bg-gradient-to-b from-accent/10 to-background">
+          <div className="container">
+            <div className="grid lg:grid-cols-2 gap-12 items-center">
+              
+              {/* Left Content */}
+              <div>
+                <Badge className="bg-accent/10 text-accent border-accent/20 mb-4">
+                  Professional Pet Grooming
+                </Badge>
+                <h1 className="font-display text-4xl md:text-5xl lg:text-6xl font-bold text-foreground mb-4">
+                  Find Grooming Services for Your{" "}
+                  <span className="text-gradient">Furry Friend</span>
+                </h1>
+                <p className="text-lg text-muted-foreground mb-8 max-w-xl">
+                  Connect with certified grooming salons offering top-quality services to keep your 
+                  pet looking and feeling their absolute best.
+                </p>
+
+                <div className="flex flex-wrap gap-4 mb-8">
+                  <Link to="#salons">
+                    <Button variant="hero" size="xl" className="gap-2">
+                      Browse Salons
+                      <ArrowRight className="h-5 w-5" />
+                    </Button>
+                  </Link>
+                  <Button variant="outline" size="xl" className="gap-2">
+                    View Gallery
+                  </Button>
+                </div>
+
+                {/* Stats Section */}
+                <div className="flex gap-8">
+                  <div>
+                    <p className="text-3xl font-bold text-foreground">100+</p>
+                    <p className="text-sm text-muted-foreground">Salons Available</p>
+                  </div>
+                  <div>
+                    <p className="text-3xl font-bold text-foreground">20k+</p>
+                    <p className="text-sm text-muted-foreground">Pets Groomed</p>
+                  </div>
+                  <div>
+                    <p className="text-3xl font-bold text-foreground">4.9★</p>
+                    <p className="text-sm text-muted-foreground">Average Rating</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Right Image */}
+              <div className="relative hidden lg:block">
+                <img
+                  src="https://images.unsplash.com/photo-1516734212186-a967f81ad0d7?w=600&auto=format&fit=crop"
+                  alt="Pet grooming"
+                  className="rounded-2xl shadow-elevated"
+                />
+                {/* Floating Info Card */}
+                <div className="absolute -bottom-6 -right-6 bg-card rounded-xl p-4 shadow-elevated">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-full bg-accent/10 flex items-center justify-center">
+                      <Star className="h-6 w-6 text-accent" />
+                    </div>
+                    <div>
+                      <p className="font-semibold">Featured Salons</p>
+                      <p className="text-sm text-muted-foreground">Top-rated and trusted</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </section>
+
+        
       <main className="py-8">
         <div className="container">
           {/* Page Header */}

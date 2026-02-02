@@ -7,6 +7,7 @@ import { useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Slider } from "@/components/ui/slider";
+import { Badge } from "@/components/ui/badge";
 
 const hotels = [
   {
@@ -117,6 +118,75 @@ const Hotels = () => {
   return (
     <div className="min-h-screen bg-background">
       <Header />
+      {/* Hero Section */}
+      <section className="py-16 md:py-24 bg-gradient-to-b from-accent/10 to-background">
+        <div className="container">
+          <div className="grid lg:grid-cols-2 gap-12 items-center">
+            
+            {/* Left Content */}
+            <div>
+              <Badge className="bg-accent/10 text-accent border-accent/20 mb-4">
+                Pet Hotels
+              </Badge>
+              <h1 className="font-display text-4xl md:text-5xl lg:text-6xl font-bold text-foreground mb-4">
+                Find the Perfect Stay for Your{" "}
+                <span className="text-gradient">Furry Friend</span>
+              </h1>
+              <p className="text-lg text-muted-foreground mb-8">
+                Discover pet-friendly hotels and resorts offering comfort, safety, and top-notch amenities 
+                so your pet enjoys a happy and stress-free stay.
+              </p>
+
+              <div className="flex flex-wrap gap-4 mb-8">
+                <Button variant="hero" size="xl" className="gap-2">
+                  Browse Hotels
+                </Button>
+                <Button variant="outline" size="xl" className="gap-2">
+                  Contact: (555) PET-CARE
+                </Button>
+              </div>
+
+              <div className="flex gap-8">
+                <div>
+                  <p className="text-3xl font-bold text-foreground">8+</p>
+                  <p className="text-sm text-muted-foreground">Cities Covered</p>
+                </div>
+                <div>
+                  <p className="text-3xl font-bold text-foreground">50+</p>
+                  <p className="text-sm text-muted-foreground">Hotels Available</p>
+                </div>
+                <div>
+                  <p className="text-3xl font-bold text-foreground">4.9★</p>
+                  <p className="text-sm text-muted-foreground">Average Rating</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Right Image */}
+            <div className="relative hidden lg:block">
+              <img
+                src="https://images.unsplash.com/photo-1587300003388-59208cc962cb?w=600&auto=format&fit=crop"
+                alt="Pet hotel"
+                className="rounded-2xl shadow-elevated"
+              />
+              {/* Floating Info Card */}
+              <div className="absolute -bottom-6 -right-6 bg-card rounded-xl p-4 shadow-elevated">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 rounded-full bg-accent/10 flex items-center justify-center">
+                    <Star className="h-6 w-6 text-accent" />
+                  </div>
+                  <div>
+                    <p className="font-semibold">Available Rooms</p>
+                    <p className="text-sm text-muted-foreground">2–5 per hotel</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </section>
+
       <main className="py-8">
         <div className="container">
           {/* Page Header */}
