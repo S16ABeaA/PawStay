@@ -10,10 +10,10 @@ const Footer = () => {
       { label: "Blog", href: "#" },
     ],
     services: [
-      { label: "Pet Hotels", href: "#" },
-      { label: "Grooming", href: "#" },
-      { label: "Veterinary", href: "#" },
-      { label: "Pet Taxi", href: "#" },
+      { label: "Pet Hotels", href: "/hotels" },
+      { label: "Grooming", href: "/grooming" },
+      { label: "Veterinary", href: "/veterinary" }//,
+      //{ label: "Pet Taxi", href: "#" },
     ],
     support: [
       { label: "Help Center", href: "#" },

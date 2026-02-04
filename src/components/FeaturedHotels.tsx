@@ -93,7 +93,7 @@ const FeaturedHotels = () => {
               Featured Pet Hotels
             </h2>
             <p className="text-muted-foreground">
-              Handpicked stays loved by pets and their owners
+              Handpicked stays loved by fur babies and their parents
             </p>
           </div>
 

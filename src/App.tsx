@@ -17,6 +17,7 @@ import Favorites from "./pages/Favorites";
 import Booking from "./pages/Booking";
 import SearchResults from "./pages/SearchResults";
 import NotFound from "./pages/NotFound";
+import ScrollToTop from "./components/ScrollToTop";
 
 // Admin pages
 import AdminDashboard from "./pages/admin/Dashboard";
@@ -42,6 +43,7 @@ const App = () => (
       <Toaster />
       <Sonner />
       <BrowserRouter>
+      <ScrollToTop />
         <Routes>
           {/* Public routes */}
           <Route path="/" element={<Index />} />
