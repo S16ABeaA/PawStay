@@ -493,10 +493,10 @@ const About = () => {
                 <motion.div
                   animate={{ y: [0, -15, 0], rotate: [-2, 2, -2] }}
                   transition={{ duration: 5, repeat: Infinity, ease: "easeInOut" }}
-                  className="w-40 h-40 lg:w-48 lg:h-48 rounded-full overflow-hidden border-4 border-primary/30 shadow-glow"
+                  className="w-[32vw] max-w-48 lg:max-w-56 aspect-square rounded-full overflow-hidden border-4 border-primary/30 shadow-glow"
                 >
                   <ImageWithFallback
-                    src="https://images.unsplash.com/photo-1762110098942-f967f5c08fd5?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxoYXBweSUyMGdvbGRlbiUyMHJldHJpZXZlciUyMHBldCUyMGNhcmV8ZW58MXx8fHwxNzcwMjEzMjg5fDA&ixlib=rb-4.1.0&q=80&w=1080"
+                    src="https://images.unsplash.com/photo-1762110098942-f967f5c08fd5?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxoYXBweSUyMGggbGRlbiUyMHJldHJpZXZlciUyMHBldCUyMGNhcmV8ZW58MXx8fHwxNzcwMjEzMjg5fDA&ixlib=rb-4.1.0&q=80&w=1080"
                     alt="Happy golden retriever"
                     className="w-full h-full object-cover"
                   />
@@ -512,10 +512,10 @@ const About = () => {
                 <motion.div
                   animate={{ y: [0, -10, 0], rotate: [2, -2, 2] }}
                   transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
-                  className="w-28 h-28 lg:w-36 lg:h-36 rounded-2xl overflow-hidden border-4 border-accent/30 shadow-xl"
+                  className="w-[24vw] max-w-36 lg:max-w-40 aspect-square rounded-2xl overflow-hidden border-4 border-accent/30 shadow-xl"
                 >
-                  <ImageWithFallback
-                    src="https://images.unsplash.com/photo-1586796304259-5fa44d5e3f71?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxzbWFsbCUyMGRvZyUyMHBvcnRyYWl0JTIwd2hpdGV8ZW58MXx8fHwxNzcwMjEzMjkyfDA&ixlib=rb-4.1.0&q=80&w=1080"
+                 <ImageWithFallback
+                    src="https://images.unsplash.com/photo-1586796304259-5fa44d5e3f71?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHxzbWFsbCUyMGRvZyUyMHBvcnRyYWl0JTIwd2hpdGV8ZW58MXx8fHwxNzcwMjEzMjkyfDA&ixlib=rb-4.1.0&q=80&w=1080"
                     alt="Cute small dog"
                     className="w-full h-full object-cover"
                   />
@@ -748,26 +748,6 @@ const About = () => {
             }}
           />
           
-          {/* Decorative dog image - professional pet hotel */}
-          <motion.div 
-            className="absolute bottom-10 right-10 hidden lg:block"
-            initial={{ opacity: 0, scale: 0.8, y: 50 }}
-            whileInView={{ opacity: 1, scale: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.8 }}
-          >
-            <motion.div
-              animate={{ y: [0, -12, 0] }}
-              transition={{ duration: 7, repeat: Infinity, ease: "easeInOut" }}
-              className="w-48 h-48 lg:w-56 lg:h-56 rounded-3xl overflow-hidden border-4 border-primary/20 shadow-elevated"
-            >
-              <ImageWithFallback
-                src="https://images.unsplash.com/photo-1759603185601-78b0bdf7cfd3?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxwcm9mZXNzaW9uYWwlMjBwZXQlMjBob3RlbCUyMGRvZ3xlbnwxfHx8fDE3NzAyMTMyOTF8MA&ixlib=rb-4.1.0&q=80&w=1080"
-                alt="Professional pet hotel"
-                className="w-full h-full object-cover"
-              />
-            </motion.div>
-          </motion.div>
           
           <div className="container relative">
             <div className="grid lg:grid-cols-2 gap-16 items-center">
