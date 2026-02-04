@@ -1,0 +1,87 @@
+{
+  "hero": {
+    "badge": "About PawStay",
+    "title": "Professional Pet Care, Delivered with Heart",
+    "subtitle": "PawStay connects pet parents with verified, caring providers—backed by 24/7 support, secure payments, and transparent reviews.",
+    "primaryCta": {
+      "label": "Explore Services",
+      "href": "/hotels"
+    },
+    "secondaryCta": {
+      "label": "List Your Property",
+      "href": "/list-property"
+    },
+    "video": {
+      "src": "https://videos.pexels.com/video-files/1108099/1108099-hd_1920_1080_30fps.mp4",
+      "poster": "https://images.unsplash.com/photo-1548199973-03cce0bbc87b?w=1200&auto=format&fit=crop"
+    }
+  },
+  "stats": [
+    { "value": "2,500+", "label": "Pet Hotels" },
+    { "value": "500K+", "label": "Happy Pets" },
+    { "value": "50K+", "label": "Pet Parents" },
+    { "value": "15+", "label": "Countries" }
+  ],
+  "values": [
+    {
+      "icon": "Heart",
+      "title": "Pet-First Approach",
+      "description": "Every policy, design choice, and partner is evaluated for comfort, safety, and wellbeing."
+    },
+    {
+      "icon": "Shield",
+      "title": "Trust & Safety",
+      "description": "We verify providers, review documents, and monitor stays for consistent quality."
+    },
+    {
+      "icon": "Users",
+      "title": "Community",
+      "description": "We build connections between pet parents and passionate caregivers worldwide."
+    },
+    {
+      "icon": "Award",
+      "title": "Excellence",
+      "description": "We continuously improve our platform through data, feedback, and service innovation."
+    }
+  ],
+  "highlights": [
+    "Verified providers and secure onboarding",
+    "Photo and video updates during stays",
+    "Flexible booking and cancellation",
+    "24/7 support with local escalation"
+  ],
+  "milestones": [
+    { "year": "2020", "title": "Founded", "description": "Launched the first PawStay marketplace with 120 trusted providers." },
+    { "year": "2022", "title": "Growth", "description": "Expanded to 15+ countries and launched secure payments." },
+    { "year": "2024", "title": "Innovation", "description": "Released smart matching and real-time stay updates." },
+    { "year": "2026", "title": "Future", "description": "Scaling our network for next-generation pet care." }
+  ],
+  "team": [
+    {
+      "name": "Alex Thompson",
+      "role": "CEO & Founder",
+      "image": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=300&auto=format&fit=crop"
+    },
+    {
+      "name": "Maria Garcia",
+      "role": "Head of Operations",
+      "image": "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=300&auto=format&fit=crop"
+    },
+    {
+      "name": "David Kim",
+      "role": "Chief Technology Officer",
+      "image": "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=300&auto=format&fit=crop"
+    },
+    {
+      "name": "Sophie Martin",
+      "role": "Head of Customer Success",
+      "image": "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=300&auto=format&fit=crop"
+    }
+  ],
+  "featureVideo": {
+    "title": "Care in Action",
+    "description": "See how verified caregivers provide safe, clean, and joyful stays for every pet.",
+    "src": "https://videos.pexels.com/video-files/6882786/6882786-hd_1920_1080_30fps.mp4",
+    "poster": "https://images.unsplash.com/photo-1518717758536-85ae29035b6d?w=1200&auto=format&fit=crop"
+  }
+}
