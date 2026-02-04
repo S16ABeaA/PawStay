@@ -17,7 +17,7 @@ import Favorites from "./pages/Favorites";
 import Booking from "./pages/Booking";
 import SearchResults from "./pages/SearchResults";
 import NotFound from "./pages/NotFound";
-import ScrollToTop from "./components/ScrollToTop";
+import Profile from "./pages/Profile";
 
 // Admin pages
 import AdminDashboard from "./pages/admin/Dashboard";
@@ -43,7 +43,6 @@ const App = () => (
       <Toaster />
       <Sonner />
       <BrowserRouter>
-      <ScrollToTop />
         <Routes>
           {/* Public routes */}
           <Route path="/" element={<Index />} />
@@ -59,6 +58,7 @@ const App = () => (
           <Route path="/favorites" element={<Favorites />} />
           <Route path="/booking" element={<Booking />} />
           <Route path="/search" element={<SearchResults />} />
+          <Route path="/profile" element={<Profile />} />
           
           {/* Admin routes */}
           <Route path="/admin" element={<AdminDashboard />} />

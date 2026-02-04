@@ -1,10 +1,16 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Menu, X, PawPrint, User, Heart } from "lucide-react";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 
 const Header = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const location = useLocation();
+  
+  // Simulated logged-in state - in real app, this would come from auth context
+  const isLoggedIn = location.pathname === "/" || location.pathname.startsWith("/admin");
+  const user = { firstName: "John", lastName: "Doe" };
 
   return (
     <header className="sticky top-0 z-50 w-full border-b border-border/50 bg-background/80 backdrop-blur-lg">
@@ -42,12 +48,24 @@ const Header = () => {
               <Heart className="h-5 w-5" />
             </Button>
           </Link>
-          <Link to="/signin">
-            <Button variant="outline" size="sm">
-              <User className="h-4 w-4 mr-2" />
-              Sign In
-            </Button>
-          </Link>
+          
+          {isLoggedIn ? (
+            <Link to="/profile">
+              <Avatar className="h-9 w-9 cursor-pointer hover:ring-2 hover:ring-primary/50 transition-all">
+                <AvatarFallback className="bg-gradient-hero text-sm text-white">
+                  {user.firstName[0]}{user.lastName[0]}
+                </AvatarFallback>
+              </Avatar>
+            </Link>
+          ) : (
+            <Link to="/signin">
+              <Button variant="outline" size="sm">
+                <User className="h-4 w-4 mr-2" />
+                Sign In
+              </Button>
+            </Link>
+          )}
+          
           <Link to="/list-property">
             <Button variant="hero" size="sm">
               List Your Property
@@ -75,7 +93,22 @@ const Header = () => {
             <Link to="/veterinary" className="py-2 text-sm font-medium text-foreground" onClick={() => setIsMenuOpen(false)}>Veterinary</Link>
             <Link to="/about" className="py-2 text-sm font-medium text-foreground" onClick={() => setIsMenuOpen(false)}>About</Link>
             <hr className="border-border my-2" />
-            <Link to="/signin" onClick={() => setIsMenuOpen(false)}><Button variant="outline" className="w-full">Sign In</Button></Link>
+            {isLoggedIn ? (
+              <Link to="/profile" onClick={() => setIsMenuOpen(false)}>
+                <Button variant="outline" className="w-full gap-2">
+                  <Avatar className="h-6 w-6">
+                    <AvatarFallback className="bg-gradient-hero text-xs text-white">
+                      {user.firstName[0]}{user.lastName[0]}
+                    </AvatarFallback>
+                  </Avatar>
+                  My Profile
+                </Button>
+              </Link>
+            ) : (
+              <Link to="/signin" onClick={() => setIsMenuOpen(false)}>
+                <Button variant="outline" className="w-full">Sign In</Button>
+              </Link>
+            )}
             <Link to="/list-property" onClick={() => setIsMenuOpen(false)}><Button variant="hero" className="w-full">List Your Property</Button></Link>
           </nav>
         </div>

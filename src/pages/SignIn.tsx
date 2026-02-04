@@ -100,7 +100,7 @@ const SignIn = () => {
                     />
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    Demo: Use "admin@" for admin panel, "super@" for superadmin
+                    Demo: Any email → User profile, "admin@" → Admin, "super@" → SuperAdmin
                   </p>
                 </div>
 
