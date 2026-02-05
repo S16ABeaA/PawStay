@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useMemo, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { Button } from "@/components/ui/button";
@@ -11,8 +11,18 @@ import { PawPrint, Mail, Lock, Eye, EyeOff } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 const SignIn = () => {
+  const location = useLocation();
+  const searchParams = useMemo(
+    () => new URLSearchParams(location.search),
+    [location.search],
+  );
+  const intent = searchParams.get("intent");
+  const mode = searchParams.get("mode");
+  const redirectTo = searchParams.get("redirect");
+  const isPartnerFlow = intent === "partner";
+
   const [showPassword, setShowPassword] = useState(false);
-  const [isSignUp, setIsSignUp] = useState(false);
+  const [isSignUp, setIsSignUp] = useState(() => mode === "signup");
   const [email, setEmail] = useState("");
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -41,12 +51,28 @@ const SignIn = () => {
     
     toast({
       title: isSignUp ? "Account Created!" : "Welcome Back!",
-      description: isSignUp 
-        ? "Your account has been created successfully." 
+      description: isSignUp
+        ? "Your account has been created successfully."
         : "You have signed in successfully.",
     });
-    navigate("/");
+    navigate(redirectTo || "/");
   };
+
+  const heading = isPartnerFlow
+    ? isSignUp
+      ? "Create your partner account"
+      : "Sign in to your partner account"
+    : isSignUp
+      ? "Create Account"
+      : "Welcome Back";
+
+  const subheading = isPartnerFlow
+    ? isSignUp
+      ? "Create an account to list and manage your business."
+      : "Sign in to manage your business."
+    : isSignUp
+      ? "Join the PawStay family today"
+      : "Sign in to access your account";
 
   return (
     <div className="min-h-screen bg-background">
@@ -60,14 +86,9 @@ const SignIn = () => {
                 <PawPrint className="h-8 w-8 text-primary-foreground" />
               </div>
               <h1 className="font-display text-2xl md:text-3xl font-bold text-foreground">
-                {isSignUp ? "Create Account" : "Welcome Back"}
+                {heading}
               </h1>
-              <p className="text-muted-foreground mt-2">
-                {isSignUp 
-                  ? "Join the PawStay family today" 
-                  : "Sign in to access your account"
-                }
-              </p>
+              <p className="text-muted-foreground mt-2">{subheading}</p>
             </div>
 
             {/* Form Card */}

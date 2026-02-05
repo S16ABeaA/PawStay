@@ -86,7 +86,7 @@ const defaultContent: AboutContent = {
     subtitle:
       "PawStay connects pet parents with verified, caring providers—backed by 24/7 support, secure payments, and transparent reviews.",
     primaryCta: { label: "Explore Services", href: "/hotels" },
-    secondaryCta: { label: "List Your Property", href: "/list-property" },
+    secondaryCta: { label: "List Your Property", href: "/signin?intent=partner&mode=signup&redirect=/list-property" },
   },
   stats: [
     { value: 2500, label: "Pet Hotels", suffix: "+" },
@@ -964,7 +964,7 @@ const About = () => {
                   </a>
                 </motion.div>
                 <motion.div variants={pop}>
-                  <a href="/list-property">
+                  <a href="/signin?intent=partner&mode=signup&redirect=/list-property">
                     <motion.div whileHover={{ scale: 1.08 }} whileTap={{ scale: 0.95 }}>
                       <Button
                         variant="outline"

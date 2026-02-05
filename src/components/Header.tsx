@@ -66,7 +66,7 @@ const Header = () => {
             </Link>
           )}
           
-          <Link to="/list-property">
+          <Link to="/signin?intent=partner&mode=signup&redirect=/list-property">
             <Button variant="hero" size="sm">
               List Your Property
             </Button>
@@ -109,7 +109,9 @@ const Header = () => {
                 <Button variant="outline" className="w-full">Sign In</Button>
               </Link>
             )}
-            <Link to="/list-property" onClick={() => setIsMenuOpen(false)}><Button variant="hero" className="w-full">List Your Property</Button></Link>
+            <Link to="/signin?intent=partner&mode=signup&redirect=/list-property" onClick={() => setIsMenuOpen(false)}>
+              <Button variant="hero" className="w-full">List Your Property</Button>
+            </Link>
           </nav>
         </div>
       )}

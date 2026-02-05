@@ -34,11 +34,11 @@ import {
 import { useToast } from "@/hooks/use-toast";
 
 const steps = [
-  { number: 1, title: "Property Type" },
-  { number: 2, title: "Basic Info" },
-  { number: 3, title: "Services" },
-  { number: 4, title: "Documents" },
-  { number: 5, title: "Review" },
+  { number: 1, title: "Establishment Info" },
+  { number: 2, title: "Property Setup" },
+  { number: 3, title: "Photos" },
+  { number: 4, title: "Pricing & Calendar" },
+  { number: 5, title: "Legal Info" },
 ];
 
 const propertyTypes = [
@@ -321,8 +321,17 @@ const ListProperty = () => {
                     <div className="space-y-6">
                       <div>
                         <h2 className="text-xl font-semibold text-foreground mb-2">
-                          What type of property are you listing?
+                          Establishment Info
                         </h2>
+                        <p className="text-muted-foreground">
+                          Tell us about your property so we can
+                          create your listing.
+                        </p>
+                      </div>
+                      <div>
+                        <h3 className="text-lg font-semibold text-foreground mb-2">
+                          Property Type
+                        </h3>
                         <p className="text-muted-foreground">
                           Select the category that best
                           describes your business
@@ -352,11 +361,20 @@ const ListProperty = () => {
                     <div className="space-y-6">
                       <div>
                         <h2 className="text-xl font-semibold text-foreground mb-2">
-                          Tell us about your property
+                          Establishment Info
                         </h2>
                         <p className="text-muted-foreground">
                           This information will be displayed on
                           your listing
+                        </p>
+                      </div>
+                      <div>
+                        <h3 className="text-lg font-semibold text-foreground mb-2">
+                          Basic Info
+                        </h3>
+                        <p className="text-muted-foreground">
+                          Provide your business and contact
+                          details
                         </p>
                       </div>
                       <div className="grid md:grid-cols-2 gap-4">
