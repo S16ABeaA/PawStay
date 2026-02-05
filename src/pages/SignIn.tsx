@@ -29,6 +29,8 @@ const SignIn = () => {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+
+    localStorage.setItem("pawstay.authenticated", "true");
     
     // Demo: redirect based on email for testing admin panels
     if (email.includes("admin@")) {

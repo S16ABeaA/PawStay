@@ -9,15 +9,23 @@ interface Step {
 interface StepIndicatorProps {
   steps: Step[];
   currentStep: number;
+  establishmentSubstep?: number;
 }
 
-const StepIndicator = ({ steps, currentStep }: StepIndicatorProps) => {
+const StepIndicator = ({ steps, currentStep, establishmentSubstep = 1 }: StepIndicatorProps) => {
   return (
     <div className="flex items-center justify-between w-full max-w-2xl mx-auto mb-8">
       {steps.map((step, index) => {
         const isEstablishmentInfo = step.title === "Establishment Info";
-        const isDuplicateEstablishmentInfo =
-          isEstablishmentInfo && steps[index - 1]?.title === "Establishment Info";
+        const establishmentFirstComplete = establishmentSubstep >= 2 || currentStep > 1;
+        const establishmentSecondComplete = currentStep > 1;
+        const establishmentComplete = currentStep > 1;
+        const isStepComplete = isEstablishmentInfo
+          ? establishmentComplete
+          : currentStep > step.number;
+        const isStepActive = isEstablishmentInfo
+          ? currentStep === 1
+          : currentStep === step.number;
 
         return (
           <div key={step.number} className="flex items-center flex-1">
@@ -25,24 +33,36 @@ const StepIndicator = ({ steps, currentStep }: StepIndicatorProps) => {
               <div
                 className={cn(
                   "w-10 h-10 rounded-full flex items-center justify-center font-semibold text-sm transition-all",
-                  currentStep > step.number
+                  isStepComplete
                     ? "bg-success text-success-foreground"
-                    : currentStep === step.number
+                    : isStepActive
                     ? "bg-primary text-primary-foreground"
                     : "bg-secondary text-muted-foreground"
                 )}
               >
-                {currentStep > step.number ? (
+                {isStepComplete ? (
                   <Check className="h-5 w-5" />
                 ) : (
                   step.number
                 )}
               </div>
-              {!isDuplicateEstablishmentInfo && (
+              {
+                !isEstablishmentInfo && (
                 <span
                   className={cn(
                     "text-xs mt-2 font-medium hidden sm:block",
                     currentStep >= step.number ? "text-foreground" : "text-muted-foreground"
+                  )}
+                >
+                  {step.title}
+                </span>
+              )
+              }
+              {isEstablishmentInfo && (
+                <span
+                  className={cn(
+                    "text-xs mt-2 font-medium hidden sm:block",
+                    currentStep >= 1 ? "text-foreground" : "text-muted-foreground"
                   )}
                 >
                   {step.title}
@@ -53,13 +73,13 @@ const StepIndicator = ({ steps, currentStep }: StepIndicatorProps) => {
                   <span
                     className={cn(
                       "h-1.5 w-8 rounded-full",
-                      currentStep >= 1 ? "bg-primary" : "bg-secondary"
+                      establishmentFirstComplete ? "bg-primary" : "bg-secondary"
                     )}
                   />
                   <span
                     className={cn(
                       "h-1.5 w-8 rounded-full",
-                      currentStep >= 2 ? "bg-primary" : "bg-secondary"
+                      establishmentSecondComplete ? "bg-primary" : "bg-secondary"
                     )}
                   />
                 </div>
@@ -69,7 +89,7 @@ const StepIndicator = ({ steps, currentStep }: StepIndicatorProps) => {
               <div
                 className={cn(
                   "flex-1 h-1 mx-2 rounded-full",
-                  currentStep > step.number ? "bg-success" : "bg-secondary"
+                  isStepComplete ? "bg-success" : "bg-secondary"
                 )}
               />
             )}

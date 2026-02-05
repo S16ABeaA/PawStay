@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Menu, X, PawPrint, User, Heart } from "lucide-react";
@@ -8,8 +8,11 @@ const Header = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const location = useLocation();
   
-  // Simulated logged-in state - in real app, this would come from auth context
-  const isLoggedIn = location.pathname === "/" || location.pathname.startsWith("/admin");
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  useEffect(() => {
+    const isSignedIn = typeof window !== "undefined" && localStorage.getItem("pawstay.authenticated") === "true";
+    setIsLoggedIn(isSignedIn);
+  }, [location.pathname]);
   const user = { firstName: "John", lastName: "Doe" };
 
   return (
@@ -66,7 +69,13 @@ const Header = () => {
             </Link>
           )}
           
-          <Link to="/signin?intent=partner&mode=signup&redirect=/list-property">
+          <Link
+            to={
+              isLoggedIn
+                ? "/list-property"
+                : "/signin?intent=partner&mode=signup&redirect=/list-property"
+            }
+          >
             <Button variant="hero" size="sm">
               List Your Property
             </Button>
@@ -109,7 +118,14 @@ const Header = () => {
                 <Button variant="outline" className="w-full">Sign In</Button>
               </Link>
             )}
-            <Link to="/signin?intent=partner&mode=signup&redirect=/list-property" onClick={() => setIsMenuOpen(false)}>
+            <Link
+              to={
+                isLoggedIn
+                  ? "/list-property"
+                  : "/signin?intent=partner&mode=signup&redirect=/list-property"
+              }
+              onClick={() => setIsMenuOpen(false)}
+            >
               <Button variant="hero" className="w-full">List Your Property</Button>
             </Link>
           </nav>

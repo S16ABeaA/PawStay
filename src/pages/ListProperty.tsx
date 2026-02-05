@@ -4,11 +4,12 @@ import Footer from "@/components/Footer";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import PropertyTypeCard from "@/components/property-listing/PropertyTypeCard";
 import StepIndicator from "@/components/property-listing/StepIndicator";
-import EarningsCalculator from "@/components/property-listing/EarningsCalculator";
+import { MapContainer, Marker, TileLayer, useMapEvents } from "react-leaflet";
+import L from "leaflet";
+import "leaflet/dist/leaflet.css";
 import {
   Building2,
   Scissors,
@@ -21,8 +22,6 @@ import {
   Shield,
   CheckCircle2,
   Clock,
-  Globe,
-  Headphones,
   MapPin,
   Phone,
   Mail,
@@ -62,28 +61,6 @@ const propertyTypes = [
   },
 ];
 
-const benefits = [
-  {
-    icon: Globe,
-    title: "Global Reach",
-    description: "Access millions of pet parents worldwide",
-  },
-  {
-    icon: Shield,
-    title: "Secure Payments",
-    description: "Guaranteed payouts every month",
-  },
-  {
-    icon: Headphones,
-    title: "24/7 Support",
-    description: "Dedicated partner support team",
-  },
-  {
-    icon: TrendingUp,
-    title: "Growth Tools",
-    description: "Analytics and marketing tools",
-  },
-];
 
 const hotelAmenities = [
   "24/7 Supervision",
@@ -121,19 +98,26 @@ const vetServices = [
 const ListProperty = () => {
   const { toast } = useToast();
   const [currentStep, setCurrentStep] = useState(1);
+  const [establishmentStep, setEstablishmentStep] = useState(1);
   const [selectedType, setSelectedType] = useState<
     string | null
   >(null);
   const [formData, setFormData] = useState({
     propertyName: "",
-    address: "",
+    addressSearch: "",
+    addressLine2: "",
+    country: "",
     city: "",
+    zipCode: "",
+    latitude: 14.5995,
+    longitude: 120.9842,
     phone: "",
     ownerName: "",
     email: "",
     password: "",
     confirmPassword: "",
     description: "",
+    isPinAccurate: true,
     services: [] as string[],
     propertyImages: [] as File[],
     lguPermits: [] as File[],
@@ -154,6 +138,81 @@ const ListProperty = () => {
     }
   };
 
+  const redPinIcon = useMemo(
+    () =>
+      L.icon({
+        iconUrl:
+          "data:image/svg+xml;utf8," +
+          encodeURIComponent(
+            `<svg xmlns='http://www.w3.org/2000/svg' width='32' height='46' viewBox='0 0 32 46'>
+              <path d='M16 0C7.7 0 1 6.7 1 15c0 10.5 15 31 15 31s15-20.5 15-31C31 6.7 24.3 0 16 0z' fill='#e11d48'/>
+              <circle cx='16' cy='15' r='6' fill='white'/>
+            </svg>`,
+          ),
+        iconSize: [32, 46],
+        iconAnchor: [16, 46],
+      }),
+    [],
+  );
+
+  const reverseGeocode = async (lat: number, lng: number) => {
+    try {
+      const params = new URLSearchParams({
+        format: "json",
+        lat: String(lat),
+        lon: String(lng),
+        addressdetails: "1",
+      });
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?${params.toString()}`,
+        {
+          headers: {
+            Accept: "application/json",
+          },
+        },
+      );
+      if (!response.ok) return;
+      const data = await response.json();
+      const address = data?.address ?? {};
+      setFormData((prev) => ({
+        ...prev,
+        latitude: lat,
+        longitude: lng,
+        addressSearch: data?.display_name ?? prev.addressSearch,
+        country: address.country ?? prev.country,
+        city:
+          address.city ??
+          address.town ??
+          address.village ??
+          address.state ??
+          prev.city,
+        zipCode: address.postcode ?? prev.zipCode,
+      }));
+    } catch {
+      setFormData((prev) => ({
+        ...prev,
+        latitude: lat,
+        longitude: lng,
+      }));
+    }
+  };
+
+  const MapClickHandler = ({
+    enabled,
+    onSelect,
+  }: {
+    enabled: boolean;
+    onSelect: (lat: number, lng: number) => void;
+  }) => {
+    useMapEvents({
+      click(e) {
+        if (!enabled) return;
+        onSelect(e.latlng.lat, e.latlng.lng);
+      },
+    });
+    return null;
+  };
+
   const handleServiceToggle = (service: string) => {
     setFormData((prev) => ({
       ...prev,
@@ -164,37 +223,41 @@ const ListProperty = () => {
   };
 
   const handleNext = () => {
-    if (currentStep === 1 && !selectedType) {
-      toast({
-        title: "Please select a property type",
-        variant: "destructive",
-      });
+    if (currentStep === 1) {
+      if (establishmentStep === 1) {
+        if (!formData.propertyName || !selectedType) {
+          toast({
+            title: "Please complete Property Name and Property Type",
+            variant: "destructive",
+          });
+          return;
+        }
+        setEstablishmentStep(2);
+        return;
+      }
+
+      const missingFields = [
+        { key: "addressSearch", label: "Find Your Address" },
+        { key: "country", label: "Country/region" },
+        { key: "city", label: "City" },
+        { key: "zipCode", label: "Zip code" },
+      ].filter((field) => !formData[field.key as keyof typeof formData]);
+
+      if (missingFields.length > 0) {
+        toast({
+          title: "Please complete Basic Info",
+          description: `Missing: ${missingFields
+            .map((field) => field.label)
+            .join(", ")}`,
+          variant: "destructive",
+        });
+        return;
+      }
+
+      setCurrentStep(2);
       return;
     }
-    if (currentStep === 2) {
-      // Validate password fields
-      if (!formData.password || !formData.confirmPassword) {
-        toast({
-          title: "Please enter and confirm your password",
-          variant: "destructive",
-        });
-        return;
-      }
-      if (formData.password !== formData.confirmPassword) {
-        toast({
-          title: "Passwords do not match",
-          variant: "destructive",
-        });
-        return;
-      }
-      if (formData.password.length < 8) {
-        toast({
-          title: "Password must be at least 8 characters long",
-          variant: "destructive",
-        });
-        return;
-      }
-    }
+
     if (currentStep < 5) setCurrentStep((prev) => prev + 1);
   };
 
@@ -234,6 +297,17 @@ const ListProperty = () => {
   };
 
   const handleBack = () => {
+    if (currentStep === 1 && establishmentStep === 2) {
+      setEstablishmentStep(1);
+      return;
+    }
+
+    if (currentStep === 2) {
+      setCurrentStep(1);
+      setEstablishmentStep(2);
+      return;
+    }
+
     if (currentStep > 1) setCurrentStep((prev) => prev - 1);
   };
 
@@ -307,26 +381,35 @@ const ListProperty = () => {
         {/* Main Content */}
         <section className="py-12 md:py-16">
           <div className="container">
-            <div className="grid lg:grid-cols-3 gap-8">
+            <div className="grid gap-8">
               {/* Form Section */}
-              <div className="lg:col-span-2">
+              <div>
                 <div className="bg-card rounded-2xl shadow-elevated p-6 md:p-8">
                   <StepIndicator
                     steps={steps}
                     currentStep={currentStep}
+                    establishmentSubstep={establishmentStep}
                   />
 
-                  {/* Step 1: Property Type */}
-                  {currentStep === 1 && (
+                  {/* Step 1: Establishment Info */}
+                  {currentStep === 1 && establishmentStep === 1 && (
                     <div className="space-y-6">
-                      <div>
-                        <h2 className="text-xl font-semibold text-foreground mb-2">
-                          Establishment Info
-                        </h2>
-                        <p className="text-muted-foreground">
-                          Tell us about your property so we can
-                          create your listing.
-                        </p>
+                      <div className="md:col-span-3 space-y-2">
+                        <Label htmlFor="propertyName" className="text-base font-semibold text-foreground">
+                          Property Name *
+                        </Label>
+                        <Input
+                          id="propertyName"
+                          placeholder="e.g., Happy Tails Pet Hotel"
+                          value={formData.propertyName}
+                          onChange={(e) =>
+                            setFormData((prev) => ({
+                              ...prev,
+                              propertyName: e.target.value,
+                            }))
+                          }
+                          className="h-12 text-base"
+                        />
                       </div>
                       <div>
                         <h3 className="text-lg font-semibold text-foreground mb-2">
@@ -356,204 +439,153 @@ const ListProperty = () => {
                     </div>
                   )}
 
-                  {/* Step 2: Basic Info */}
-                  {currentStep === 2 && (
+                  {currentStep === 1 && establishmentStep === 2 && (
                     <div className="space-y-6">
-                      <div>
-                        <h2 className="text-xl font-semibold text-foreground mb-2">
-                          Establishment Info
-                        </h2>
-                        <p className="text-muted-foreground">
-                          This information will be displayed on
-                          your listing
-                        </p>
-                      </div>
                       <div>
                         <h3 className="text-lg font-semibold text-foreground mb-2">
                           Basic Info
                         </h3>
                         <p className="text-muted-foreground">
-                          Provide your business and contact
-                          details
+                          Provide your address details for accurate listing placement
                         </p>
                       </div>
-                      <div className="grid md:grid-cols-2 gap-4">
-                        <div className="md:col-span-2 space-y-2">
-                          <Label htmlFor="propertyName">
-                            Property Name *
-                          </Label>
-                          <Input
-                            id="propertyName"
-                            placeholder="e.g., Happy Tails Pet Hotel"
-                            value={formData.propertyName}
-                            onChange={(e) =>
-                              setFormData((prev) => ({
-                                ...prev,
-                                propertyName: e.target.value,
-                              }))
-                            }
-                          />
+                      <div className="grid lg:grid-cols-2 gap-4">
+                        <div className="rounded-2xl border border-border overflow-hidden h-[420px]">
+                          <MapContainer
+                            {...({
+                              center: [formData.latitude, formData.longitude],
+                              scrollWheelZoom: true,
+                              className: "h-full w-full",
+                              whenCreated: (map: any) => {
+                                map.setView([formData.latitude, formData.longitude], 16);
+                              },
+                            } as any)}
+                          >
+                            <TileLayer
+                              {...({
+                                attribution:
+                                  '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+                                url: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+                              } as any)}
+                            />
+                            <Marker
+                              {...({
+                                position: [formData.latitude, formData.longitude],
+                                icon: redPinIcon,
+                                draggable: true,
+                                eventHandlers: {
+                                  dragend: (event: any) => {
+                                    const marker = event.target as L.Marker;
+                                    const { lat, lng } = marker.getLatLng();
+                                    void reverseGeocode(lat, lng);
+                                  },
+                                },
+                              } as any)}
+                            />
+                            <MapClickHandler
+                              enabled
+                              onSelect={(lat, lng) => void reverseGeocode(lat, lng)}
+                            />
+                          </MapContainer>
                         </div>
-                        <div className="md:col-span-2 space-y-2">
-                          <Label htmlFor="address">
-                            Street Address *
-                          </Label>
-                          <Input
-                            id="address"
-                            placeholder="123 Pet Street"
-                            value={formData.address}
-                            onChange={(e) =>
-                              setFormData((prev) => ({
-                                ...prev,
-                                address: e.target.value,
-                              }))
-                            }
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="city">City *</Label>
-                          <Input
-                            id="city"
-                            placeholder="San Francisco"
-                            value={formData.city}
-                            onChange={(e) =>
-                              setFormData((prev) => ({
-                                ...prev,
-                                city: e.target.value,
-                              }))
-                            }
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="phone">
-                            Phone Number *
-                          </Label>
-                          <Input
-                            id="phone"
-                            type="tel"
-                            placeholder="(555) 123-4567"
-                            value={formData.phone}
-                            onChange={(e) =>
-                              setFormData((prev) => ({
-                                ...prev,
-                                phone: e.target.value,
-                              }))
-                            }
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="ownerName">
-                            Contact Name *
-                          </Label>
-                          <Input
-                            id="ownerName"
-                            placeholder="John Smith"
-                            value={formData.ownerName}
-                            onChange={(e) =>
-                              setFormData((prev) => ({
-                                ...prev,
-                                ownerName: e.target.value,
-                              }))
-                            }
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="email">
-                            Email Address *
-                          </Label>
-                          <Input
-                            id="email"
-                            type="email"
-                            placeholder="john@example.com"
-                            value={formData.email}
-                            onChange={(e) =>
-                              setFormData((prev) => ({
-                                ...prev,
-                                email: e.target.value,
-                              }))
-                            }
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="password">
-                            Password *
-                          </Label>
-                          <Input
-                            id="password"
-                            type="password"
-                            placeholder="Enter a strong password"
-                            value={formData.password}
-                            onChange={(e) =>
-                              setFormData((prev) => ({
-                                ...prev,
-                                password: e.target.value,
-                              }))
-                            }
-                          />
-                          <p className="text-xs text-muted-foreground">
-                            Must be at least 8 characters long
-                          </p>
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="confirmPassword">
-                            Confirm Password *
-                          </Label>
-                          <Input
-                            id="confirmPassword"
-                            type="password"
-                            placeholder="Re-enter your password"
-                            value={formData.confirmPassword}
-                            onChange={(e) =>
-                              setFormData((prev) => ({
-                                ...prev,
-                                confirmPassword: e.target.value,
-                              }))
-                            }
-                            className={
-                              formData.confirmPassword &&
-                              formData.password !==
-                                formData.confirmPassword
-                                ? "border-destructive"
-                                : formData.confirmPassword &&
-                                    formData.password ===
-                                      formData.confirmPassword
-                                  ? "border-success"
-                                  : ""
-                            }
-                          />
-                          {formData.confirmPassword &&
-                            formData.password !==
-                              formData.confirmPassword && (
-                              <p className="text-xs text-destructive flex items-center gap-1">
-                                <X className="h-3 w-3" />
-                                Passwords do not match
-                              </p>
-                            )}
-                          {formData.confirmPassword &&
-                            formData.password ===
-                              formData.confirmPassword && (
-                              <p className="text-xs text-success flex items-center gap-1">
-                                <CheckCircle2 className="h-3 w-3" />
-                                Passwords match
-                              </p>
-                            )}
-                        </div>
-                        <div className="md:col-span-2 space-y-2">
-                          <Label htmlFor="description">
-                            Property Description
-                          </Label>
-                          <Textarea
-                            id="description"
-                            placeholder="Tell pet parents what makes your property special..."
-                            rows={4}
-                            value={formData.description}
-                            onChange={(e) =>
-                              setFormData((prev) => ({
-                                ...prev,
-                                description: e.target.value,
-                              }))
-                            }
-                          />
+                        <div className="rounded-2xl border border-border bg-background p-5">
+                          <div className="grid md:grid-cols-2 gap-4">
+                            <div className="md:col-span-2 space-y-2">
+                              <Label htmlFor="addressSearch">
+                                Find Your Address
+                              </Label>
+                              <Input
+                                id="addressSearch"
+                                placeholder="De La Salle University Manila"
+                                value={formData.addressSearch}
+                                onChange={(e) =>
+                                  setFormData((prev) => ({
+                                    ...prev,
+                                    addressSearch: e.target.value,
+                                  }))
+                                }
+                              />
+                            </div>
+                            <div className="md:col-span-2 space-y-2">
+                              <Label htmlFor="addressLine2">
+                                Apartment or floor number (optional)
+                              </Label>
+                              <Input
+                                id="addressLine2"
+                                placeholder="Apartment, building, floor, etc"
+                                value={formData.addressLine2}
+                                onChange={(e) =>
+                                  setFormData((prev) => ({
+                                    ...prev,
+                                    addressLine2: e.target.value,
+                                  }))
+                                }
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <Label htmlFor="country">Country/region</Label>
+                              <Input
+                                id="country"
+                                placeholder="Philippines"
+                                value={formData.country}
+                                onChange={(e) =>
+                                  setFormData((prev) => ({
+                                    ...prev,
+                                    country: e.target.value,
+                                  }))
+                                }
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <Label htmlFor="city">City</Label>
+                              <Input
+                                id="city"
+                                placeholder="Manila"
+                                value={formData.city}
+                                onChange={(e) =>
+                                  setFormData((prev) => ({
+                                    ...prev,
+                                    city: e.target.value,
+                                  }))
+                                }
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <Label htmlFor="zipCode">Zip code</Label>
+                              <Input
+                                id="zipCode"
+                                placeholder="1004"
+                                value={formData.zipCode}
+                                onChange={(e) =>
+                                  setFormData((prev) => ({
+                                    ...prev,
+                                    zipCode: e.target.value,
+                                  }))
+                                }
+                              />
+                            </div>
+                            <div className="md:col-span-2 space-y-2">
+                              <div className="flex items-start gap-2">
+                                <Checkbox
+                                  id="pinAccurate"
+                                  checked={formData.isPinAccurate}
+                                  onCheckedChange={(checked) =>
+                                    setFormData((prev) => ({
+                                      ...prev,
+                                      isPinAccurate: Boolean(checked),
+                                    }))
+                                  }
+                                  className="mt-1"
+                                />
+                                <Label
+                                  htmlFor="pinAccurate"
+                                  className="text-sm cursor-pointer text-muted-foreground"
+                                >
+                                  Update the address by moving the pin on the map.
+                                </Label>
+                              </div>
+                            </div>
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -1131,7 +1163,7 @@ const ListProperty = () => {
                     <Button
                       variant="outline"
                       onClick={handleBack}
-                      disabled={currentStep === 1}
+                      disabled={currentStep === 1 && establishmentStep === 1}
                       className="gap-2"
                     >
                       <ArrowLeft className="h-4 w-4" />
@@ -1160,52 +1192,6 @@ const ListProperty = () => {
                 </div>
               </div>
 
-              {/* Sidebar */}
-              <div className="space-y-6">
-                <EarningsCalculator />
-
-                {/* Benefits */}
-                <div className="bg-card rounded-2xl p-6 shadow-soft">
-                  <h3 className="font-semibold text-lg text-foreground mb-4">
-                    Why Partner With Us?
-                  </h3>
-                  <div className="space-y-4">
-                    {benefits.map((benefit) => (
-                      <div
-                        key={benefit.title}
-                        className="flex items-start gap-3"
-                      >
-                        <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-                          <benefit.icon className="h-5 w-5 text-primary" />
-                        </div>
-                        <div>
-                          <p className="font-medium text-foreground">
-                            {benefit.title}
-                          </p>
-                          <p className="text-sm text-muted-foreground">
-                            {benefit.description}
-                          </p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Support */}
-                <div className="bg-secondary/50 rounded-2xl p-6">
-                  <h3 className="font-semibold text-foreground mb-2">
-                    Need Help?
-                  </h3>
-                  <p className="text-sm text-muted-foreground mb-4">
-                    Our partner support team is here to help you
-                    get started.
-                  </p>
-                  <Button variant="outline" className="w-full">
-                    <Headphones className="h-4 w-4 mr-2" />
-                    Contact Support
-                  </Button>
-                </div>
-              </div>
             </div>
           </div>
         </section>
