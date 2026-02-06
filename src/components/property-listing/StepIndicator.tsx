@@ -10,26 +10,45 @@ interface StepIndicatorProps {
   steps: Step[];
   currentStep: number;
   establishmentSubstep?: number;
+  propertySetupCompleted?: number;
+  photosCompleted?: boolean;
+  pricingCalendarCompleted?: number;
 }
 
-const StepIndicator = ({ steps, currentStep, establishmentSubstep = 1 }: StepIndicatorProps) => {
+const StepIndicator = ({ steps, currentStep, establishmentSubstep = 1, propertySetupCompleted = 0, photosCompleted = false, pricingCalendarCompleted = 0 }: StepIndicatorProps) => {
   return (
-    <div className="flex items-center justify-between w-full max-w-2xl mx-auto mb-8">
+    <div className="flex items-start justify-evenly w-full max-w-4xl mx-auto mb-8 px-4">
       {steps.map((step, index) => {
         const isEstablishmentInfo = step.title === "Establishment Info";
+        const isPropertySetup = step.title === "Property Setup";
+        const isPhotos = step.title === "Photos";
+        const isPricingCalendar = step.title === "Pricing and Calendar";
         const establishmentFirstComplete = establishmentSubstep >= 2 || currentStep > 1;
         const establishmentSecondComplete = currentStep > 1;
         const establishmentComplete = currentStep > 1;
+        const propertySetupComplete = currentStep > 2 || (currentStep === 2 && propertySetupCompleted === 5);
+        const photosComplete = photosCompleted;
+        const pricingCalendarComplete = currentStep > 4 || (currentStep === 4 && pricingCalendarCompleted === 8);
         const isStepComplete = isEstablishmentInfo
           ? establishmentComplete
+          : isPropertySetup
+          ? propertySetupComplete
+          : isPhotos
+          ? photosComplete
+          : isPricingCalendar
+          ? pricingCalendarComplete
           : currentStep > step.number;
         const isStepActive = isEstablishmentInfo
           ? currentStep === 1
+          : isPropertySetup
+          ? currentStep === 2
+          : isPricingCalendar
+          ? currentStep === 4
           : currentStep === step.number;
 
         return (
-          <div key={step.number} className="flex items-center flex-1">
-            <div className="flex flex-col items-center">
+          <div key={step.number} className="flex flex-col items-center flex-1">
+            <div className="flex flex-col items-center min-h-[100px] w-full">
               <div
                 className={cn(
                   "w-10 h-10 rounded-full flex items-center justify-center font-semibold text-sm transition-all",
@@ -50,7 +69,8 @@ const StepIndicator = ({ steps, currentStep, establishmentSubstep = 1 }: StepInd
                 !isEstablishmentInfo && (
                 <span
                   className={cn(
-                    "text-xs mt-2 font-medium hidden sm:block",
+                    "text-xs mt-2 font-medium hidden sm:block whitespace-nowrap",
+                    step.number === 6 && "ml-3",
                     currentStep >= step.number ? "text-foreground" : "text-muted-foreground"
                   )}
                 >
@@ -61,7 +81,8 @@ const StepIndicator = ({ steps, currentStep, establishmentSubstep = 1 }: StepInd
               {isEstablishmentInfo && (
                 <span
                   className={cn(
-                    "text-xs mt-2 font-medium hidden sm:block",
+                    "text-xs mt-2 font-medium hidden sm:block whitespace-nowrap",
+                    step.number === 6 && "4",
                     currentStep >= 1 ? "text-foreground" : "text-muted-foreground"
                   )}
                 >
@@ -83,6 +104,36 @@ const StepIndicator = ({ steps, currentStep, establishmentSubstep = 1 }: StepInd
                     )}
                   />
                 </div>
+              )}
+              {isPropertySetup && index === 1 && (
+                <div className="hidden sm:flex items-center gap-1 mt-2">
+                  {Array.from({ length: 5 }, (_, i) => (
+                    <span
+                      key={i}
+                      className={cn(
+                        "h-1.5 w-4 rounded-full",
+                        i < propertySetupCompleted ? "bg-primary" : "bg-secondary"
+                      )}
+                    />
+                  ))}
+                </div>
+              )}
+              {isPricingCalendar && index === 3 && (
+                <div className="hidden sm:flex items-center gap-1 mt-2">
+                  {Array.from({ length: 8 }, (_, i) => (
+                    <span
+                      key={i}
+                      className={cn(
+                        "h-1.5 w-3 rounded-full",
+                        i < pricingCalendarCompleted ? "bg-primary" : "bg-secondary"
+                      )}
+                    />
+                  ))}
+                </div>
+              )}
+              {/* Add consistent bottom spacing for steps without sub-indicators */}
+              {(!isEstablishmentInfo && !isPropertySetup && !isPricingCalendar) && (
+                <div className="mt-2 h-6"></div>
               )}
             </div>
             {index < steps.length - 1 && (
