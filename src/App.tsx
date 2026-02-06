@@ -18,6 +18,7 @@ import Booking from "./pages/Booking";
 import SearchResults from "./pages/SearchResults";
 import NotFound from "./pages/NotFound";
 import Profile from "./pages/Profile";
+import MyPets from "./pages/MyPets";
 
 // Admin pages
 import AdminDashboard from "./pages/admin/Dashboard";
@@ -80,6 +81,7 @@ const App = () => (
           <Route path="/booking" element={<Booking />} />
           <Route path="/search" element={<SearchResults />} />
           <Route path="/profile" element={<Profile />} />
+          <Route path="/my-pets" element={<MyPets />} />
           
           {/* Admin routes */}
           <Route path="/admin" element={<AdminDashboard />} />

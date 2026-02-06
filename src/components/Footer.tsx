@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 const Footer = () => {
   const footerLinks = {
     company: [
-      { label: "About Us", href: "#" },
+      { label: "About Us", href: "/about" },
       { label: "Careers", href: "#" },
       { label: "Press", href: "#" },
       { label: "Blog", href: "#" },
@@ -70,10 +70,17 @@ const Footer = () => {
               The trusted platform for pet care. Find the perfect home away from home for your furry friends.
             </p>
             <div className="flex gap-3">
-              {[Facebook, Twitter, Instagram, Youtube].map((Icon, index) => (
+              {[
+                { Icon: Facebook, href: "https://www.facebook.com/profile.php?id=61587235174522" },
+                { Icon: Twitter, href: "https://twitter.com" },
+                { Icon: Instagram, href: "https://www.instagram.com/pawstay.ph/" },
+                { Icon: Youtube, href: "https://youtube.com" },
+              ].map(({ Icon, href }, index) => (
                 <a
                   key={index}
-                  href="#"
+                  href={href}
+                  target="_blank"
+                  rel="noopener noreferrer"
                   className="w-10 h-10 rounded-full bg-background/10 flex items-center justify-center hover:bg-background/20 transition-colors"
                 >
                   <Icon className="h-5 w-5" />
