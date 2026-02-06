@@ -22,9 +22,12 @@ import {
   Heart,
   Calendar,
   PawPrint,
-  ChevronRight
+   ChevronRight,
+   Scissors,
+   Stethoscope
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+
 const Profile = () => {
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -39,7 +42,29 @@ const Profile = () => {
     avatar: "",
     isAdmin: true, // Simulated admin role
   });
+
   const [isEditing, setIsEditing] = useState(false);
+
+   // Sample pets data - in real app this would be shared state/context
+   const pets = [
+     {
+       id: "1",
+       name: "Buddy",
+       species: "Dog",
+       breed: "Golden Retriever",
+       photo: "",
+       lastService: { type: "grooming", daysAgo: 5 }
+     },
+     {
+       id: "2", 
+       name: "Whiskers",
+       species: "Cat",
+       breed: "Persian",
+       photo: "",
+       lastService: { type: "checkup", daysAgo: 10 }
+     },
+   ];
+
   const handleSave = () => {
     setIsEditing(false);
     toast({
@@ -47,6 +72,7 @@ const Profile = () => {
       description: "Your profile has been updated successfully.",
     });
   };
+
   const handleLogout = () => {
     toast({
       title: "Signed Out",
@@ -54,9 +80,11 @@ const Profile = () => {
     });
     navigate("/");
   };
+
   const handleSwitchToAdmin = () => {
     navigate("/admin");
   };
+
   return (
     <div className="min-h-screen bg-background">
       <Header />
@@ -107,6 +135,7 @@ const Profile = () => {
               )}
             </div>
           </div>
+
           <div className="grid md:grid-cols-3 gap-6">
             {/* Main Profile Info */}
             <div className="md:col-span-2 space-y-6">
@@ -184,6 +213,7 @@ const Profile = () => {
                   </div>
                 </CardContent>
               </Card>
+
               {/* My Pets Section */}
               <Card>
                 <CardHeader>
@@ -196,18 +226,53 @@ const Profile = () => {
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <div className="flex flex-col items-center justify-center py-8 text-center">
-                    <div className="h-16 w-16 rounded-full bg-muted flex items-center justify-center mb-4">
-                      <PawPrint className="h-8 w-8 text-muted-foreground" />
+                   {pets.length === 0 ? (
+                     <div className="flex flex-col items-center justify-center py-8 text-center">
+                       <div className="h-16 w-16 rounded-full bg-muted flex items-center justify-center mb-4">
+                         <PawPrint className="h-8 w-8 text-muted-foreground" />
+                       </div>
+                       <p className="text-muted-foreground mb-4">No pets added yet</p>
+                       <Link to="/my-pets">
+                         <Button variant="outline">
+                           Add Your First Pet
+                         </Button>
+                       </Link>
                     </div>
-                    <p className="text-muted-foreground mb-4">No pets added yet</p>
-                    <Button variant="outline">
-                      Add Your First Pet
-                    </Button>
-                  </div>
+                   ) : (
+                     <div className="space-y-3">
+                       {pets.map((pet) => (
+                         <div key={pet.id} className="flex items-center gap-3 p-3 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors">
+                           <Avatar className="h-12 w-12 border-2 border-background">
+                             <AvatarImage src={pet.photo} className="object-cover" />
+                             <AvatarFallback className="bg-gradient-hero text-white text-sm">
+                               {pet.name[0]}
+                             </AvatarFallback>
+                           </Avatar>
+                           <div className="flex-1 min-w-0">
+                             <p className="text-sm font-medium truncate">{pet.name}</p>
+                             <p className="text-xs text-muted-foreground">{pet.breed}</p>
+                           </div>
+                           <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                             {pet.lastService.type === "grooming" ? (
+                               <Scissors className="h-3 w-3" />
+                             ) : (
+                               <Stethoscope className="h-3 w-3" />
+                             )}
+                             <span>{pet.lastService.daysAgo}d ago</span>
+                           </div>
+                         </div>
+                       ))}
+                       <Link to="/my-pets">
+                         <Button variant="outline" className="w-full mt-2">
+                           Manage Pets
+                         </Button>
+                       </Link>
+                     </div>
+                   )}
                 </CardContent>
               </Card>
             </div>
+
             {/* Sidebar */}
             <div className="space-y-6">
               {/* Admin Switch Card */}
@@ -234,6 +299,7 @@ const Profile = () => {
                   </CardContent>
                 </Card>
               )}
+
               {/* Quick Links */}
               <Card>
                 <CardHeader className="pb-3">
@@ -263,6 +329,7 @@ const Profile = () => {
                   </Button>
                 </CardContent>
               </Card>
+
               {/* Account Settings */}
               <Card>
                 <CardHeader className="pb-3">
@@ -300,4 +367,5 @@ const Profile = () => {
     </div>
   );
 };
+
 export default Profile;

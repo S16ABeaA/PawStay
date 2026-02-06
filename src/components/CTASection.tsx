@@ -16,11 +16,11 @@ const CTASection = () => {
             {/* Content */}
             <div className="flex flex-col justify-center">
               <h2 className="font-display text-3xl md:text-4xl lg:text-5xl font-bold text-foreground mb-4 leading-tight">
-                Give Your Pet the{" "}
+                Give Your Fur Baby the{" "}
                 <span className="text-gradient">Vacation</span> They Deserve
               </h2>
               <p className="text-lg text-muted-foreground mb-8">
-                Join thousands of pet parents who trust PawStay for their furry family members. 
+                Join thousands of fur parents who trust PawStay for their furry family members. 
                 Book your first stay today and get 20% off!
               </p>
 
