@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { ArrowRight, Shield, Clock, HeartHandshake } from "lucide-react";
 
@@ -25,13 +26,12 @@ const CTASection = () => {
               </p>
 
               <div className="flex flex-col sm:flex-row gap-3 mb-8">
-                <Button variant="hero" size="xl" className="group">
-                  Start Booking
-                  <ArrowRight className="h-5 w-5 group-hover:translate-x-1 transition-transform" />
-                </Button>
-                <Button variant="outline" size="xl">
-                  Learn More
-                </Button>
+                <Link to="/veterinary">
+                  <Button variant="hero" size="xl" className="group">
+                    Start Booking
+                    <ArrowRight className="h-5 w-5 group-hover:translate-x-1 transition-transform" />
+                  </Button>
+                </Link>
               </div>
 
               {/* Trust Badges */}
