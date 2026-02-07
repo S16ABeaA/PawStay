@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
@@ -25,20 +25,46 @@ import {
   ChevronRight
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+
+import { AuthApi } from "../services/authApi";
+
 const Profile = () => {
   const { toast } = useToast();
   const navigate = useNavigate();
   
   // Simulated user data - in real app, this would come from auth context
-  const [user, setUser] = useState({
-    firstName: "John",
-    lastName: "Doe",
-    email: "john.doe@example.com",
-    phone: "+1 234 567 8900",
-    address: "123 Pet Street, San Francisco, CA",
-    avatar: "",
-    isAdmin: true, // Simulated admin role
-  });
+  // const [user, setUser] = useState({
+  //   firstName: "John",
+  //   lastName: "Doe",
+  //   email: "john.doe@example.com",
+  //   phone: "+1 234 567 8900",
+  //   address: "123 Pet Street, San Francisco, CA",
+  //   avatar: "",
+  //   isAdmin: true, // Simulated admin role
+  // });
+  
+  const [user, setUser] = useState<any>(null); // start as null
+
+  useEffect(() => {
+    const fetchUser = async () => {
+      const session = await AuthService.getSession();
+      if(session?.user){
+        setUser({
+          firstName: session.user.user_metadata.firstName,
+          lastName: session.user.user_metadata.lastName,
+          email: session.user.email,
+          phone: session.user.user_metadata.phone || "",
+          address: session.user.user_metadata.address || "",
+          avatar: session.user.user_metadata.avatar || "",
+          isAdmin: session.user.user_metadata.role === "admin",
+        });
+      } else {
+        navigate("/signin");
+      }
+    };
+    fetchUser();
+  }, []);
+
   const [isEditing, setIsEditing] = useState(false);
   const handleSave = () => {
     setIsEditing(false);
@@ -47,16 +73,30 @@ const Profile = () => {
       description: "Your profile has been updated successfully.",
     });
   };
-  const handleLogout = () => {
-    toast({
-      title: "Signed Out",
-      description: "You have been signed out successfully.",
-    });
-    navigate("/");
+  const handleLogout =  async() => {
+    try{
+      await AuthService.signOut();
+      toast({
+        title: "Signed Out",
+        description: "You have been signed out successfully.",
+      });
+      navigate("/signin");
+    }catch(err){
+      toast({ title: "Error", description: err.message || "Failed to sign out. Please try again." });
+      return;
+    }
+    
   };
   const handleSwitchToAdmin = () => {
     navigate("/admin");
   };
+  if(!user){
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <p>Loading profile...</p>
+      </div>
+    );
+  }
   return (
     <div className="min-h-screen bg-background">
       <Header />
