@@ -170,7 +170,8 @@ export class PropertyService {
 
       if (!response.ok) {
         const errorData = await response.json()
-        throw new Error(errorData.error || 'Failed to submit property')
+        const errorMessage = typeof errorData.error === 'string' ? errorData.error : JSON.stringify(errorData.error) || 'Failed to submit property'
+        throw new Error(errorMessage)
       }
 
       const result = await response.json()
