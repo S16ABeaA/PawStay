@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { Button } from "@/components/ui/button";
@@ -33,6 +34,8 @@ import {
   Image,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { PropertyService, PropertySubmissionData } from "@/utils/propertyService";
+import supabase from '@/config/supabaseClient';
 
 const steps = [
   { number: 1, title: "Establishment Info" },
@@ -186,12 +189,14 @@ const healthSafetyList = [
 
 const ListProperty = () => {
   const { toast } = useToast();
+  const navigate = useNavigate();
   const [currentStep, setCurrentStep] = useState(1);
   const [establishmentStep, setEstablishmentStep] = useState(1);
   const [propertySetupStep, setPropertySetupStep] = useState(1);
   const [propertySetupCompleted, setPropertySetupCompleted] = useState(0);
   const [pricingCalendarStep, setPricingCalendarStep] = useState(1);
   const [pricingCalendarCompleted, setPricingCalendarCompleted] = useState(0);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [enableCatPricing, setEnableCatPricing] = useState(false);
   const [enableExoticPricing, setEnableExoticPricing] = useState(false);
   const [selectedType, setSelectedType] = useState<
@@ -257,6 +262,8 @@ const ListProperty = () => {
     lguPermits: [] as File[],
     baiDocument: null as File | null,
     contractDocument: null as File | null,
+    occupancyRate: 0,
+    animalCapacity: 0,
     legalEntityType: "" as "" | "individual" | "business",
     contractingParty: {
       firstName: "",
@@ -536,12 +543,108 @@ const ListProperty = () => {
     }
   };
 
-  const handleSubmit = () => {
-    toast({
-      title: "Application Submitted! 🎉",
-      description:
-        "We'll review your property and contact you within 24-48 hours.",
-    });
+  const handleSubmit = async () => {
+    if (isSubmitting) return;
+
+    setIsSubmitting(true);
+    try {
+      // Temporarily disabled authentication for backend testing
+
+      // Validate required fields
+      if (!formData.propertyName || !selectedType || !formData.contractingParty.firstName || !formData.legalEntityType) {
+        toast({
+          title: "Validation Error",
+          description: "Please fill in all required fields.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // Upload files first
+      const uploadedImages: string[] = [];
+      const uploadedPermits: string[] = [];
+      let uploadedBAI: string = '';
+      let uploadedContract: string = '';
+
+      // Upload property images
+      if (formData.propertyImages.length > 0) {
+        const imageUrls = await PropertyService.uploadMultipleFiles(
+          formData.propertyImages,
+          'property-images',
+          `applications/${Date.now()}`
+        );
+        uploadedImages.push(...imageUrls);
+      }
+
+      // Upload permits
+      if (formData.lguPermits.length > 0) {
+        const permitUrls = await PropertyService.uploadMultipleFiles(
+          formData.lguPermits,
+          'documents',
+          `applications/${Date.now()}/permits`
+        );
+        uploadedPermits.push(...permitUrls);
+      }
+
+      // Upload BAI document
+      if (formData.baiDocument) {
+        const baiUrl = await PropertyService.uploadFile(
+          formData.baiDocument,
+          'documents',
+          `applications/${Date.now()}/bai-${Date.now()}.pdf`
+        );
+        if (baiUrl) uploadedBAI = baiUrl;
+      }
+
+      // Upload contract document
+      if (formData.contractDocument) {
+        const contractUrl = await PropertyService.uploadFile(
+          formData.contractDocument,
+          'documents',
+          `applications/${Date.now()}/contract-${Date.now()}.pdf`
+        );
+        if (contractUrl) uploadedContract = contractUrl;
+      }
+
+      // Prepare submission data
+      const submissionData: PropertySubmissionData = {
+        ...formData,
+        propertyImages: uploadedImages,
+        lguPermits: uploadedPermits,
+        baiDocument: uploadedBAI,
+        contractDocument: uploadedContract,
+        propertyType: selectedType as 'hotel' | 'grooming' | 'veterinary',
+        legalEntityType: formData.legalEntityType as 'individual' | 'business',
+      };
+
+      // Submit the application
+      const response = await PropertyService.submitProperty(submissionData);
+
+      if (response.success) {
+        toast({
+          title: "Application Submitted! 🎉",
+          description: "We'll review your property and contact you within 24-48 hours.",
+        });
+
+        // Reset form or redirect
+        // You might want to redirect to a success page or reset the form
+      } else {
+        toast({
+          title: "Submission Failed",
+          description: response.error || "An error occurred while submitting your application.",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      console.error('Submission error:', error);
+      toast({
+        title: "Submission Failed",
+        description: "An unexpected error occurred. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -3165,10 +3268,20 @@ const ListProperty = () => {
                         <Button
                           variant="hero"
                           onClick={handleSubmit}
+                          disabled={isSubmitting}
                           className="gap-2"
                         >
-                          Submit Application
-                          <ArrowRight className="h-4 w-4" />
+                          {isSubmitting ? (
+                            <>
+                              Submitting...
+                              <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                            </>
+                          ) : (
+                            <>
+                              Submit Application
+                              <ArrowRight className="h-4 w-4" />
+                            </>
+                          )}
                         </Button>
                       )}
                     </div>
