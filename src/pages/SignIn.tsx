@@ -10,7 +10,7 @@ import { Separator } from "@/components/ui/separator";
 import { PawPrint, Mail, Lock, Eye, EyeOff } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
-import { AuthApi } from "../services/authApi";
+import { authApi } from "../services/authApi";
 
 const SignIn = () => {
   const location = useLocation();
@@ -48,61 +48,115 @@ const SignIn = () => {
     }
 
     try {
-      const user = await AuthApi.signUp({
+      const result  = await authApi.signUp({
         email,
         password,
         firstName,
         lastName,
         isPartner: isPartnerFlow,
       });
-
+      if (!result?.user) {
+        toast({ title: "Error", description: "Signup failed." });
+        return;
+      }
       toast({
         title: "Account Created!", //Sign-up Successful
         description: "Please check your email to confirm your account.",
       });
+
+      // reset form
+      // setFirstName("");
+      // setLastName("");
+      // setPassword("");
+      // setConfirmPassword("");
+      // setTermsChecked(false);
+
       navigate(redirectTo || "/");
-    }catch(err){
-      toast({ title: "Error", description: err.message });
+    } catch(err) {
+      toast({ title: "Error", description: err.message || "Failed to sign up." });
     }
   };
 
   // Signin
   const handleSignIn = async () => {
+    if (!email || !password) {
+      toast({ title: "Error", description: "Email and password are required." });
+      return;
+    }
+
     try{
-      await AuthApi.signIn(email, password);
-
-      // Demo: redirect based on email for testing admin panels
-      if (email.includes("admin@")) {
-        toast({
-          title: "Welcome Admin!",
-          description: "Redirecting to admin dashboard...",
-        });
-        navigate("/admin");
+      const result = await authApi.signIn({email, password});
+      if (!result?.user) {
+        toast({ title: "Error", description: "Sign-in failed. Check your credentials." });
         return;
       }
+      console.log(" [Frontend] Full response:", result);
+    console.log(" [Frontend] User object:", result?.user);
+    console.log(" [Frontend] User keys:", Object.keys(result?.user || {}));
+    console.log(" [Frontend] User role:", result?.user?.role);
+    console.log(" [Frontend] User email:", result?.user?.email);
       
-      if (email.includes("super@") || email.includes("superadmin@")) {
-        toast({
-          title: "Welcome Super Admin!",
-          description: "Redirecting to super admin dashboard...",
-        });
-        navigate("/superadmin");
-        return;
-      }
+      // Demo: redirect based on email for testing admin panels
+      //  if (email.includes("admin@")) {
+      //   toast({
+      //     title: "Welcome Admin!",
+      //     description: "Redirecting to admin dashboard...",
+      //   });
+      //   navigate("/admin");
+      //   return;
+      // }
+      // if (result.user.role === "admin") {
+      //   toast({ 
+      //    title: "Welcome Admin!", 
+      //    description: "Redirecting to admin dashboard..." 
+      //   });
+      //   navigate("/admin");
+      //   return;
+      // }
+      
+      // if (email.includes("super@") || email.includes("superadmin@")) {
+      //   toast({
+      //     title: "Welcome Super Admin!",
+      //     description: "Redirecting to super admin dashboard...",
+      //   });
+      //   navigate("/superadmin");
+      //   return;
+      // }
+      // if (result.user.role === "superadmin") {
+      //   toast({ 
+      //     title: "Welcome Super Admin!", 
+      //     description: "Redirecting to super admin dashboard..." 
+      //   });
+      //   navigate("/superadmin");
+      //   return;
+      // }
 
+      // For proprietors (partners)
+      // if (result.user.role === "proprietor") {
+      //   toast({
+      //     title: "Welcome Partner!",
+      //     description: "Redirecting to partner dashboard...",
+      //   });
+      //   navigate("/"); /////////
+      //   return;
+      // }
+
+      // Regular customers
       toast({
         title: "Welcome Back!",
-        description: `Logged in as ${email}`,
+        description: `Logged in as ${result.user.email}`,
       });
+
+      console.log("User role:", result.user.role);
       navigate(redirectTo || "/");
-    }catch(err){
-      toast({ title: "Error", description: err.message });
+    } catch(err) {
+      toast({ title: "Error", description: err.message || "Invalid email or password" });
     }   
   };
 
   const handleGoogleAuth = async () => {
     try{
-      await AuthApi.signInWithGoogle();
+      // await authApi.signInWithGoogle();
     }catch(err){
       toast({ title: "Error", description: err.message });
     }

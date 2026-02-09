@@ -1,126 +1,252 @@
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
-export const AuthApi = {
-  signUp: async (data: {
-    email: string;
-    password: string;
-    firstName: string;
-    lastName: string;
-    isPartner?: boolean;
-  }) => {
-    const res = await fetch(`${API_BASE_URL}/api/auth/signup`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(data),
-    });
-    return await res.json();
-  },
+import { authHelper } from "../helpers/authHelper";
 
-  signIn: async (email: string, password: string) => {
-    const res = await fetch(`${API_BASE_URL}/api/auth/login`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password }),
-    });
-    return await res.json();
-  },
+const API_BASE_URL = "http://localhost:5000";
 
-  signInWithGoogle: async () => {
-    const res = await fetch(`${API_BASE_URL}/api/auth/signInWithGoogle`, {
-      method: "POST",
-    });
-    return await res.json();
-  },
-
-  logout: async () => {
-    const res = await fetch(`${API_BASE_URL}/api/auth/logout`, {
-      method: "POST",
-    });
-    return await res.json();
-  },
+export const authApi = {
+  signUp: async (data: any) => authHelper.post(`${API_BASE_URL}/api/auth/signUp`, data),
+  signIn: async (data: any) => authHelper.post(`${API_BASE_URL}/api/auth/signIn`, data),
+  signOut: async () => authHelper.post(`${API_BASE_URL}/api/auth/signOut`),
+  getProfile: async () => authHelper.get(`${API_BASE_URL}/api/auth/profile`),
 };
 
-// import { supabase } from "../config/supabaseClient";
-
-// export const AuthService = {
-//   signUp: async ({
-//     email,
-//     password,
-//     firstName,
-//     lastName,
-//     isPartner = false
-//     }:{
-//     email: string,
-//     password: string,
-//     firstName: string,
-//     lastName: string,
-//     isPartner?: boolean
+// export const authApi = {
+//   signUp: async (data: {
+//     email: string;
+//     password: string;
+//     firstName: string;
+//     lastName: string;
+//     isPartner?: boolean;
 //   }) => {
-//     const { data, error } = await supabase.auth.signUp({
-//       email,
-//       password,
-//       options: {
-//         emailRedirectTo: "http://localhost:8080/profile", //test
-//         data: { firstName, lastName, isPartner },
-//       },
-//     });
-
-//     if (error) throw error;
-
-//     const { data: sessionData, error: signInError } = await supabase.auth.signInWithPassword({
-//       email,
-//       password,
-//     });
-
-//     // Insert into users table
-//     // await supabase.from("users").insert([{
-//     //   id: data.user?.id,
-//     //   first_name: firstName,
-//     //   last_name: lastName,
-//     //   role: isPartner ? "proprietor" : "customer",
-//     // }]);
-
-//     const { error: userError } = await supabase.from("users").insert([{
-//       id: data.user?.id,
-//       first_name: firstName,
-//       last_name: lastName,
-//       role: isPartner ? "proprietor" : "customer",
-//     }]);
-
-//     if (userError) {
-//       console.error("Failed to insert user into users table:", userError);
-//       throw userError;
-//     }
-
-//     return data.user;
+//     const res = await fetch(`${API_BASE_URL}/api/auth/signUp`, {
+//       method: "POST",
+//       headers: { "Content-Type": "application/json" },
+//       credentials: 'include',
+//       body: JSON.stringify(data),
+//     });    
+//     return await res.json();
 //   },
 
 //   signIn: async (email: string, password: string) => {
-//     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-//     if (error) throw error;
-//     return data.session;
+//     const res = await fetch(`${API_BASE_URL}/api/auth/signIn`, {
+//       method: "POST",
+//       headers: { "Content-Type": "application/json" },
+//       credentials: 'include',
+//       body: JSON.stringify({ email, password }),
+//     });
+//     const result = await res.json();
+    
+//     // Save user info to localStorage
+//     if (result.user) {
+//       localStorage.setItem("user", JSON.stringify(result.user));
+//     }
+    
+//     return result;
 //   },
 
 //   signInWithGoogle: async () => {
-//     const { data, error } = await supabase.auth.signInWithOAuth({
-//       provider: "google",
-//       options: { redirectTo: window.location.origin },
+//     const res = await fetch(`${API_BASE_URL}/api/auth/signInWithGoogle`, {
+//       method: "POST",
+//       credentials: 'include',
 //     });
-//     if (error) throw error;
-//     return data;
+//     return await res.json();
+//   },
+
+//   getProfile: async () => {
+//     const res = await fetch(`${API_BASE_URL}/api/auth/profile`, {
+//       headers: { "Content-Type": "application/json" },
+//       credentials: 'include',
+//     });
+//     return await res.json();
 //   },
 
 //   signOut: async () => {
-//     const { error } = await supabase.auth.signOut();
-//     if (error) throw error;
+//     const res = await fetch(`${API_BASE_URL}/api/auth/signOut`, {
+//       method: "POST",
+//       credentials: 'include',
+//     });
+    
+//     // Clear user data from localStorage
+//     localStorage.removeItem("user");
+//     localStorage.removeItem("authToken");
+    
+//     return await res.json();
 //   },
 
-//   getSession: async () => {
-//     const { data } = await supabase.auth.getSession();
-//     return data.session;
+//   //Token refresh endpoint
+//   refreshToken: async () => {
+//     const res = await fetch(`${API_BASE_URL}/api/auth/refresh`, {
+//       method: "POST",
+//       credentials: 'include',
+//     });
+//     return await res.json();
+//   },
+// };
+
+// //Helper functions
+// let isRefreshing = false;
+
+// export const AuthHelper = {
+//   // Fetch with auto token refresh
+//   fetchWithAuth: async (url: string, options: RequestInit = {}) => {
+//     const response = await fetch(url, {
+//       ...options,
+//       credentials: 'include',
+//       headers: {
+//         'Content-Type': 'application/json',
+//         ...options.headers,
+//       },
+//     });
+    
+//     if (response.status === 401 && !isRefreshing) {
+//       isRefreshing = true;
+      
+//       try {
+//         const refreshResult = await AuthApi.refreshToken();
+        
+//         if (refreshResult.success) {
+//           const retryResponse = await fetch(url, {
+//             ...options,
+//             credentials: 'include',
+//             headers: {
+//               'Content-Type': 'application/json',
+//               ...options.headers,
+//             },
+//           });
+          
+//           isRefreshing = false;
+//           return retryResponse;
+//         }
+//       } catch (refreshError) {
+//         console.error('Token refresh failed:', refreshError);
+//         AuthHelper.clearUser();
+//         window.location.href = '/signin';
+//         throw new Error('Session expired. Please sign in again.');
+//       }
+      
+//       isRefreshing = false;
+//     }
+    
+//     return response;
 //   },
 
-//   onAuthStateChange: (callback: (event: string, session: any) => void) => {
-//     const { data } = supabase.auth.onAuthStateChange(callback);
-//     return data.subscription;
+//   // Convenience methods
+//   get: async (url: string, options: RequestInit = {}) => {
+//     return AuthHelper.fetchWithAuth(url, { ...options, method: 'GET' });
+//   },
+
+//   post: async (url: string, data: any, options: RequestInit = {}) => {
+//     return AuthHelper.fetchWithAuth(url, {
+//       ...options,
+//       method: 'POST',
+//       body: JSON.stringify(data),
+//     });
+//   },
+
+//   put: async (url: string, data: any, options: RequestInit = {}) => {
+//     return AuthHelper.fetchWithAuth(url, {
+//       ...options,
+//       method: 'PUT',
+//       body: JSON.stringify(data),
+//     });
+//   },
+
+//   patch: async (url: string, data: any, options: RequestInit = {}) => {
+//     return AuthHelper.fetchWithAuth(url, {
+//       ...options,
+//       method: 'PATCH',
+//       body: JSON.stringify(data),
+//     });
+//   },
+
+//   delete: async (url: string, options: RequestInit = {}) => {
+//     return AuthHelper.fetchWithAuth(url, { ...options, method: 'DELETE' });
+//   },
+
+//   // User state management
+//   saveUser: (userData: any) => {
+//     localStorage.setItem("user", JSON.stringify(userData));
+//   },
+  
+//   getCurrentUser: () => {
+//     const userStr = localStorage.getItem('user');
+//     if (!userStr) return null;
+    
+//     try {
+//       return JSON.parse(userStr);
+//     } catch {
+//       return null;
+//     }
+//   },
+
+//   clearUser: () => {
+//     localStorage.removeItem('user');
+//     localStorage.removeItem('authToken');
+//   },
+
+//   isAuthenticated: () => {
+//     return !!AuthHelper.getCurrentUser();
+//   },
+
+//   // Initialize user state from localStorage
+//   initializeUser: () => {
+//     return AuthHelper.getCurrentUser();
+//   },
+// };
+
+// const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
+
+// export const AuthApi = {
+//   signUp: async (data: {
+//     email: string;
+//     password: string;
+//     firstName: string;
+//     lastName: string;
+//     isPartner?: boolean;
+//   }) => {
+//     const res = await fetch(`${API_BASE_URL}/api/auth/signUp`, {
+//       method: "POST",
+//       headers: { "Content-Type": "application/json" },
+//       body: JSON.stringify(data),
+//     });
+//     const result = await res.json();
+//     if(result.session?.access_token){
+//       localStorage.setItem("authToken", result.session.access_token);
+//     }
+//     return result;
+//   },
+
+//   signIn: async (email: string, password: string) => {
+//     const res = await fetch(`${API_BASE_URL}/api/auth/signIn`, {
+//       method: "POST",
+//       headers: { "Content-Type": "application/json" },
+//       body: JSON.stringify({ email, password }),
+//     });
+//     const result = await res.json();
+//     if(result.session?.access_token){
+//       localStorage.setItem("authToken", result.session.access_token);
+//     }
+//     return result;
+//   },
+
+//   signInWithGoogle: async () => {
+//     const res = await fetch(`${API_BASE_URL}/api/auth/signInWithGoogle`, {
+//       method: "POST",
+//     });
+//     return await res.json();
+//   },
+
+//   getProfile: async (token: string) => {
+//     const res = await fetch(`${API_BASE_URL}/api/auth/profile`, {
+//       headers: { Authorization: `Bearer ${token}` },
+//     });
+//     return await res.json();
+//   },
+
+//   signOut: async () => {
+//     const res = await fetch(`${API_BASE_URL}/api/auth/signOut`, {
+//       method: "POST",
+//     });
+//     // localStorage.removeItem("authToken");
+//     return await res.json();
 //   },
 // };

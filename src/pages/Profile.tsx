@@ -26,7 +26,7 @@ import {
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
-import { AuthApi } from "../services/authApi";
+import { authApi } from "../services/authApi";
 
 const Profile = () => {
   const { toast } = useToast();
@@ -43,26 +43,60 @@ const Profile = () => {
   //   isAdmin: true, // Simulated admin role
   // });
   
-  const [user, setUser] = useState<any>(null); // start as null
+  // const [user, setUser] = useState<any>(null); // start as null
+
+  // useEffect(() => {
+  //   const fetchProfile = async () => {
+  //     const profile = await authApi.getProfile();
+  //     console.log("[FRONTEND] Profile response:", profile);
+  //     if(!profile?.user){
+  //       navigate("/signin");
+  //     }
+  //     // AuthHelper.saveUser(profile.user);
+  //     setUser({
+  //       firstName: profile.user.first_name,
+  //       lastName: profile.user.last_name,
+  //       email: profile.user.email,
+  //       phone: profile.user.phone || "",
+  //       address: profile.user.address || "",
+  //       avatar: profile.user.avatar_url || "",
+  //       isAdmin: profile.user.role === "admin",
+  //       isSuperAdmin: profile.user.role === "super_admin",
+  //     });
+  //   };
+  //   fetchProfile();
+  // }, []);
+
+  const [user, setUser] = useState<any>(null);
 
   useEffect(() => {
-    const fetchUser = async () => {
-      const session = await AuthService.getSession();
-      if(session?.user){
+    const fetchProfile = async () => {
+      try {
+        const profile = await authApi.getProfile();
+        console.log("[FRONTEND] Profile response:", profile);
+
+        if (!profile?.user) {
+          navigate("/signin");
+        }
+
         setUser({
-          firstName: session.user.user_metadata.firstName,
-          lastName: session.user.user_metadata.lastName,
-          email: session.user.email,
-          phone: session.user.user_metadata.phone || "",
-          address: session.user.user_metadata.address || "",
-          avatar: session.user.user_metadata.avatar || "",
-          isAdmin: session.user.user_metadata.role === "admin",
+          firstName: profile.user.first_name,
+          lastName: profile.user.last_name,
+          email: profile.user.email,
+          phone: profile.user.phone || "",
+          address: profile.user.address || "",
+          avatar: profile.user.avatar_url || "",
+          isAdmin: profile.user.role === "admin",
+          isSuperAdmin: profile.user.role === "super_admin",
         });
-      } else {
+      } catch (err) {
+        console.error("Failed to fetch profile:", err);
+        toast({ title: "Error", description: "Failed to load profile. Please try again." });
         navigate("/signin");
       }
     };
-    fetchUser();
+
+    fetchProfile();
   }, []);
 
   const [isEditing, setIsEditing] = useState(false);
@@ -73,20 +107,25 @@ const Profile = () => {
       description: "Your profile has been updated successfully.",
     });
   };
+
   const handleLogout =  async() => {
     try{
-      await AuthService.signOut();
+      await authApi.signOut();
       toast({
         title: "Signed Out",
         description: "You have been signed out successfully.",
       });
+      setUser(null);
       navigate("/signin");
     }catch(err){
-      toast({ title: "Error", description: err.message || "Failed to sign out. Please try again." });
+      toast({ 
+        title: "Error", 
+        description: err.message || "Failed to sign out. Please try again." 
+      });
       return;
     }
-    
   };
+
   const handleSwitchToAdmin = () => {
     navigate("/admin");
   };

@@ -1,4 +1,4 @@
-import { supabase } from "../config/superbaseAdmin";
+import { supabase } from "../config/supabaseAdmin";
 
 export type Role = "customer" | "proprietor" | "admin";
 
@@ -9,14 +9,14 @@ export interface User {
   role?: Role;
 }
 
-export const UserModel = {
+export const userModel = {
   createUser: async ({
     id,
     firstName,
     lastName,
     role = "customer",
   }: User) => {
-    const { error } = await supabase.from("users").insert([
+    const { error } = await supabase.from("profiles").insert([
       {
         id,
         first_name: firstName,
@@ -28,14 +28,15 @@ export const UserModel = {
     if(error) throw error;
   },
 
-//   findById: async (id: string) => {
-//     const { data, error } = await supabase
-//       .from("users")
-//       .select("*")
-//       .eq("id", id)
-//       .single();
+  getUserById: async (id: string) => {
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("id, first_name, last_name, role, phone, address, avatar_url")
+      .eq("id", id)
+      .maybeSingle();
+      // .single();
+    if (error) throw error;
+    return data;
+  },
 
-//     if (error) throw error;
-//     return data;
-//   },
 };
