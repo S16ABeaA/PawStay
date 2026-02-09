@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
@@ -10,7 +10,15 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import PropertyTypeCard from "@/components/property-listing/PropertyTypeCard";
 import StepIndicator from "@/components/property-listing/StepIndicator";
-import { MapContainer, Marker, TileLayer, useMapEvents } from "react-leaflet";
+import {
+  MapContainer,
+  Marker,
+  TileLayer,
+  useMapEvents,
+  type MapContainerProps,
+  type MarkerProps,
+  type TileLayerProps,
+} from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import {
@@ -33,6 +41,7 @@ import {
   X,
   Image,
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { PropertyService, PropertySubmissionData } from "@/utils/propertyService";
 import supabase from '@/config/supabaseClient';
@@ -64,7 +73,14 @@ const countryCodes = [
   { code: "+886", country: "Taiwan", flag: "🇹🇼" },
 ];
 
-const propertyTypes = [
+type PropertyTypeId = "hotel" | "grooming" | "veterinary";
+
+const propertyTypes: Array<{
+  id: PropertyTypeId;
+  icon: LucideIcon;
+  title: string;
+  description: string;
+}> = [
   {
     id: "hotel",
     icon: Building2,
@@ -84,107 +100,121 @@ const propertyTypes = [
     description: "Medical care and wellness services",
   },
 ];
+const amenityOptions: Array<{ name: string; icon: string; types?: PropertyTypeId[] }> = [
+  // Boarding (hotel)
+  { name: "Individual kennel / private room", icon: "🧺", types: ["hotel"] },
+  { name: "Shared room", icon: "🛏️", types: ["hotel"] },
+  { name: "Luxury suite", icon: "🛋️", types: ["hotel"] },
+  { name: "Size-based enclosures (small / medium / large pets)", icon: "📏", types: ["hotel"] },
+  { name: "Indoor boarding", icon: "🏠", types: ["hotel"] },
+  { name: "Outdoor access", icon: "🌿", types: ["hotel"] },
+  { name: "Air-conditioned rooms", icon: "❄️", types: ["hotel"] },
+  { name: "Heated rooms", icon: "🔥", types: ["hotel"] },
+  { name: "Natural ventilation", icon: "🍃", types: ["hotel"] },
+  { name: "Comfortable bedding provided", icon: "🧸", types: ["hotel"] },
+  { name: "Owner-provided bedding allowed", icon: "🧺", types: ["hotel"] },
+  { name: "Soundproof / quiet areas", icon: "🔇", types: ["hotel"] },
+  { name: "24/7 staff supervision", icon: "👁️", types: ["hotel"] },
+  { name: "Scheduled feeding", icon: "🍽️", types: ["hotel"] },
+  { name: "Custom diet accommodation", icon: "🥣", types: ["hotel"] },
+  { name: "Medication administration", icon: "💊", types: ["hotel"] },
+  { name: "Vet-supervised boarding", icon: "⚕️", types: ["hotel"] },
+  { name: "Special needs care", icon: "🫶", types: ["hotel"] },
+  { name: "Daily walks", icon: "🚶", types: ["hotel"] },
+  { name: "Group playtime", icon: "🐕", types: ["hotel"] },
+  { name: "Solo playtime", icon: "🎾", types: ["hotel"] },
+  { name: "Outdoor play yard", icon: "🏕️", types: ["hotel"] },
+  { name: "Enrichment toys & activities", icon: "🧩", types: ["hotel"] },
+  { name: "Secure fencing", icon: "🛡️", types: ["hotel"] },
+  { name: "CCTV monitoring", icon: "📹", types: ["hotel"] },
+  { name: "Regular sanitation", icon: "🧼", types: ["hotel"] },
+  { name: "Vaccination required", icon: "✅", types: ["hotel"] },
+  { name: "Separate cat and dog areas", icon: "🐶", types: ["hotel"] },
+  { name: "Photo / video updates", icon: "📷", types: ["hotel"] },
+  { name: "Live pet cam", icon: "📡", types: ["hotel"] },
+  { name: "Emergency contact support", icon: "🆘", types: ["hotel"] },
+  { name: "Long-stay discounts", icon: "🏷️", types: ["hotel"] },
 
+  // Veterinary
+  { name: "Consultation / exam rooms", icon: "🩺", types: ["veterinary"] },
+  { name: "Diagnostic laboratory", icon: "🧪", types: ["veterinary"] },
+  { name: "X-ray services", icon: "🦴", types: ["veterinary"] },
+  { name: "Ultrasound services", icon: "📡", types: ["veterinary"] },
+  { name: "Surgical suite", icon: "🏥", types: ["veterinary"] },
+  { name: "Recovery / observation area", icon: "🛏️", types: ["veterinary"] },
+  { name: "Isolation ward", icon: "🚪", types: ["veterinary"] },
+  { name: "General check-ups", icon: "✅", types: ["veterinary"] },
+  { name: "Vaccinations", icon: "💉", types: ["veterinary"] },
+  { name: "Emergency care", icon: "🚑", types: ["veterinary"] },
+  { name: "Dental services", icon: "🦷", types: ["veterinary"] },
+  { name: "Minor procedures", icon: "🩹", types: ["veterinary"] },
+  { name: "Major surgery", icon: "⚕️", types: ["veterinary"] },
+  { name: "Chronic illness management", icon: "📋", types: ["veterinary"] },
+  { name: "Licensed veterinarian on-site", icon: "👩‍⚕️", types: ["veterinary"] },
+  { name: "Veterinary technicians", icon: "🧑‍⚕️", types: ["veterinary"] },
+  { name: "24/7 emergency availability", icon: "🕐", types: ["veterinary"] },
+  { name: "Appointment booking", icon: "📅", types: ["veterinary"] },
+  { name: "Walk-in accepted", icon: "🚶", types: ["veterinary"] },
+  { name: "Digital medical records", icon: "💾", types: ["veterinary"] },
+  { name: "Online prescription refills", icon: "💊", types: ["veterinary"] },
+  { name: "Health reminders", icon: "🔔", types: ["veterinary"] },
+  { name: "Post-treatment follow-ups", icon: "☎️", types: ["veterinary"] },
 
-const hotelAmenities = [
-  "24/7 Supervision",
-  "Outdoor Play Area",
-  "Webcam Access",
-  "Grooming Services",
-  "Training Sessions",
-  "Vet On-site",
-  "Climate Control",
-  "Individual Suites",
+  // Grooming
+  { name: "Bath & blow-dry", icon: "🛁", types: ["grooming"] },
+  { name: "Haircut / trimming", icon: "✂️", types: ["grooming"] },
+  { name: "Breed-specific styling", icon: "🐩", types: ["grooming"] },
+  { name: "Nail trimming", icon: "🧷", types: ["grooming"] },
+  { name: "Ear cleaning", icon: "👂", types: ["grooming"] },
+  { name: "Eye cleaning", icon: "👁️", types: ["grooming"] },
+  { name: "De-shedding treatment", icon: "🧽", types: ["grooming"] },
+  { name: "Medicated baths", icon: "🧴", types: ["grooming"] },
+  { name: "Flea & tick treatment", icon: "🪲", types: ["grooming"] },
+  { name: "Anal gland expression", icon: "🧼", types: ["grooming"] },
+  { name: "Teeth brushing", icon: "🦷", types: ["grooming"] },
+  { name: "Professional grooming tables", icon: "🪑", types: ["grooming"] },
+  { name: "Dedicated bathing stations", icon: "🚿", types: ["grooming"] },
+  { name: "Cage-free grooming", icon: "🐾", types: ["grooming"] },
+  { name: "Low-stress handling", icon: "🌿", types: ["grooming"] },
+  { name: "Separate drying area", icon: "💨", types: ["grooming"] },
+  { name: "Hypoallergenic products", icon: "🧴", types: ["grooming"] },
+  { name: "Sensitive-skin products", icon: "🌼", types: ["grooming"] },
+  { name: "One-pet-at-a-time grooming", icon: "🐶", types: ["grooming"] },
+  { name: "Vet-on-call for grooming", icon: "☎️", types: ["grooming"] },
+  { name: "Same-day service", icon: "⚡", types: ["grooming"] },
+  { name: "Appointment scheduling", icon: "📅", types: ["grooming"] },
+  { name: "Grooming packages", icon: "🎁", types: ["grooming"] },
+  { name: "Add-on spa services", icon: "🫧", types: ["grooming"] },
 ];
 
-const groomingServices = [
-  "Bath & Dry",
-  "Haircut & Styling",
-  "Nail Trimming",
-  "Ear Cleaning",
-  "Teeth Brushing",
-  "De-shedding",
-  "Flea Treatment",
-  "Spa Packages",
+const bookingRuleOptions: Array<{ name: string; description: string; types?: PropertyTypeId[] }> = [
+  { name: "Advance booking required", description: "Set minimum notice period" },
+  { name: "Same-day booking allowed", description: "Accept last-minute bookings" },
+  { name: "Minimum stay requirements", description: "Set minimum nights/days", types: ["hotel"] },
+  { name: "Maximum stay limits", description: "Set maximum stay duration", types: ["hotel"] },
+  { name: "Deposit required", description: "Require payment to secure booking" },
+  { name: "Full payment upfront", description: "Require full payment at booking" },
 ];
 
-const vetServices = [
-  "General Checkups",
-  "Vaccinations",
-  "Surgery",
-  "Emergency Care",
-  "Dental Care",
-  "Lab Tests",
-  "X-Ray & Imaging",
-  "Pharmacy",
+const addOnOptions: Array<{ name: string; types?: PropertyTypeId[] }> = [
+  { name: "Flea & tick treatment", types: ["grooming", "hotel"] },
+  { name: "De-shedding", types: ["grooming", "hotel"] },
+  { name: "Nail grinding", types: ["grooming"] },
+  { name: "Teeth brushing", types: ["grooming"] },
+  { name: "Medication administration", types: ["hotel"] },
+  { name: "Extra playtime", types: ["hotel"] },
+  { name: "Special diet handling", types: ["hotel"] },
 ];
 
-const groomingServicesList = [
-  "Bath & blow dry",
-  "Haircut / trimming",
-  "Nail clipping",
-  "Ear cleaning",
-  "Teeth brushing",
-  "De-shedding",
-  "Breed-specific grooming",
-  "Add-ons (flea treatment, spa packages)",
-];
-
-const vetServicesList = [
-  "General consultation",
-  "Vaccination",
-  "Deworming",
-  "Minor / major surgery",
-  "Laboratory tests",
-  "Emergency care",
-  "Pharmacy / pet meds",
-  "Home visits",
-];
-
-const boardingServicesList = [
-  "Daycare",
-  "Overnight / long-term boarding",
-  "Cage-free boarding",
-  "Private rooms / suites",
-  "Playtime & socialization",
-  "Special care (senior pets, medication)",
-];
-
-const petTypesList = [
-  "Dogs (small / medium / large)",
-  "Cats",
-  "Exotic pets (birds, rabbits, reptiles)",
-];
-
-const facilitiesAmenitiesList = [
-  "Air-conditioned facilities",
-  "CCTV / pet cams",
-  "Indoor & outdoor play areas",
-  "Separate areas for dogs & cats",
-  "Isolation room (vet / boarding)",
-  "Grooming equipment quality",
-  "Medical equipment (for vets)",
-  "Feeding bowls / bedding provided",
-  "24/7 supervision (boarding)",
-];
-
-const bookingRulesList = [
-  "Advance booking required",
-  "Same-day booking allowed",
-  "Cancellation & rescheduling policy",
-  "Vaccination requirements",
-  "Health declaration required",
-  "Liability waiver",
-  "Aggressive behavior policy",
-];
-
-const healthSafetyList = [
-  "Required vaccination records",
-  "Parasite prevention requirement",
-  "Emergency protocol",
-  "Vet on-call (for grooming/boarding)",
-  "Isolation procedure for sick pets",
-  "Cleaning & sanitation routine",
+const pricingDisclaimerOptions: Array<{ name: string; types?: PropertyTypeId[] }> = [
+  { name: "Prices may vary based on pet condition" },
+  { name: "Final price confirmed after inspection" },
+  { name: "Vet procedures require assessment first", types: ["veterinary"] },
+  { name: "Emergency fees apply for after-hours service", types: ["veterinary", "grooming"] },
+  { name: "Holiday surcharges apply during peak seasons" },
+  { name: "Multi-pet discounts available" },
+  { name: "Deposit required to secure booking" },
+  { name: "Cancellation fees apply as per policy" },
 ];
 
 const ListProperty = () => {
@@ -197,108 +227,148 @@ const ListProperty = () => {
   const [pricingCalendarStep, setPricingCalendarStep] = useState(1);
   const [pricingCalendarCompleted, setPricingCalendarCompleted] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [enableCatPricing, setEnableCatPricing] = useState(false);
-  const [enableExoticPricing, setEnableExoticPricing] = useState(false);
-  const [selectedType, setSelectedType] = useState<
-    string | null
-  >(null);
+  const [selectedTypes, setSelectedTypes] = useState<PropertyTypeId[]>([]);
   const [formData, setFormData] = useState({
-    propertyName: "",
-    addressSearch: "",
-    addressLine2: "",
-    country: "",
-    city: "",
-    zipCode: "",
-    latitude: 14.5995,
-    longitude: 120.9842,
-    phone: "",
-    ownerName: "",
-    email: "",
-    password: "",
-    confirmPassword: "",
-    description: "",
-    isPinAccurate: true,
-    services: [] as string[],
-    petTypesAccepted: [] as string[],
-    dogSizes: [] as string[],
-    exoticPetTypes: "",
-    breedRestrictions: false,
-    breedRestrictionDetails: "",
-    aggressivePolicy: false,
-    aggressivePolicyDetails: "",
-    unvaccinatedPolicy: false,
-    unvaccinatedPolicyDetails: "",
-    facilitiesAmenities: [] as string[],
-    sameHoursEveryDay: false,
-    dailyOpenTime: "",
-    dailyCloseTime: "",
-    weeklyHours: {} as Record<string, { open: string; close: string }>,
-    weekendAvailability: false,
-    holidayAvailability: false,
-    emergencyServices: false,
-    checkInCutoff: "",
-    pickupStart: "",
-    pickupEnd: "",
-    appointmentOnly: "",
-    bookingRules: [] as string[],
-    cancellationPolicy: { freeCancellation: "24hours", lateFee: "", noShow: "" },
-    complianceRequirements: [] as string[],
-    healthSafety: [] as string[],
-    vetAvailability: [] as string[],
-    sanitationProtocols: [] as string[],
-    emergencyContact: "",
-    nearestVetHospital: "",
-    emergencyResponseTime: "",
-    baseServices: [] as { name: string; priceType: string; price: string; duration: string }[],
-    petSizePricing: { small: "", medium: "", large: "", giant: "", cats: "", exotic: "" },
-    addOns: [] as { name: string; price: string; type: string }[],
-    vetFees: {} as Record<string, string>,
-    boardingRules: { advanceBooking: false, sameDayBooking: false, freeCancellation: false, lateCancellationFee: false, lateCancellationFeeAmount: "", vaccinationRequired: false, healthDeclaration: false, noAggressivePets: false, liabilityWaiver: false },
-    feesCharges: { serviceFee: "", taxes: "Included", noShow: "", latePickup: "", cleaningFee: "", emergencyFee: "", holidaySurcharge: "", cancellationFee: "" },
-    paymentOptions: { deposit: false, methods: [] as string[], refundPolicy: "" },
-    pricingNotes: "",
-    additionalPricingNotes: "",
-    propertyImages: [] as File[],
-    lguPermits: [] as File[],
-    baiDocument: null as File | null,
-    contractDocument: null as File | null,
-    occupancyRate: 0,
-    animalCapacity: 0,
-    legalEntityType: "" as "" | "individual" | "business",
-    contractingParty: {
-      firstName: "",
-      middleName: "",
-      lastName: "",
-      email: "",
-      phone: "",
-      phoneCountryCode: "+63",
-    },
-    contractingPartyAddress: {
-      country: "Philippines",
-      streetAddress: "",
-      addressLine2: "",
-      city: "",
-      postalCode: "",
-    },
-    legalAgreementAccepted: {
-      termsAccepted: false,
-      dataProcessing: false,
-    },
-    finalAgreementAccepted: false,
+            propertyName: "",
+            addressSearch: "",
+            addressLine2: "",
+            country: "",
+            city: "",
+            zipCode: "",
+            latitude: 14.5995,
+            longitude: 120.9842,
+            phone: "",
+            ownerName: "",
+            email: "",
+            password: "",
+            confirmPassword: "",
+            description: "",
+            isPinAccurate: true,
+            services: [] as string[],
+            petTypesAccepted: [] as string[],
+            dogSizes: [] as string[],
+            exoticPetTypes: "",
+            breedRestrictions: false,
+            breedRestrictionDetails: "",
+            aggressivePolicy: false,
+            aggressivePolicyDetails: "",
+            unvaccinatedPolicy: false,
+            unvaccinatedPolicyDetails: "",
+            facilitiesAmenities: [] as string[],
+            sameHoursEveryDay: false,
+            dailyOpenTime: "",
+            dailyCloseTime: "",
+            weeklyHours: {} as Record<string, { open: string; close: string }>,
+            weekendAvailability: false,
+            holidayAvailability: false,
+            emergencyServices: false,
+            checkInCutoff: "",
+            pickupStart: "",
+            pickupEnd: "",
+            appointmentOnly: "",
+            bookingRules: [] as string[],
+            cancellationPolicy: { freeCancellation: "24hours", lateFee: "", noShow: "" },
+            complianceRequirements: [] as string[],
+            healthSafety: [] as string[],
+            vetAvailability: [] as string[],
+            sanitationProtocols: [] as string[],
+            emergencyContact: "",
+            nearestVetHospital: "",
+            emergencyResponseTime: "",
+            baseServices: [] as { name: string; priceType: string; price: string; minPrice: string; maxPrice: string; duration: string }[],
+            petSizePricing: { small: "", medium: "", large: "", giant: "", cats: "", exotic: "" },
+            addOns: [] as { name: string; price: string; type: string }[],
+            vetFees: {} as Record<string, string>,
+            boardingRules: { advanceBooking: false, sameDayBooking: false, freeCancellation: false, lateCancellationFee: false, lateCancellationFeeAmount: "", vaccinationRequired: false, healthDeclaration: false, noAggressivePets: false, liabilityWaiver: false },
+            feesCharges: { serviceFee: "", taxes: "Included", noShow: "", latePickup: "", cleaningFee: "", emergencyFee: "", holidaySurcharge: "", cancellationFee: "" },
+            paymentOptions: { deposit: false, methods: [] as string[], refundPolicy: "" },
+            pricingNotes: "",
+            additionalPricingNotes: "",
+            propertyImages: [] as File[],
+            lguPermits: [] as File[],
+            baiDocument: null as File | null,
+            contractDocument: null as File | null,
+            occupancyRate: 0,
+            animalCapacity: 0,
+            legalEntityType: "" as "" | "individual" | "business",
+            contractingParty: {
+              firstName: "",
+              middleName: "",
+              lastName: "",
+              email: "",
+              phone: "",
+              phoneCountryCode: "+63",
+            },
+            contractingPartyAddress: {
+              country: "Philippines",
+              streetAddress: "",
+              addressLine2: "",
+              city: "",
+              postalCode: "",
+            },
+            legalAgreementAccepted: {
+              termsAccepted: false,
+              dataProcessing: false,
+            },
+            finalAgreementAccepted: false,
   });
 
-  const getServicesForType = () => {
-    switch (selectedType) {
-      case "hotel":
-        return hotelAmenities;
-      case "grooming":
-        return groomingServices;
-      case "veterinary":
-        return vetServices;
-      default:
-        return [];
+  const hasBoarding = selectedTypes.includes("hotel");
+  const hasGrooming = selectedTypes.includes("grooming");
+  const hasVet = selectedTypes.includes("veterinary");
+
+  const pricingSteps = useMemo(() => {
+    const stepsList = [1];
+
+    if (hasBoarding || hasGrooming) {
+      stepsList.push(3);
     }
-  };
+
+    if (hasVet) {
+      stepsList.push(4);
+    }
+
+    if (hasBoarding) {
+      stepsList.push(5);
+    }
+
+    stepsList.push(6, 7, 8);
+    return stepsList;
+  }, [hasBoarding, hasGrooming, hasVet]);
+
+  const visibleAmenities = useMemo(
+    () =>
+      amenityOptions.filter(
+        (amenity) =>
+          !amenity.types || amenity.types.some((type) => selectedTypes.includes(type)),
+      ),
+    [selectedTypes],
+  );
+
+  const visibleBookingRules = useMemo(
+    () =>
+      bookingRuleOptions.filter(
+        (rule) => !rule.types || rule.types.some((type) => selectedTypes.includes(type)),
+      ),
+    [selectedTypes],
+  );
+
+  const visibleAddOns = useMemo(
+    () =>
+      addOnOptions.filter(
+        (addon) => !addon.types || addon.types.some((type) => selectedTypes.includes(type)),
+      ),
+    [selectedTypes],
+  );
+
+  const visiblePricingDisclaimers = useMemo(
+    () =>
+      pricingDisclaimerOptions.filter(
+        (disclaimer) =>
+          !disclaimer.types || disclaimer.types.some((type) => selectedTypes.includes(type)),
+      ),
+    [selectedTypes],
+  );
 
   const redPinIcon = useMemo(
     () =>
@@ -375,19 +445,10 @@ const ListProperty = () => {
     return null;
   };
 
-  const handleServiceToggle = (service: string) => {
-    setFormData((prev) => ({
-      ...prev,
-      services: prev.services.includes(service)
-        ? prev.services.filter((s) => s !== service)
-        : [...prev.services, service],
-    }));
-  };
-
   const handleNext = () => {
     if (currentStep === 1) {
       if (establishmentStep === 1) {
-        if (!formData.propertyName || !selectedType) {
+        if (!formData.propertyName || selectedTypes.length === 0) {
           toast({
             title: "Please complete Property Name and Property Type",
             variant: "destructive",
@@ -445,11 +506,14 @@ const ListProperty = () => {
     }
 
     if (currentStep === 4) {
-      if (pricingCalendarStep < 8) {
+      const currentIndex = pricingSteps.indexOf(pricingCalendarStep);
+      const nextStep = pricingSteps[currentIndex + 1];
+
+      if (nextStep) {
         setPricingCalendarCompleted(pricingCalendarStep);
-        setPricingCalendarStep((prev) => prev + 1);
+        setPricingCalendarStep(nextStep);
       } else {
-        setPricingCalendarCompleted(8);
+        setPricingCalendarCompleted(pricingSteps[pricingSteps.length - 1] ?? pricingCalendarStep);
         setCurrentStep(5);
       }
       return;
@@ -521,9 +585,12 @@ const ListProperty = () => {
     }
 
     if (currentStep === 4) {
-      if (pricingCalendarStep > 1) {
-        setPricingCalendarStep((prev) => prev - 1);
-        setPricingCalendarCompleted((prev) => prev - 1);
+      const currentIndex = pricingSteps.indexOf(pricingCalendarStep);
+      const previousStep = pricingSteps[currentIndex - 1];
+
+      if (previousStep) {
+        setPricingCalendarStep(previousStep);
+        setPricingCalendarCompleted((prev) => Math.max(prev - 1, 0));
       } else {
         setCurrentStep(3);
       }
@@ -532,8 +599,9 @@ const ListProperty = () => {
 
     if (currentStep === 5) {
       setCurrentStep(4);
-      setPricingCalendarStep(8);
-      setPricingCalendarCompleted(8);
+      const lastPricingStep = pricingSteps[pricingSteps.length - 1] ?? pricingCalendarStep;
+      setPricingCalendarStep(lastPricingStep);
+      setPricingCalendarCompleted(lastPricingStep);
       return;
     }
 
@@ -551,7 +619,7 @@ const ListProperty = () => {
       // Temporarily disabled authentication for backend testing
 
       // Validate required fields
-      if (!formData.propertyName || !selectedType || !formData.contractingParty.firstName || !formData.legalEntityType) {
+      if (!formData.propertyName || selectedTypes.length === 0 || !formData.contractingParty.firstName || !formData.legalEntityType) {
         toast({
           title: "Validation Error",
           description: "Please fill in all required fields.",
@@ -607,14 +675,61 @@ const ListProperty = () => {
       }
 
       // Prepare submission data
+      const filteredAmenities = formData.facilitiesAmenities.filter((amenity) =>
+        visibleAmenities.some((option) => option.name === amenity),
+      );
+
+      const filteredBookingRules = formData.bookingRules.filter((rule) =>
+        visibleBookingRules.some((option) => option.name === rule),
+      );
+
+      const primaryType = (selectedTypes[0] ?? "hotel") as PropertyTypeId;
+
       const submissionData: PropertySubmissionData = {
         ...formData,
         propertyImages: uploadedImages,
         lguPermits: uploadedPermits,
         baiDocument: uploadedBAI,
         contractDocument: uploadedContract,
-        propertyType: selectedType as 'hotel' | 'grooming' | 'veterinary',
+        propertyType: primaryType,
+        propertyTypes: selectedTypes,
         legalEntityType: formData.legalEntityType as 'individual' | 'business',
+        facilitiesAmenities: filteredAmenities,
+        bookingRules: filteredBookingRules,
+        checkInCutoff: hasBoarding ? formData.checkInCutoff : "",
+        pickupStart: hasBoarding ? formData.pickupStart : "",
+        pickupEnd: hasBoarding ? formData.pickupEnd : "",
+        appointmentOnly: hasGrooming || hasVet ? formData.appointmentOnly : "",
+        emergencyServices: hasVet ? formData.emergencyServices : false,
+        petSizePricing:
+          hasBoarding || hasGrooming
+            ? formData.petSizePricing
+            : { small: "", medium: "", large: "", giant: "", cats: "", exotic: "" },
+        addOns: hasBoarding || hasGrooming ? formData.addOns : [],
+        vetFees: hasVet ? formData.vetFees : {},
+        vetAvailability: hasVet || hasBoarding ? formData.vetAvailability : [],
+        healthSafety: hasBoarding || hasGrooming ? formData.healthSafety : [],
+        boardingRules: hasBoarding
+          ? formData.boardingRules
+          : {
+            advanceBooking: false,
+            sameDayBooking: false,
+            freeCancellation: false,
+            lateCancellationFee: false,
+            lateCancellationFeeAmount: "",
+            vaccinationRequired: false,
+            healthDeclaration: false,
+            noAggressivePets: false,
+            liabilityWaiver: false,
+          },
+        feesCharges: {
+          ...formData.feesCharges,
+          latePickup: hasBoarding ? formData.feesCharges.latePickup : "",
+          cleaningFee: hasBoarding ? formData.feesCharges.cleaningFee : "",
+          emergencyFee: hasVet || hasGrooming ? formData.feesCharges.emergencyFee : "",
+          noShow: formData.cancellationPolicy?.noShow || "",
+          cancellationFee: formData.cancellationPolicy?.lateFee || "",
+        },
       };
 
       // Submit the application
@@ -664,6 +779,44 @@ const ListProperty = () => {
       propertyImages: prev.propertyImages.filter((_, i) => i !== index),
     }));
   };
+
+  const mapProps = {
+    center: [formData.latitude, formData.longitude] as L.LatLngExpression,
+    zoom: 16,
+    scrollWheelZoom: true,
+    className: "h-full w-full",
+  } as unknown as MapContainerProps;
+
+  const tileLayerProps = {
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+    url: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+  } as unknown as TileLayerProps;
+
+  const markerProps = {
+    position: [formData.latitude, formData.longitude] as L.LatLngExpression,
+    icon: redPinIcon,
+    draggable: true,
+    eventHandlers: {
+      dragend: (event: L.DragEndEvent) => {
+        const marker = event.target as L.Marker;
+        const { lat, lng } = marker.getLatLng();
+        void reverseGeocode(lat, lng);
+      },
+    },
+  } as unknown as MarkerProps;
+
+  const propertySetupTotal = 5;
+  const propertySetupCompletedDisplay = currentStep > 2
+    ? propertySetupTotal
+    : currentStep < 2
+    ? 0
+    : Math.max(1, Math.min(propertySetupStep, propertySetupTotal));
+  const pricingCalendarTotal = pricingSteps.length;
+  const pricingCalendarCompletedDisplay = currentStep > 4
+    ? pricingCalendarTotal
+    : currentStep < 4
+    ? 0
+    : Math.max(1, pricingSteps.indexOf(pricingCalendarStep) + 1);
 
   return (
     <div className="min-h-screen bg-background">
@@ -717,9 +870,11 @@ const ListProperty = () => {
                     steps={steps}
                     currentStep={currentStep}
                     establishmentSubstep={establishmentStep}
-                    propertySetupCompleted={propertySetupCompleted}
+                    propertySetupCompleted={propertySetupCompletedDisplay}
+                    propertySetupTotal={propertySetupTotal}
                     photosCompleted={formData.propertyImages.length >= 5}
-                    pricingCalendarCompleted={pricingCalendarCompleted}
+                    pricingCalendarCompleted={pricingCalendarCompletedDisplay}
+                    pricingCalendarTotal={pricingCalendarTotal}
                   />
 
                   {/* Step 1: Establishment Info */}
@@ -747,8 +902,7 @@ const ListProperty = () => {
                           Property Type
                         </h3>
                         <p className="text-muted-foreground">
-                          Select the category that best
-                          describes your business
+                          Select all that apply to your business
                         </p>
                       </div>
                       <div className="grid md:grid-cols-3 gap-4">
@@ -759,10 +913,14 @@ const ListProperty = () => {
                             title={type.title}
                             description={type.description}
                             isSelected={
-                              selectedType === type.id
+                              selectedTypes.includes(type.id)
                             }
                             onClick={() =>
-                              setSelectedType(type.id)
+                              setSelectedTypes((prev) =>
+                                prev.includes(type.id)
+                                  ? prev.filter((item) => item !== type.id)
+                                  : [...prev, type.id],
+                              )
                             }
                           />
                         ))}
@@ -782,34 +940,9 @@ const ListProperty = () => {
                       </div>
                       <div className="grid lg:grid-cols-2 gap-4">
                         <div className="rounded-2xl border border-border overflow-hidden h-[420px]">
-                          <MapContainer
-                            {...({
-                              center: [formData.latitude, formData.longitude],
-                              zoom: 16,
-                              scrollWheelZoom: true,
-                              className: "h-full w-full",
-                            } as any)}
-                          >
-                            <TileLayer
-                              {...({
-                                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-                                url: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
-                              } as any)}
-                            />
-                            <Marker
-                              {...({
-                                position: [formData.latitude, formData.longitude],
-                                icon: redPinIcon,
-                                draggable: true,
-                                eventHandlers: {
-                                  dragend: (event: any) => {
-                                    const marker = event.target as L.Marker;
-                                    const { lat, lng } = marker.getLatLng();
-                                    void reverseGeocode(lat, lng);
-                                  },
-                                },
-                              } as any)}
-                            />
+                            <MapContainer {...mapProps}>
+                              <TileLayer {...tileLayerProps} />
+                              <Marker {...markerProps} />
                             <MapClickHandler
                               enabled
                               onSelect={(lat, lng) => void reverseGeocode(lat, lng)}
@@ -1106,24 +1239,7 @@ const ListProperty = () => {
                         </div>
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          {[
-                            { name: "Air-Conditioned Facility", icon: "❄️", category: "general" },
-                            { name: "CCTV / Pet Cams", icon: "📹", category: "general" },
-                            { name: "Outdoor Play Area", icon: "🐕", category: "general" },
-                            { name: "Indoor Play Area", icon: "🏠", category: "general" },
-                            { name: "Separate Grooming Area", icon: "✂️", category: "grooming" },
-                            { name: "Professional Grooming Equipment", icon: "🛁", category: "grooming" },
-                            { name: "Medical Equipment", icon: "⚕️", category: "vet" },
-                            { name: "Examination Room", icon: "🏥", category: "vet" },
-                            { name: "Luxury Suites", icon: "🛋️", category: "boarding" },
-                            { name: "Climate Controlled Rooms", icon: "🌡️", category: "boarding" },
-                            { name: "24/7 Supervision", icon: "👁️", category: "boarding" },
-                            { name: "Emergency Lighting", icon: "💡", category: "general" },
-                            { name: "Fire Safety Equipment", icon: "🚒", category: "general" },
-                            { name: "Backup Generator", icon: "⚡", category: "general" },
-                            { name: "Pet Washing Station", icon: "🚿", category: "grooming" },
-                            { name: "Drying Equipment", icon: "💨", category: "grooming" }
-                          ].map((amenity) => (
+                          {visibleAmenities.map((amenity) => (
                             <div
                               key={amenity.name}
                               className={`p-4 border-2 rounded-xl cursor-pointer transition-all ${
@@ -1142,12 +1258,6 @@ const ListProperty = () => {
                                 <div className="text-2xl">{amenity.icon}</div>
                                 <div className="flex-1">
                                   <div className="text-sm font-medium">{amenity.name}</div>
-                                  {amenity.category === "vet" && (
-                                    <div className="text-xs text-muted-foreground">Vet services only</div>
-                                  )}
-                                  {amenity.category === "boarding" && (
-                                    <div className="text-xs text-muted-foreground">Boarding only</div>
-                                  )}
                                 </div>
                                 <input
                                   type="checkbox"
@@ -1274,89 +1384,95 @@ const ListProperty = () => {
                                   onChange={(e) => setFormData((prev) => ({ ...prev, holidayAvailability: e.target.checked }))}
                                 />
                               </div>
-                              <div className="flex items-center justify-between p-3 bg-background rounded-lg border md:col-span-2">
-                                <div>
-                                  <Label className="text-sm font-medium">24/7 emergency services</Label>
-                                  <p className="text-xs text-muted-foreground">Available for emergencies</p>
+                              {hasVet && (
+                                <div className="flex items-center justify-between p-3 bg-background rounded-lg border md:col-span-2">
+                                  <div>
+                                    <Label className="text-sm font-medium">24/7 emergency services</Label>
+                                    <p className="text-xs text-muted-foreground">Available for emergencies</p>
+                                  </div>
+                                  <input
+                                    type="checkbox"
+                                    className="w-5 h-5"
+                                    checked={formData.emergencyServices || false}
+                                    onChange={(e) => setFormData((prev) => ({ ...prev, emergencyServices: e.target.checked }))}
+                                  />
                                 </div>
-                                <input
-                                  type="checkbox"
-                                  className="w-5 h-5"
-                                  checked={formData.emergencyServices || false}
-                                  onChange={(e) => setFormData((prev) => ({ ...prev, emergencyServices: e.target.checked }))}
-                                />
-                              </div>
+                              )}
                             </div>
                           </div>
 
                           {/* Boarding Rules */}
-                          <div className="bg-secondary/30 rounded-xl p-6">
-                            <h3 className="text-lg font-medium mb-6">Boarding Rules</h3>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                              <div className="space-y-2">
-                                <Label>Check-in cut-off</Label>
-                                <Input
-                                  type="time"
-                                  placeholder="6:00 PM"
-                                  value={formData.checkInCutoff || ""}
-                                  onChange={(e) => setFormData((prev) => ({ ...prev, checkInCutoff: e.target.value }))}
-                                />
-                              </div>
-                              <div className="space-y-2">
-                                <Label>Pick-up window start</Label>
-                                <Input
-                                  type="time"
-                                  placeholder="8:00 AM"
-                                  value={formData.pickupStart || ""}
-                                  onChange={(e) => setFormData((prev) => ({ ...prev, pickupStart: e.target.value }))}
-                                />
-                              </div>
-                              <div className="space-y-2">
-                                <Label>Pick-up window end</Label>
-                                <Input
-                                  type="time"
-                                  placeholder="6:00 PM"
-                                  value={formData.pickupEnd || ""}
-                                  onChange={(e) => setFormData((prev) => ({ ...prev, pickupEnd: e.target.value }))}
-                                />
+                          {hasBoarding && (
+                            <div className="bg-secondary/30 rounded-xl p-6">
+                              <h3 className="text-lg font-medium mb-6">Boarding Rules</h3>
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div className="space-y-2">
+                                  <Label>Check-in cut-off</Label>
+                                  <Input
+                                    type="time"
+                                    placeholder="6:00 PM"
+                                    value={formData.checkInCutoff || ""}
+                                    onChange={(e) => setFormData((prev) => ({ ...prev, checkInCutoff: e.target.value }))}
+                                  />
+                                </div>
+                                <div className="space-y-2">
+                                  <Label>Pick-up window start</Label>
+                                  <Input
+                                    type="time"
+                                    placeholder="8:00 AM"
+                                    value={formData.pickupStart || ""}
+                                    onChange={(e) => setFormData((prev) => ({ ...prev, pickupStart: e.target.value }))}
+                                  />
+                                </div>
+                                <div className="space-y-2">
+                                  <Label>Pick-up window end</Label>
+                                  <Input
+                                    type="time"
+                                    placeholder="6:00 PM"
+                                    value={formData.pickupEnd || ""}
+                                    onChange={(e) => setFormData((prev) => ({ ...prev, pickupEnd: e.target.value }))}
+                                  />
+                                </div>
                               </div>
                             </div>
-                          </div>
+                          )}
 
                           {/* Booking Type */}
-                          <div className="bg-secondary/30 rounded-xl p-6">
-                            <h3 className="text-lg font-medium mb-6">Booking Type</h3>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                              <div
-                                className={`p-4 border-2 rounded-xl cursor-pointer transition-all ${
-                                  formData.appointmentOnly === "appointment"
-                                    ? "border-primary bg-primary/5"
-                                    : "border-border hover:border-primary/30"
-                                }`}
-                                onClick={() => setFormData((prev) => ({ ...prev, appointmentOnly: "appointment" }))}
-                              >
-                                <div className="text-center">
-                                  <div className="text-2xl mb-2">📅</div>
-                                  <div className="text-sm font-medium">Appointment-only</div>
-                                  <div className="text-xs text-muted-foreground mt-1">Scheduled bookings only</div>
+                          {(hasGrooming || hasVet) && (
+                            <div className="bg-secondary/30 rounded-xl p-6">
+                              <h3 className="text-lg font-medium mb-6">Booking Type</h3>
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div
+                                  className={`p-4 border-2 rounded-xl cursor-pointer transition-all ${
+                                    formData.appointmentOnly === "appointment"
+                                      ? "border-primary bg-primary/5"
+                                      : "border-border hover:border-primary/30"
+                                  }`}
+                                  onClick={() => setFormData((prev) => ({ ...prev, appointmentOnly: "appointment" }))}
+                                >
+                                  <div className="text-center">
+                                    <div className="text-2xl mb-2">📅</div>
+                                    <div className="text-sm font-medium">Appointment-only</div>
+                                    <div className="text-xs text-muted-foreground mt-1">Scheduled bookings only</div>
+                                  </div>
                                 </div>
-                              </div>
-                              <div
-                                className={`p-4 border-2 rounded-xl cursor-pointer transition-all ${
-                                  formData.appointmentOnly === "walkins"
-                                    ? "border-primary bg-primary/5"
-                                    : "border-border hover:border-primary/30"
-                                }`}
-                                onClick={() => setFormData((prev) => ({ ...prev, appointmentOnly: "walkins" }))}
-                              >
-                                <div className="text-center">
-                                  <div className="text-2xl mb-2">🚶</div>
-                                  <div className="text-sm font-medium">Walk-ins accepted</div>
-                                  <div className="text-xs text-muted-foreground mt-1">Accept same-day visits</div>
+                                <div
+                                  className={`p-4 border-2 rounded-xl cursor-pointer transition-all ${
+                                    formData.appointmentOnly === "walkins"
+                                      ? "border-primary bg-primary/5"
+                                      : "border-border hover:border-primary/30"
+                                  }`}
+                                  onClick={() => setFormData((prev) => ({ ...prev, appointmentOnly: "walkins" }))}
+                                >
+                                  <div className="text-center">
+                                    <div className="text-2xl mb-2">🚶</div>
+                                    <div className="text-sm font-medium">Walk-ins accepted</div>
+                                    <div className="text-xs text-muted-foreground mt-1">Accept same-day visits</div>
+                                  </div>
                                 </div>
                               </div>
                             </div>
-                          </div>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -1379,91 +1495,25 @@ const ListProperty = () => {
                           <div className="bg-secondary/30 rounded-xl p-6">
                             <h3 className="text-lg font-medium mb-6">Booking Rules</h3>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                              {[
-                                "Advance booking required",
-                                "Same-day booking allowed",
-                                "Minimum stay requirements",
-                                "Maximum stay limits",
-                                "Deposit required",
-                                "Full payment upfront"
-                              ].map((rule) => (
-                                <div key={rule} className="flex items-center justify-between p-3 bg-background rounded-lg border">
+                              {visibleBookingRules.map((rule) => (
+                                <div key={rule.name} className="flex items-center justify-between p-3 bg-background rounded-lg border">
                                   <div>
-                                    <Label className="text-sm font-medium">{rule}</Label>
-                                    <p className="text-xs text-muted-foreground">
-                                      {rule === "Advance booking required" && "Set minimum notice period"}
-                                      {rule === "Same-day booking allowed" && "Accept last-minute bookings"}
-                                      {rule === "Minimum stay requirements" && "Set minimum nights/days"}
-                                      {rule === "Maximum stay limits" && "Set maximum stay duration"}
-                                      {rule === "Deposit required" && "Require payment to secure booking"}
-                                      {rule === "Full payment upfront" && "Require full payment at booking"}
-                                    </p>
+                                    <Label className="text-sm font-medium">{rule.name}</Label>
+                                    <p className="text-xs text-muted-foreground">{rule.description}</p>
                                   </div>
                                   <input
                                     type="checkbox"
                                     className="w-5 h-5"
-                                    checked={formData.bookingRules.includes(rule)}
+                                    checked={formData.bookingRules.includes(rule.name)}
                                     onChange={(e) => {
-                                      const newRules = formData.bookingRules.includes(rule)
-                                        ? formData.bookingRules.filter(r => r !== rule)
-                                        : [...formData.bookingRules, rule];
+                                      const newRules = formData.bookingRules.includes(rule.name)
+                                        ? formData.bookingRules.filter(r => r !== rule.name)
+                                        : [...formData.bookingRules, rule.name];
                                       setFormData((prev) => ({ ...prev, bookingRules: newRules }));
                                     }}
                                   />
                                 </div>
                               ))}
-                            </div>
-                          </div>
-
-                          {/* Cancellation & Rescheduling */}
-                          <div className="bg-secondary/30 rounded-xl p-6">
-                            <h3 className="text-lg font-medium mb-6">Cancellation & Rescheduling</h3>
-                            <div className="space-y-6">
-                              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <div className="space-y-2">
-                                  <Label className="text-sm font-medium">Free cancellation period *</Label>
-                                  <select
-                                    className="w-full px-3 py-2 border rounded-md"
-                                    value={formData.cancellationPolicy?.freeCancellation || "24hours"}
-                                    onChange={(e) => setFormData((prev) => ({
-                                      ...prev,
-                                      cancellationPolicy: { ...prev.cancellationPolicy, freeCancellation: e.target.value }
-                                    }))}
-                                  >
-                                    <option value="24hours">Up to 24 hours before</option>
-                                    <option value="48hours">Up to 48 hours before</option>
-                                    <option value="1week">Up to 1 week before</option>
-                                    <option value="none">No free cancellation</option>
-                                  </select>
-                                  <p className="text-xs text-muted-foreground">Customers can cancel for free within this period</p>
-                                </div>
-
-                                <div className="space-y-2">
-                                  <Label className="text-sm font-medium">Late cancellation fee</Label>
-                                  <Input
-                                    placeholder="₱500 or 50% of booking"
-                                    value={formData.cancellationPolicy?.lateFee || ""}
-                                    onChange={(e) => setFormData((prev) => ({
-                                      ...prev,
-                                      cancellationPolicy: { ...prev.cancellationPolicy, lateFee: e.target.value }
-                                    }))}
-                                  />
-                                  <p className="text-xs text-muted-foreground">Fee for cancellations after free period</p>
-                                </div>
-                              </div>
-
-                              <div className="space-y-2">
-                                <Label className="text-sm font-medium">No-show policy</Label>
-                                <Input
-                                  placeholder="Full charge or 100% of booking amount"
-                                  value={formData.cancellationPolicy?.noShow || ""}
-                                  onChange={(e) => setFormData((prev) => ({
-                                    ...prev,
-                                    cancellationPolicy: { ...prev.cancellationPolicy, noShow: e.target.value }
-                                  }))}
-                                />
-                                <p className="text-xs text-muted-foreground">What happens if customer doesn't show up</p>
-                              </div>
                             </div>
                           </div>
 
@@ -1521,38 +1571,40 @@ const ListProperty = () => {
 
                         <div className="space-y-6">
                           {/* Vaccination & Parasite Requirements */}
-                          <div className="bg-secondary/30 rounded-xl p-6">
-                            <h3 className="text-lg font-medium mb-4">Vaccination & Parasite Requirements</h3>
-                            <div className="space-y-4">
-                              {[
-                                "DHPP vaccination (Distemper, Hepatitis, Parvovirus, Parainfluenza)",
-                                "Rabies vaccination",
-                                "Bordetella vaccination (Kennel Cough)",
-                                "Leptospirosis vaccination",
-                                "Heartworm prevention",
-                                "Flea and tick prevention",
-                                "Internal parasite prevention"
-                              ].map((requirement) => (
-                                <div key={requirement} className="flex items-center justify-between p-3 bg-background rounded-lg border">
-                                  <div>
-                                    <Label className="text-sm font-medium">{requirement}</Label>
-                                    <p className="text-xs text-muted-foreground">Required for all pets</p>
+                          {(hasBoarding || hasGrooming) && (
+                            <div className="bg-secondary/30 rounded-xl p-6">
+                              <h3 className="text-lg font-medium mb-4">Vaccination & Parasite Requirements</h3>
+                              <div className="space-y-4">
+                                {[
+                                  "DHPP vaccination (Distemper, Hepatitis, Parvovirus, Parainfluenza)",
+                                  "Rabies vaccination",
+                                  "Bordetella vaccination (Kennel Cough)",
+                                  "Leptospirosis vaccination",
+                                  "Heartworm prevention",
+                                  "Flea and tick prevention",
+                                  "Internal parasite prevention"
+                                ].map((requirement) => (
+                                  <div key={requirement} className="flex items-center justify-between p-3 bg-background rounded-lg border">
+                                    <div>
+                                      <Label className="text-sm font-medium">{requirement}</Label>
+                                      <p className="text-xs text-muted-foreground">Required for all pets</p>
+                                    </div>
+                                    <input
+                                      type="checkbox"
+                                      className="w-5 h-5"
+                                      checked={formData.healthSafety.includes(requirement)}
+                                      onChange={(e) => {
+                                        const newRequirements = formData.healthSafety.includes(requirement)
+                                          ? formData.healthSafety.filter(r => r !== requirement)
+                                          : [...formData.healthSafety, requirement];
+                                        setFormData((prev) => ({ ...prev, healthSafety: newRequirements }));
+                                      }}
+                                    />
                                   </div>
-                                  <input
-                                    type="checkbox"
-                                    className="w-5 h-5"
-                                    checked={formData.healthSafety.includes(requirement)}
-                                    onChange={(e) => {
-                                      const newRequirements = formData.healthSafety.includes(requirement)
-                                        ? formData.healthSafety.filter(r => r !== requirement)
-                                        : [...formData.healthSafety, requirement];
-                                      setFormData((prev) => ({ ...prev, healthSafety: newRequirements }));
-                                    }}
-                                  />
-                                </div>
-                              ))}
+                                ))}
+                              </div>
                             </div>
-                          </div>
+                          )}
 
                           {/* Emergency Procedures */}
                           <div className="bg-secondary/30 rounded-xl p-6">
@@ -1586,42 +1638,44 @@ const ListProperty = () => {
                           </div>
 
                           {/* Vet Availability */}
-                          <div className="bg-secondary/30 rounded-xl p-6">
-                            <h3 className="text-lg font-medium mb-4">Vet Availability</h3>
-                            <div className="space-y-4">
-                              {[
-                                "On-site veterinarian available",
-                                "24/7 vet on-call service",
-                                "Emergency vet clinic partnership",
-                                "Telemedicine consultations",
-                                "Mobile vet services"
-                              ].map((service) => (
-                                <div key={service} className="flex items-center justify-between p-3 bg-background rounded-lg border">
-                                  <div>
-                                    <Label className="text-sm font-medium">{service}</Label>
-                                    <p className="text-xs text-muted-foreground">
-                                      {service === "On-site veterinarian available" && "Vet present at facility"}
-                                      {service === "24/7 vet on-call service" && "Emergency vet support"}
-                                      {service === "Emergency vet clinic partnership" && "Affiliated with emergency clinic"}
-                                      {service === "Telemedicine consultations" && "Remote vet consultations"}
-                                      {service === "Mobile vet services" && "Vet visits facility"}
-                                    </p>
+                          {(hasVet || hasBoarding) && (
+                            <div className="bg-secondary/30 rounded-xl p-6">
+                              <h3 className="text-lg font-medium mb-4">Vet Availability</h3>
+                              <div className="space-y-4">
+                                {[
+                                  "On-site veterinarian available",
+                                  "24/7 vet on-call service",
+                                  "Emergency vet clinic partnership",
+                                  "Telemedicine consultations",
+                                  "Mobile vet services"
+                                ].map((service) => (
+                                  <div key={service} className="flex items-center justify-between p-3 bg-background rounded-lg border">
+                                    <div>
+                                      <Label className="text-sm font-medium">{service}</Label>
+                                      <p className="text-xs text-muted-foreground">
+                                        {service === "On-site veterinarian available" && "Vet present at facility"}
+                                        {service === "24/7 vet on-call service" && "Emergency vet support"}
+                                        {service === "Emergency vet clinic partnership" && "Affiliated with emergency clinic"}
+                                        {service === "Telemedicine consultations" && "Remote vet consultations"}
+                                        {service === "Mobile vet services" && "Vet visits facility"}
+                                      </p>
+                                    </div>
+                                    <input
+                                      type="checkbox"
+                                      className="w-5 h-5"
+                                      checked={formData.vetAvailability?.includes(service) || false}
+                                      onChange={(e) => {
+                                        const newServices = formData.vetAvailability?.includes(service)
+                                          ? formData.vetAvailability.filter(s => s !== service)
+                                          : [...(formData.vetAvailability || []), service];
+                                        setFormData((prev) => ({ ...prev, vetAvailability: newServices }));
+                                      }}
+                                    />
                                   </div>
-                                  <input
-                                    type="checkbox"
-                                    className="w-5 h-5"
-                                    checked={formData.vetAvailability?.includes(service) || false}
-                                    onChange={(e) => {
-                                      const newServices = formData.vetAvailability?.includes(service)
-                                        ? formData.vetAvailability.filter(s => s !== service)
-                                        : [...(formData.vetAvailability || []), service];
-                                      setFormData((prev) => ({ ...prev, vetAvailability: newServices }));
-                                    }}
-                                  />
-                                </div>
-                              ))}
+                                ))}
+                              </div>
                             </div>
-                          </div>
+                          )}
 
                           {/* Isolation & Sanitation Protocols */}
                           <div className="bg-secondary/30 rounded-xl p-6">
@@ -1775,19 +1829,64 @@ const ListProperty = () => {
                                     <option value="Starting from">Starting from</option>
                                   </select>
                                 </div>
-                                <div className="space-y-2">
-                                  <Label>Price</Label>
-                                  <Input
-                                    placeholder="₱1,200"
-                                    value={service.price}
-                                    onChange={(e) => {
-                                      const newServices = [...formData.baseServices];
-                                      newServices[index].price = e.target.value;
-                                      setFormData((prev) => ({ ...prev, baseServices: newServices }));
-                                    }}
-                                  />
-                                </div>
-                                <div className="space-y-2">
+                                {service.priceType === "Starting from" ? (
+                                  <>
+                                    <div className="space-y-2">
+                                      <Label>Min Price</Label>
+                                      <Input
+                                        placeholder="₱800"
+                                        value={service.minPrice}
+                                        onChange={(e) => {
+                                          const newServices = [...formData.baseServices];
+                                          newServices[index].minPrice = e.target.value;
+                                          setFormData((prev) => ({ ...prev, baseServices: newServices }));
+                                        }}
+                                      />
+                                    </div>
+                                    <div className="space-y-2">
+                                      <Label>Max Price</Label>
+                                      <Input
+                                        placeholder="₱1,500"
+                                        value={service.maxPrice}
+                                        onChange={(e) => {
+                                          const newServices = [...formData.baseServices];
+                                          newServices[index].maxPrice = e.target.value;
+                                          setFormData((prev) => ({ ...prev, baseServices: newServices }));
+                                        }}
+                                      />
+                                    </div>
+                                  </>
+                                ) : (
+                                  <>
+                                    <div className="space-y-2">
+                                      <Label>Price</Label>
+                                      <Input
+                                        placeholder="₱1,200"
+                                        value={service.price}
+                                        onChange={(e) => {
+                                          const newServices = [...formData.baseServices];
+                                          newServices[index].price = e.target.value;
+                                          setFormData((prev) => ({ ...prev, baseServices: newServices }));
+                                        }}
+                                      />
+                                    </div>
+                                    <div className="space-y-2">
+                                      <Label>Duration</Label>
+                                      <Input
+                                        placeholder="1–1.5 hrs"
+                                        value={service.duration}
+                                        onChange={(e) => {
+                                          const newServices = [...formData.baseServices];
+                                          newServices[index].duration = e.target.value;
+                                          setFormData((prev) => ({ ...prev, baseServices: newServices }));
+                                        }}
+                                      />
+                                    </div>
+                                  </>
+                                )}
+                              </div>
+                              {service.priceType === "Starting from" && (
+                                <div className="mt-4">
                                   <Label>Duration</Label>
                                   <Input
                                     placeholder="1–1.5 hrs"
@@ -1799,7 +1898,7 @@ const ListProperty = () => {
                                     }}
                                   />
                                 </div>
-                              </div>
+                              )}
                             </div>
                           ))}
                         </div>
@@ -1809,7 +1908,7 @@ const ListProperty = () => {
                             variant="outline"
                             onClick={() => setFormData((prev) => ({
                               ...prev,
-                              baseServices: [...prev.baseServices, { name: "", priceType: "Fixed price", price: "", duration: "" }]
+                              baseServices: [...prev.baseServices, { name: "", priceType: "Fixed price", price: "", minPrice: "", maxPrice: "", duration: "" }]
                             }))}
                             className="mb-4"
                           >
@@ -1823,147 +1922,7 @@ const ListProperty = () => {
                     </div>
                   )}
 
-                  {currentStep === 4 && pricingCalendarStep === 2 && (
-                    <div className="max-w-4xl mx-auto">
-                      <div className="bg-card rounded-2xl shadow-elevated p-6 md:p-8">
-                        <div className="text-center mb-8">
-                          <h2 className="text-2xl font-semibold text-foreground mb-2">
-                            Pricing by Pet Size / Type
-                          </h2>
-                          <p className="text-muted-foreground">
-                            Set different prices based on pet size and type
-                          </p>
-                        </div>
-
-                        <div className="space-y-6">
-                          <div className="bg-secondary/50 rounded-xl p-6">
-                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                              <div className="text-center">
-                                <Label className="text-sm font-medium">Small</Label>
-                                <Input
-                                  placeholder="₱500"
-                                  value={formData.petSizePricing.small}
-                                  onChange={(e) => setFormData((prev) => ({
-                                    ...prev,
-                                    petSizePricing: { ...prev.petSizePricing, small: e.target.value }
-                                  }))}
-                                  className="mt-2"
-                                />
-                              </div>
-                              <div className="text-center">
-                                <Label className="text-sm font-medium">Medium</Label>
-                                <Input
-                                  placeholder="₱700"
-                                  value={formData.petSizePricing.medium}
-                                  onChange={(e) => setFormData((prev) => ({
-                                    ...prev,
-                                    petSizePricing: { ...prev.petSizePricing, medium: e.target.value }
-                                  }))}
-                                  className="mt-2"
-                                />
-                              </div>
-                              <div className="text-center">
-                                <Label className="text-sm font-medium">Large</Label>
-                                <Input
-                                  placeholder="₱900"
-                                  value={formData.petSizePricing.large}
-                                  onChange={(e) => setFormData((prev) => ({
-                                    ...prev,
-                                    petSizePricing: { ...prev.petSizePricing, large: e.target.value }
-                                  }))}
-                                  className="mt-2"
-                                />
-                              </div>
-                              <div className="text-center">
-                                <Label className="text-sm font-medium">Giant</Label>
-                                <Input
-                                  placeholder="₱1,200"
-                                  value={formData.petSizePricing.giant}
-                                  onChange={(e) => setFormData((prev) => ({
-                                    ...prev,
-                                    petSizePricing: { ...prev.petSizePricing, giant: e.target.value }
-                                  }))}
-                                  className="mt-2"
-                                />
-                              </div>
-                            </div>
-                          </div>
-
-                          <div className="space-y-4">
-                            <div className="flex items-center justify-between p-4 bg-secondary/50 rounded-xl">
-                              <div>
-                                <Label className="text-sm font-medium">Enable Cat Pricing</Label>
-                                <p className="text-xs text-muted-foreground">Set separate pricing for cats</p>
-                              </div>
-                              <input
-                                type="checkbox"
-                                className="w-5 h-5"
-                                checked={enableCatPricing}
-                                onChange={(e) => {
-                                  setEnableCatPricing(e.target.checked);
-                                  if (!e.target.checked) {
-                                    setFormData((prev) => ({
-                                      ...prev,
-                                      petSizePricing: { ...prev.petSizePricing, cats: "" }
-                                    }));
-                                  }
-                                }}
-                              />
-                            </div>
-                            {enableCatPricing && (
-                              <div className="bg-background rounded-xl p-4 border border-border animate-in slide-in-from-top-2">
-                                <Label className="text-sm font-medium mb-2 block">Cat Pricing</Label>
-                                <Input
-                                  placeholder="₱600"
-                                  value={formData.petSizePricing.cats}
-                                  onChange={(e) => setFormData((prev) => ({
-                                    ...prev,
-                                    petSizePricing: { ...prev.petSizePricing, cats: e.target.value }
-                                  }))}
-                                />
-                              </div>
-                            )}
-
-                            <div className="flex items-center justify-between p-4 bg-secondary/50 rounded-xl">
-                              <div>
-                                <Label className="text-sm font-medium">Enable Exotic Pet Pricing</Label>
-                                <p className="text-xs text-muted-foreground">Set pricing for birds, rabbits, reptiles</p>
-                              </div>
-                              <input
-                                type="checkbox"
-                                className="w-5 h-5"
-                                checked={enableExoticPricing}
-                                onChange={(e) => {
-                                  setEnableExoticPricing(e.target.checked);
-                                  if (!e.target.checked) {
-                                    setFormData((prev) => ({
-                                      ...prev,
-                                      petSizePricing: { ...prev.petSizePricing, exotic: "" }
-                                    }));
-                                  }
-                                }}
-                              />
-                            </div>
-                            {enableExoticPricing && (
-                              <div className="bg-background rounded-xl p-4 border border-border animate-in slide-in-from-top-2">
-                                <Label className="text-sm font-medium mb-2 block">Exotic Pet Pricing</Label>
-                                <Input
-                                  placeholder="₱800"
-                                  value={formData.petSizePricing.exotic}
-                                  onChange={(e) => setFormData((prev) => ({
-                                    ...prev,
-                                    petSizePricing: { ...prev.petSizePricing, exotic: e.target.value }
-                                  }))}
-                                />
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {currentStep === 4 && pricingCalendarStep === 3 && (
+                  {currentStep === 4 && pricingCalendarStep === 3 && (hasBoarding || hasGrooming) && (
                     <div className="max-w-4xl mx-auto">
                       <div className="bg-card rounded-2xl shadow-elevated p-6 md:p-8">
                         <div className="text-center mb-8">
@@ -1976,42 +1935,39 @@ const ListProperty = () => {
                         </div>
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          {[
-                            "Flea & tick treatment",
-                            "De-shedding",
-                            "Nail grinding",
-                            "Teeth brushing",
-                            "Medication administration",
-                            "Extra playtime",
-                            "Special diet handling"
-                          ].map((addonName) => {
+                          {visibleAddOns.map((addon) => {
+                            const addonName = addon.name;
                             const existingAddon = formData.addOns.find(a => a.name === addonName);
                             const isEnabled = !!existingAddon;
                             return (
-                              <div key={addonName} className="bg-secondary/50 rounded-xl p-4 border border-border">
+                              <div 
+                                key={addonName} 
+                                className="bg-secondary/50 rounded-xl p-4 border border-border cursor-pointer hover:bg-secondary/70 transition-colors"
+                                onClick={() => {
+                                  if (isEnabled) {
+                                    setFormData((prev) => ({
+                                      ...prev,
+                                      addOns: prev.addOns.filter(a => a.name !== addonName)
+                                    }));
+                                  } else {
+                                    setFormData((prev) => ({
+                                      ...prev,
+                                      addOns: [...prev.addOns, { name: addonName, price: "", type: "One-time" }]
+                                    }));
+                                  }
+                                }}
+                              >
                                 <div className="flex items-center justify-between mb-3">
                                   <Label className="text-sm font-medium">{addonName}</Label>
                                   <input
                                     type="checkbox"
-                                    className="w-5 h-5"
+                                    className="w-5 h-5 pointer-events-none"
                                     checked={isEnabled}
-                                    onChange={(e) => {
-                                      if (e.target.checked) {
-                                        setFormData((prev) => ({
-                                          ...prev,
-                                          addOns: [...prev.addOns, { name: addonName, price: "", type: "One-time" }]
-                                        }));
-                                      } else {
-                                        setFormData((prev) => ({
-                                          ...prev,
-                                          addOns: prev.addOns.filter(a => a.name !== addonName)
-                                        }));
-                                      }
-                                    }}
+                                    readOnly
                                   />
                                 </div>
                                 {isEnabled && (
-                                  <div className="space-y-3 animate-in slide-in-from-top-2">
+                                  <div className="space-y-3 animate-in slide-in-from-top-2" onClick={(e) => e.stopPropagation()}>
                                     <Input
                                       placeholder="Price"
                                       value={existingAddon.price}
@@ -2045,7 +2001,7 @@ const ListProperty = () => {
                     </div>
                   )}
 
-                  {currentStep === 4 && pricingCalendarStep === 4 && (
+                  {currentStep === 4 && pricingCalendarStep === 4 && hasVet && (
                     <div className="max-w-4xl mx-auto">
                       <div className="bg-card rounded-2xl shadow-elevated p-6 md:p-8">
                         <div className="text-center mb-8">
@@ -2190,7 +2146,7 @@ const ListProperty = () => {
                     </div>
                   )}
 
-                  {currentStep === 4 && pricingCalendarStep === 5 && (
+                  {currentStep === 4 && pricingCalendarStep === 5 && hasBoarding && (
                     <div className="max-w-4xl mx-auto">
                       <div className="bg-card rounded-2xl shadow-elevated p-6 md:p-8">
                         <div className="text-center mb-8">
@@ -2206,149 +2162,118 @@ const ListProperty = () => {
                           <div className="bg-secondary/30 rounded-xl p-6">
                             <h3 className="text-lg font-medium mb-4">Booking Policies</h3>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                              <div className="flex items-center justify-between p-3 bg-background rounded-lg border">
+                              <div 
+                                className="flex items-center justify-between p-3 bg-background rounded-lg border cursor-pointer hover:bg-secondary/50 transition-colors"
+                                onClick={() => setFormData((prev) => ({
+                                  ...prev,
+                                  boardingRules: { ...prev.boardingRules, advanceBooking: !prev.boardingRules?.advanceBooking }
+                                }))}
+                              >
                                 <div>
                                   <Label className="text-sm font-medium">Advance booking required</Label>
                                   <p className="text-xs text-muted-foreground">Minimum notice period</p>
                                 </div>
                                 <input
                                   type="checkbox"
-                                  className="w-5 h-5"
+                                  className="w-5 h-5 pointer-events-none"
                                   checked={formData.boardingRules?.advanceBooking || false}
-                                  onChange={(e) => setFormData((prev) => ({
-                                    ...prev,
-                                    boardingRules: { ...prev.boardingRules, advanceBooking: e.target.checked }
-                                  }))}
+                                  readOnly
                                 />
                               </div>
-                              <div className="flex items-center justify-between p-3 bg-background rounded-lg border">
+                              <div 
+                                className="flex items-center justify-between p-3 bg-background rounded-lg border cursor-pointer hover:bg-secondary/50 transition-colors"
+                                onClick={() => setFormData((prev) => ({
+                                  ...prev,
+                                  boardingRules: { ...prev.boardingRules, sameDayBooking: !prev.boardingRules?.sameDayBooking }
+                                }))}
+                              >
                                 <div>
                                   <Label className="text-sm font-medium">Same-day booking allowed</Label>
                                   <p className="text-xs text-muted-foreground">Accept last-minute bookings</p>
                                 </div>
                                 <input
                                   type="checkbox"
-                                  className="w-5 h-5"
+                                  className="w-5 h-5 pointer-events-none"
                                   checked={formData.boardingRules?.sameDayBooking || false}
-                                  onChange={(e) => setFormData((prev) => ({
-                                    ...prev,
-                                    boardingRules: { ...prev.boardingRules, sameDayBooking: e.target.checked }
-                                  }))}
+                                  readOnly
                                 />
                               </div>
-                            </div>
-                          </div>
-
-                          <div className="bg-secondary/30 rounded-xl p-6">
-                            <h3 className="text-lg font-medium mb-4">Cancellation & Rescheduling</h3>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                              <div className="flex items-center justify-between p-3 bg-background rounded-lg border">
-                                <div>
-                                  <Label className="text-sm font-medium">Free cancellation</Label>
-                                  <p className="text-xs text-muted-foreground">Up to 24 hours before</p>
-                                </div>
-                                <input
-                                  type="checkbox"
-                                  className="w-5 h-5"
-                                  checked={formData.boardingRules?.freeCancellation || false}
-                                  onChange={(e) => setFormData((prev) => ({
-                                    ...prev,
-                                    boardingRules: { ...prev.boardingRules, freeCancellation: e.target.checked }
-                                  }))}
-                                />
-                              </div>
-                              <div className="flex items-center justify-between p-3 bg-background rounded-lg border">
-                                <div>
-                                  <Label className="text-sm font-medium">Late cancellation fee</Label>
-                                  <p className="text-xs text-muted-foreground">For cancellations within 24h</p>
-                                </div>
-                                <input
-                                  type="checkbox"
-                                  className="w-5 h-5"
-                                  checked={formData.boardingRules?.lateCancellationFee || false}
-                                  onChange={(e) => setFormData((prev) => ({
-                                    ...prev,
-                                    boardingRules: { ...prev.boardingRules, lateCancellationFee: e.target.checked }
-                                  }))}
-                                />
-                              </div>
-                              {formData.boardingRules?.lateCancellationFee && (
-                                <div className="md:col-span-2 space-y-2 animate-in slide-in-from-top-2">
-                                  <Label>Late Cancellation Fee Amount</Label>
-                                  <Input
-                                    placeholder="₱500"
-                                    value={formData.boardingRules?.lateCancellationFeeAmount || ""}
-                                    onChange={(e) => setFormData((prev) => ({
-                                      ...prev,
-                                      boardingRules: { ...prev.boardingRules, lateCancellationFeeAmount: e.target.value }
-                                    }))}
-                                  />
-                                </div>
-                              )}
                             </div>
                           </div>
 
                           <div className="bg-secondary/30 rounded-xl p-6">
                             <h3 className="text-lg font-medium mb-4">Pet Restrictions</h3>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                              <div className="flex items-center justify-between p-3 bg-background rounded-lg border">
+                              <div 
+                                className="flex items-center justify-between p-3 bg-background rounded-lg border cursor-pointer hover:bg-secondary/50 transition-colors"
+                                onClick={() => setFormData((prev) => ({
+                                  ...prev,
+                                  boardingRules: { ...prev.boardingRules, vaccinationRequired: !prev.boardingRules?.vaccinationRequired }
+                                }))}
+                              >
                                 <div>
                                   <Label className="text-sm font-medium">Vaccination required</Label>
                                   <p className="text-xs text-muted-foreground">Up-to-date vaccinations</p>
                                 </div>
                                 <input
                                   type="checkbox"
-                                  className="w-5 h-5"
+                                  className="w-5 h-5 pointer-events-none"
                                   checked={formData.boardingRules?.vaccinationRequired || false}
-                                  onChange={(e) => setFormData((prev) => ({
-                                    ...prev,
-                                    boardingRules: { ...prev.boardingRules, vaccinationRequired: e.target.checked }
-                                  }))}
+                                  readOnly
                                 />
                               </div>
-                              <div className="flex items-center justify-between p-3 bg-background rounded-lg border">
+                              <div 
+                                className="flex items-center justify-between p-3 bg-background rounded-lg border cursor-pointer hover:bg-secondary/50 transition-colors"
+                                onClick={() => setFormData((prev) => ({
+                                  ...prev,
+                                  boardingRules: { ...prev.boardingRules, healthDeclaration: !prev.boardingRules?.healthDeclaration }
+                                }))}
+                              >
                                 <div>
                                   <Label className="text-sm font-medium">Health declaration required</Label>
                                   <p className="text-xs text-muted-foreground">Vet health certificate</p>
                                 </div>
                                 <input
                                   type="checkbox"
-                                  className="w-5 h-5"
+                                  className="w-5 h-5 pointer-events-none"
                                   checked={formData.boardingRules?.healthDeclaration || false}
-                                  onChange={(e) => setFormData((prev) => ({
-                                    ...prev,
-                                    boardingRules: { ...prev.boardingRules, healthDeclaration: e.target.checked }
-                                  }))}
+                                  readOnly
                                 />
                               </div>
-                              <div className="flex items-center justify-between p-3 bg-background rounded-lg border">
+                              <div 
+                                className="flex items-center justify-between p-3 bg-background rounded-lg border cursor-pointer hover:bg-secondary/50 transition-colors"
+                                onClick={() => setFormData((prev) => ({
+                                  ...prev,
+                                  boardingRules: { ...prev.boardingRules, noAggressivePets: !prev.boardingRules?.noAggressivePets }
+                                }))}
+                              >
                                 <div>
                                   <Label className="text-sm font-medium">Aggressive behavior policy</Label>
                                   <p className="text-xs text-muted-foreground">No aggressive pets</p>
                                 </div>
                                 <input
                                   type="checkbox"
-                                  className="w-5 h-5"
+                                  className="w-5 h-5 pointer-events-none"
                                   checked={formData.boardingRules?.noAggressivePets || false}
-                                  onChange={(e) => setFormData((prev) => ({
-                                    ...prev,
-                                    boardingRules: { ...prev.boardingRules, noAggressivePets: e.target.checked }
-                                  }))}
+                                  readOnly
                                 />
                               </div>
-                              <div className="flex items-center justify-between p-3 bg-background rounded-lg border">
+                              <div 
+                                className="flex items-center justify-between p-3 bg-background rounded-lg border cursor-pointer hover:bg-secondary/50 transition-colors"
+                                onClick={() => setFormData((prev) => ({
+                                  ...prev,
+                                  boardingRules: { ...prev.boardingRules, liabilityWaiver: !prev.boardingRules?.liabilityWaiver }
+                                }))}
+                              >
                                 <div>
                                   <Label className="text-sm font-medium">Liability waiver required</Label>
                                   <p className="text-xs text-muted-foreground">Signed waiver needed</p>
                                 </div>
                                 <input
                                   type="checkbox"
-                                  className="w-5 h-5"
+                                  className="w-5 h-5 pointer-events-none"
                                   checked={formData.boardingRules?.liabilityWaiver || false}
-                                  onChange={(e) => setFormData((prev) => ({
-                                    ...prev,
-                                    boardingRules: { ...prev.boardingRules, liabilityWaiver: e.target.checked }
-                                  }))}
+                                  readOnly
                                 />
                               </div>
                             </div>
@@ -2396,50 +2321,91 @@ const ListProperty = () => {
                               <option value="Excluded">Excluded</option>
                             </select>
                           </div>
-                          <div className="space-y-2">
-                            <Label>No-Show Fee</Label>
-                            <Input
-                              placeholder="₱300"
-                              value={formData.feesCharges?.noShow || ""}
-                              onChange={(e) => setFormData((prev) => ({
-                                ...prev,
-                                feesCharges: { ...prev.feesCharges, noShow: e.target.value }
-                              }))}
-                            />
+                          <div className="md:col-span-2 bg-secondary/30 rounded-xl p-6">
+                            <h3 className="text-lg font-medium mb-4">Cancellation & Rescheduling</h3>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              <div className="space-y-2">
+                                <Label className="text-sm font-medium">Free cancellation period *</Label>
+                                <select
+                                  className="w-full px-3 py-2 border rounded-md"
+                                  value={formData.cancellationPolicy?.freeCancellation || "24hours"}
+                                  onChange={(e) => setFormData((prev) => ({
+                                    ...prev,
+                                    cancellationPolicy: { ...prev.cancellationPolicy, freeCancellation: e.target.value }
+                                  }))}
+                                >
+                                  <option value="24hours">Up to 24 hours before</option>
+                                  <option value="48hours">Up to 48 hours before</option>
+                                  <option value="1week">Up to 1 week before</option>
+                                  <option value="none">No free cancellation</option>
+                                </select>
+                                <p className="text-xs text-muted-foreground">Customers can cancel for free within this period</p>
+                              </div>
+                              <div className="space-y-2">
+                                <Label className="text-sm font-medium">Late cancellation fee</Label>
+                                <Input
+                                  placeholder="₱500 or 50% of booking"
+                                  value={formData.cancellationPolicy?.lateFee || ""}
+                                  onChange={(e) => setFormData((prev) => ({
+                                    ...prev,
+                                    cancellationPolicy: { ...prev.cancellationPolicy, lateFee: e.target.value }
+                                  }))}
+                                />
+                                <p className="text-xs text-muted-foreground">Fee for cancellations after free period</p>
+                              </div>
+                              <div className="space-y-2 md:col-span-2">
+                                <Label className="text-sm font-medium">No-show policy</Label>
+                                <Input
+                                  placeholder="Full charge or 100% of booking amount"
+                                  value={formData.cancellationPolicy?.noShow || ""}
+                                  onChange={(e) => setFormData((prev) => ({
+                                    ...prev,
+                                    cancellationPolicy: { ...prev.cancellationPolicy, noShow: e.target.value }
+                                  }))}
+                                />
+                                <p className="text-xs text-muted-foreground">What happens if customer doesn't show up</p>
+                              </div>
+                            </div>
                           </div>
-                          <div className="space-y-2">
-                            <Label>Late Pickup Fee</Label>
-                            <Input
-                              placeholder="₱100 per hour"
-                              value={formData.feesCharges?.latePickup || ""}
-                              onChange={(e) => setFormData((prev) => ({
-                                ...prev,
-                                feesCharges: { ...prev.feesCharges, latePickup: e.target.value }
-                              }))}
-                            />
-                          </div>
-                          <div className="space-y-2">
-                            <Label>Cleaning Fee</Label>
-                            <Input
-                              placeholder="₱200"
-                              value={formData.feesCharges?.cleaningFee || ""}
-                              onChange={(e) => setFormData((prev) => ({
-                                ...prev,
-                                feesCharges: { ...prev.feesCharges, cleaningFee: e.target.value }
-                              }))}
-                            />
-                          </div>
-                          <div className="space-y-2">
-                            <Label>Emergency Fee</Label>
-                            <Input
-                              placeholder="₱500"
-                              value={formData.feesCharges?.emergencyFee || ""}
-                              onChange={(e) => setFormData((prev) => ({
-                                ...prev,
-                                feesCharges: { ...prev.feesCharges, emergencyFee: e.target.value }
-                              }))}
-                            />
-                          </div>
+                          {hasBoarding && (
+                            <div className="space-y-2">
+                              <Label>Late Pickup Fee</Label>
+                              <Input
+                                placeholder="₱100 per hour"
+                                value={formData.feesCharges?.latePickup || ""}
+                                onChange={(e) => setFormData((prev) => ({
+                                  ...prev,
+                                  feesCharges: { ...prev.feesCharges, latePickup: e.target.value }
+                                }))}
+                              />
+                            </div>
+                          )}
+                          {hasBoarding && (
+                            <div className="space-y-2">
+                              <Label>Cleaning Fee</Label>
+                              <Input
+                                placeholder="₱200"
+                                value={formData.feesCharges?.cleaningFee || ""}
+                                onChange={(e) => setFormData((prev) => ({
+                                  ...prev,
+                                  feesCharges: { ...prev.feesCharges, cleaningFee: e.target.value }
+                                }))}
+                              />
+                            </div>
+                          )}
+                          {(hasVet || hasGrooming) && (
+                            <div className="space-y-2">
+                              <Label>Emergency Fee</Label>
+                              <Input
+                                placeholder="₱500"
+                                value={formData.feesCharges?.emergencyFee || ""}
+                                onChange={(e) => setFormData((prev) => ({
+                                  ...prev,
+                                  feesCharges: { ...prev.feesCharges, emergencyFee: e.target.value }
+                                }))}
+                              />
+                            </div>
+                          )}
                           <div className="space-y-2">
                             <Label>Holiday Surcharge</Label>
                             <Input
@@ -2448,17 +2414,6 @@ const ListProperty = () => {
                               onChange={(e) => setFormData((prev) => ({
                                 ...prev,
                                 feesCharges: { ...prev.feesCharges, holidaySurcharge: e.target.value }
-                              }))}
-                            />
-                          </div>
-                          <div className="space-y-2">
-                            <Label>Cancellation Fee</Label>
-                            <Input
-                              placeholder="₱250"
-                              value={formData.feesCharges?.cancellationFee || ""}
-                              onChange={(e) => setFormData((prev) => ({
-                                ...prev,
-                                feesCharges: { ...prev.feesCharges, cancellationFee: e.target.value }
                               }))}
                             />
                           </div>
@@ -2567,30 +2522,21 @@ const ListProperty = () => {
                           <div className="bg-secondary/30 rounded-xl p-6">
                             <h3 className="text-lg font-medium mb-4">Common Disclaimers</h3>
                             <div className="space-y-3">
-                              {[
-                                "Prices may vary based on pet condition",
-                                "Final price confirmed after inspection",
-                                "Vet procedures require assessment first",
-                                "Emergency fees apply for after-hours service",
-                                "Holiday surcharges apply during peak seasons",
-                                "Multi-pet discounts available",
-                                "Deposit required to secure booking",
-                                "Cancellation fees apply as per policy"
-                              ].map((disclaimer) => (
-                                <label key={disclaimer} className="flex items-start gap-3 cursor-pointer">
+                              {visiblePricingDisclaimers.map((disclaimer) => (
+                                <label key={disclaimer.name} className="flex items-start gap-3 cursor-pointer">
                                   <input
                                     type="checkbox"
                                     className="mt-1 w-4 h-4"
-                                    checked={formData.pricingNotes?.includes(disclaimer) || false}
+                                    checked={formData.pricingNotes?.includes(disclaimer.name) || false}
                                     onChange={(e) => {
                                       const currentNotes = formData.pricingNotes || "";
                                       const newNotes = e.target.checked
-                                        ? currentNotes + (currentNotes ? "\n" : "") + disclaimer
-                                        : currentNotes.split("\n").filter(note => note !== disclaimer).join("\n");
+                                        ? currentNotes + (currentNotes ? "\n" : "") + disclaimer.name
+                                        : currentNotes.split("\n").filter(note => note !== disclaimer.name).join("\n");
                                       setFormData((prev) => ({ ...prev, pricingNotes: newNotes }));
                                     }}
                                   />
-                                  <span className="text-sm text-muted-foreground">{disclaimer}</span>
+                                  <span className="text-sm text-muted-foreground">{disclaimer.name}</span>
                                 </label>
                               ))}
                             </div>

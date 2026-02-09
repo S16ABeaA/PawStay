@@ -97,6 +97,7 @@ interface PropertySubmissionData {
   };
   finalAgreementAccepted: boolean;
   propertyType: 'hotel' | 'grooming' | 'veterinary';
+  propertyTypes?: Array<'hotel' | 'grooming' | 'veterinary'>;
   propertyImages: string[];
   lguPermits: string[];
   baiDocument: string;
@@ -249,7 +250,7 @@ export const submitProperty = async (req: Request, res: Response) => {
     });
 
     // Helper to insert and throw on error so we know exactly which insert fails
-    const insertOrThrow = async (table: string, row: any) => {
+    const insertOrThrow = async (table: string, row: Record<string, unknown>) => {
       const { data, error } = await supabaseClient.from(table).insert(row);
       if (error) {
         console.error('Supabase insert error', { table, row, error });
@@ -258,7 +259,7 @@ export const submitProperty = async (req: Request, res: Response) => {
       return data;
     };
 
-    const insertSingleOrThrow = async <T>(table: string, row: any) => {
+    const insertSingleOrThrow = async <T>(table: string, row: Record<string, unknown>) => {
       const { data, error } = await supabaseClient.from(table).insert(row).select().single<T>();
       if (error) {
         console.error('Supabase insert error', { table, row, error });

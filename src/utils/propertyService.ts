@@ -127,6 +127,7 @@ export interface PropertySubmissionData {
 
   // Property type
   propertyType: 'hotel' | 'grooming' | 'veterinary'
+  propertyTypes?: Array<'hotel' | 'grooming' | 'veterinary'>
 
   // File uploads (URLs after upload)
   propertyImages: string[]
