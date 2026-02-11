@@ -8,15 +8,15 @@
 -- 1. PROFILES  (extends Supabase Auth users)
 -- ============================================================
 create table if not exists profiles (
-  id            uuid primary key references auth.users(id) on delete cascade,
+  id            uuid primary key references auth.users(id) on delete restrict,
   first_name    text,
   last_name     text,
   email         text unique,
   phone         text,
   address       text,
   avatar_url    text,
-  role          text not null default 'user'
-                check (role in ('user','partner','admin','superadmin')),
+  role          text not null default 'customer'
+                check (role in ('customer','admin','proprietor')),
 
   -- Notification preferences (admin Settings page)
   notification_prefs  jsonb default '{}'::jsonb,
@@ -40,8 +40,8 @@ begin
   values (
     new.id,
     new.email,
-    coalesce(new.raw_user_meta_data ->> 'first_name', ''),
-    coalesce(new.raw_user_meta_data ->> 'last_name', '')
+    coalesce(new.raw_user_meta_data ->> 'firstName', ''),
+    coalesce(new.raw_user_meta_data ->> 'lastName', '')
   );
   return new;
 end;
@@ -54,21 +54,21 @@ create trigger on_auth_user_created
 
 
 -- ============================================================
--- 2. PROPERTIES  (one row per listed property)
---    Heavy use of jsonb / text[] to avoid extra join tables.
+-- 2. PROPERTIES  (core listing info — lean table for search)
+--    Maps to ListProperty Step 1 + Step 3 + computed fields.
 -- ============================================================
 create table if not exists properties (
   id                  uuid primary key default gen_random_uuid(),
   owner_id            uuid not null references profiles(id) on delete restrict,
   status              text not null default 'pending'
                       check (status in ('pending','approved','rejected','suspended')),
-  rejection_reason    text,          -- filled when status = 'rejected'
+  rejection_reason    text,
 
-  -- Step 1 – Establishment Info
+  -- Establishment Info  (Step 1)
   name                text not null,
-  property_type       text not null
-                      check (property_type in ('hotel','grooming','veterinary')),
-  address             text,              -- display_name / search address
+  property_type       text[] not null default '{}'
+                      check (property_type <@ array['hotel','grooming','veterinary']),
+  address             text,
   address_line2       text,
   country             text default 'Philippines',
   city                text,
@@ -78,138 +78,23 @@ create table if not exists properties (
   phone               text,
   website             text,
   description         text,
-  capacity            int,               -- max number of pets
+  capacity            int,
 
-  -- Step 2 – Property Setup
-  --   Pet types
-  pet_types_accepted  text[]   default '{}',   -- e.g. {"Dogs","Cats","Exotic Pets"}
-  dog_sizes           text[]   default '{}',   -- e.g. {"Small","Medium","Large"}
+  -- Pet types  (needed for search filtering)
+  pet_types_accepted  text[]   default '{}',
+  dog_sizes           text[]   default '{}',
   exotic_pet_types    text,
-  policies            jsonb    default '{}'::jsonb,
-  /*  policies example:
-      {
-        "breedRestrictions": false,
-        "breedRestrictionDetails": "",
-        "aggressivePolicy": false,
-        "aggressivePolicyDetails": "",
-        "unvaccinatedPolicy": false,
-        "unvaccinatedPolicyDetails": ""
-      }
-  */
 
-  --   Facilities & amenities  (simple array of names)
+  -- Amenities  (needed for search filtering)
   facilities_amenities text[]  default '{}',
 
-  --   Operating hours
-  operating_hours     jsonb    default '{}'::jsonb,
-  /*  operating_hours example:
-      {
-        "sameHoursEveryDay": true,
-        "dailyOpenTime": "08:00",
-        "dailyCloseTime": "18:00",
-        "weeklyHours": {
-          "Monday":  {"open":"08:00","close":"18:00"},
-          "Tuesday": {"open":"08:00","close":"18:00"}
-        },
-        "weekendAvailability": true,
-        "holidayAvailability": false,
-        "emergencyServices": false,
-        "checkInCutoff": "15:00",
-        "pickupStart": "08:00",
-        "pickupEnd": "12:00",
-        "appointmentOnly": "appointments"
-      }
-  */
-
-  --   Booking rules & compliance
-  booking_rules       text[]   default '{}',
-  compliance          text[]   default '{}',
-
-  --   Cancellation policy
-  cancellation_policy jsonb    default '{}'::jsonb,
-  /*  { "freeCancellation":"24hours", "lateFee":"₱200", "noShow":"₱500" } */
-
-  --   Health & safety
-  health_safety       text[]   default '{}',
-  vet_availability    text[]   default '{}',
-  sanitation_protocols text[]  default '{}',
-  emergency_contact   text,
-  nearest_vet_hospital text,
-  emergency_response_time text,
-
-  -- Step 3 – Photos  (stored as Supabase Storage public URLs)
+  -- Photos  (Step 3)
   images              text[]   default '{}',
-  cover_image         text,                    -- first / hero image
-
-  -- Step 4 – Pricing & Calendar
-  --   Base services
-  base_services       jsonb    default '[]'::jsonb,
-  /*  [
-        {"name":"Overnight Stay","priceType":"Fixed price","price":"500","duration":"24h"},
-        {"name":"Daycare","priceType":"Per hour","price":"100","duration":"1h"}
-      ]
-  */
-
-  --   Size-based pricing
-  pet_size_pricing    jsonb    default '{}'::jsonb,
-  /*  {"small":"300","medium":"400","large":"500","giant":"600","cats":"350","exotic":"450"} */
-
-  --   Add-ons
-  add_ons             jsonb    default '[]'::jsonb,
-  /*  [{"name":"Flea treatment","price":"250","type":"One-time"}] */
-
-  --   Vet fees  (only for type = veterinary)
-  vet_fees            jsonb    default '{}'::jsonb,
-  /*  {"generalConsult":"500","vaccination":"300","emergency":"2000"} */
-
-  --   Boarding rules
-  boarding_rules      jsonb    default '{}'::jsonb,
-  /*  {
-        "advanceBooking":true,"sameDayBooking":false,
-        "freeCancellation":true,"lateCancellationFee":false,
-        "lateCancellationFeeAmount":"","vaccinationRequired":true,
-        "healthDeclaration":true,"noAggressivePets":true,"liabilityWaiver":true
-      }
-  */
-
-  --   Fees & charges
-  fees_charges        jsonb    default '{}'::jsonb,
-  /*  {
-        "serviceFee":"10%","taxes":"Included","noShow":"₱300",
-        "latePickup":"₱100/hr","cleaningFee":"₱200",
-        "emergencyFee":"₱500","holidaySurcharge":"20%","cancellationFee":"₱250"
-      }
-  */
-
-  --   Payment options
-  payment_options     jsonb    default '{}'::jsonb,
-  /*  {"deposit":true,"methods":["GCash","Cash","Card"],"refundPolicy":"Full refund..."} */
-
-  pricing_notes       text,
-  additional_pricing_notes text,
-
-  -- Step 5 – Legal Info  (document URLs in Supabase Storage)
-  legal_entity_type   text     check (legal_entity_type in ('individual','business','')),
-  contracting_party   jsonb    default '{}'::jsonb,
-  /*  {
-        "firstName":"","middleName":"","lastName":"",
-        "email":"","phone":"","phoneCountryCode":"+63"
-      }
-  */
-  contracting_party_address jsonb default '{}'::jsonb,
-  /*  {"country":"Philippines","streetAddress":"","addressLine2":"","city":"","postalCode":""} */
-
-  lgu_permits         text[]   default '{}',   -- array of storage URLs
-  bai_document        text,                     -- storage URL
-  contract_document   text,                     -- storage URL
-
-  legal_agreements    jsonb    default '{}'::jsonb,
-  /*  {"termsAccepted":true,"dataProcessing":true,"finalAgreementAccepted":true} */
+  cover_image         text,
 
   -- Computed / search helpers
   rating              numeric(2,1) default 0,
   review_count        int      default 0,
-  featured            boolean  default false,
 
   is_deleted          boolean not null default false,
   created_at          timestamptz not null default now(),
@@ -220,12 +105,11 @@ create table if not exists properties (
 create index if not exists idx_properties_city
   on properties using gin (to_tsvector('simple', coalesce(city,'')));
 create index if not exists idx_properties_type
-  on properties (property_type);
+  on properties using gin (property_type);
 create index if not exists idx_properties_status
   on properties (status);
 create index if not exists idx_properties_owner
   on properties (owner_id);
--- Geo index: only create if PostGIS is available
 do $$
 begin
   if exists (select 1 from pg_extension where extname = 'postgis') then
@@ -236,6 +120,164 @@ begin
     execute 'create index if not exists idx_properties_lng on properties (longitude)';
   end if;
 end $$;
+
+
+-- ============================================================
+-- 2e. AMENITIES  (admin-managed list)
+-- ============================================================
+create table if not exists amenities (
+  id          uuid primary key default gen_random_uuid(),
+  amenity     text not null unique,
+  category    text,
+  is_active   boolean not null default true,
+  created_at  timestamptz not null default now()
+);
+
+-- Join table: property ↔ amenities
+create table if not exists property_amenities (
+  property_id uuid not null references properties(id) on delete restrict,
+  amenity_id  uuid not null references amenities(id) on delete restrict,
+  created_at  timestamptz not null default now(),
+  primary key (property_id, amenity_id)
+);
+
+create index if not exists idx_amenities_active on amenities(is_active);
+create index if not exists idx_property_amenities_property on property_amenities(property_id);
+create index if not exists idx_property_amenities_amenity on property_amenities(amenity_id);
+
+
+-- ============================================================
+-- 2b. PROPERTY SETUP  (1-to-1 — policies, hours, health & safety)
+--     Maps to ListProperty Step 2. Loaded on detail / admin page.
+-- ============================================================
+create table if not exists property_setup (
+  property_id         uuid primary key references properties(id) on delete restrict,
+
+  -- Policies
+  policies            jsonb    default '{}'::jsonb,
+  /*  {
+        "breedRestrictions": false, "breedRestrictionDetails": "",
+        "aggressivePolicy": false,  "aggressivePolicyDetails": "",
+        "unvaccinatedPolicy": false,"unvaccinatedPolicyDetails": ""
+      }
+  */
+
+  -- Operating hours
+  operating_hours     jsonb    default '{}'::jsonb,
+  /*  {
+        "sameHoursEveryDay": true,
+        "dailyOpenTime": "08:00", "dailyCloseTime": "18:00",
+        "weeklyHours": { "Monday": {"open":"08:00","close":"18:00"}, ... },
+        "weekendAvailability": true, "holidayAvailability": false,
+        "emergencyServices": false,
+        "checkInCutoff": "15:00",
+        "pickupStart": "08:00", "pickupEnd": "12:00",
+        "appointmentOnly": "appointments"
+      }
+  */
+
+  -- Booking rules & compliance
+  booking_rules       text[]   default '{}',
+  compliance          text[]   default '{}',
+
+  -- Cancellation policy
+  cancellation_policy jsonb    default '{}'::jsonb,
+  /*  { "freeCancellation":"24hours", "lateFee":"₱200", "noShow":"₱500" } */
+
+  -- Health & safety
+  health_safety       text[]   default '{}',
+  vet_availability    text[]   default '{}',
+  sanitation_protocols text[]  default '{}',
+  emergency_contact   text,
+  nearest_vet_hospital text,
+  emergency_response_time text,
+
+  created_at          timestamptz not null default now(),
+  updated_at          timestamptz not null default now()
+);
+
+
+-- ============================================================
+-- 2c. PROPERTY PRICING  (1-to-1 — all pricing & payment config)
+--     Maps to ListProperty Step 4. Loaded on detail / booking page.
+-- ============================================================
+create table if not exists property_pricing (
+  property_id         uuid primary key references properties(id) on delete restrict,
+
+  -- Base services
+  base_services       jsonb    default '[]'::jsonb,
+  /*  [{"name":"Overnight Stay","priceType":"Fixed price","price":"500","duration":"24h"}] */
+
+  -- Size-based pricing
+  pet_size_pricing    jsonb    default '{}'::jsonb,
+  /*  {"small":"300","medium":"400","large":"500","giant":"600","cats":"350","exotic":"450"} */
+
+  -- Add-ons
+  add_ons             jsonb    default '[]'::jsonb,
+  /*  [{"name":"Flea treatment","price":"250","type":"One-time"}] */
+
+  -- Vet fees  (veterinary properties only)
+  vet_fees            jsonb    default '{}'::jsonb,
+  /*  {"generalConsult":"500","vaccination":"300","emergency":"2000"} */
+
+  -- Boarding rules
+  boarding_rules      jsonb    default '{}'::jsonb,
+  /*  {
+        "advanceBooking":true,"sameDayBooking":false,
+        "freeCancellation":true,"lateCancellationFee":false,
+        "lateCancellationFeeAmount":"","vaccinationRequired":true,
+        "healthDeclaration":true,"noAggressivePets":true,"liabilityWaiver":true
+      }
+  */
+
+  -- Fees & charges
+  fees_charges        jsonb    default '{}'::jsonb,
+  /*  {
+        "serviceFee":"10%","taxes":"Included","noShow":"₱300",
+        "latePickup":"₱100/hr","cleaningFee":"₱200",
+        "emergencyFee":"₱500","holidaySurcharge":"20%","cancellationFee":"₱250"
+      }
+  */
+
+  -- Payment options
+  payment_options     jsonb    default '{}'::jsonb,
+  /*  {"deposit":true,"methods":["GCash","Cash","Card"],"refundPolicy":"Full refund..."} */
+
+  pricing_notes       text,
+  additional_pricing_notes text,
+
+  created_at          timestamptz not null default now(),
+  updated_at          timestamptz not null default now()
+);
+
+
+-- ============================================================
+-- 2d. PROPERTY LEGAL  (1-to-1 — documents & legal agreements)
+--     Maps to ListProperty Step 5. Admin-only access.
+-- ============================================================
+create table if not exists property_legal (
+  property_id         uuid primary key references properties(id) on delete restrict,
+
+  legal_entity_type   text     check (legal_entity_type in ('individual','business','')),
+
+  -- Contracting party
+  contracting_party   jsonb    default '{}'::jsonb,
+  /*  {"firstName":"","middleName":"","lastName":"","email":"","phone":"","phoneCountryCode":"+63"} */
+  contracting_party_address jsonb default '{}'::jsonb,
+  /*  {"country":"Philippines","streetAddress":"","addressLine2":"","city":"","postalCode":""} */
+
+  -- Document uploads  (Supabase Storage URLs)
+  lgu_permits         text[]   default '{}',
+  bai_document        text,
+  contract_document   text,
+
+  -- Agreements
+  legal_agreements    jsonb    default '{}'::jsonb,
+  /*  {"termsAccepted":true,"dataProcessing":true,"finalAgreementAccepted":true} */
+
+  created_at          timestamptz not null default now(),
+  updated_at          timestamptz not null default now()
+);
 
 
 -- ============================================================
@@ -603,6 +645,21 @@ create trigger trg_properties_updated
   before update on properties
   for each row execute function set_updated_at();
 
+drop trigger if exists trg_property_setup_updated on property_setup;
+create trigger trg_property_setup_updated
+  before update on property_setup
+  for each row execute function set_updated_at();
+
+drop trigger if exists trg_property_pricing_updated on property_pricing;
+create trigger trg_property_pricing_updated
+  before update on property_pricing
+  for each row execute function set_updated_at();
+
+drop trigger if exists trg_property_legal_updated on property_legal;
+create trigger trg_property_legal_updated
+  before update on property_legal
+  for each row execute function set_updated_at();
+
 drop trigger if exists trg_bookings_updated on bookings;
 create trigger trg_bookings_updated
   before update on bookings
@@ -629,6 +686,11 @@ create trigger trg_support_tickets_updated
 -- ============================================================
 alter table profiles          enable row level security;
 alter table properties        enable row level security;
+alter table property_setup    enable row level security;
+alter table property_pricing  enable row level security;
+alter table property_legal    enable row level security;
+alter table amenities         enable row level security;
+alter table property_amenities enable row level security;
 alter table pets              enable row level security;
 alter table pet_service_history enable row level security;
 alter table property_services enable row level security;
@@ -655,6 +717,54 @@ create policy "Public read approved properties" on properties
 create policy "Owners manage own properties"    on properties
   for all using (auth.uid() = owner_id);
 create policy "Admins manage all properties"    on properties
+  for all using (
+    exists (select 1 from profiles where id = auth.uid() and role in ('admin','superadmin'))
+  );
+
+-- ── Amenities ──
+create policy "Public read amenities" on amenities
+  for select using (is_active = true);
+create policy "Admins manage amenities" on amenities
+  for all using (
+    exists (select 1 from profiles where id = auth.uid() and role in ('admin','superadmin'))
+  );
+
+-- ── Property Amenities ──
+create policy "Public read property amenities" on property_amenities
+  for select using (
+    exists (select 1 from properties where id = property_id and status = 'approved' and is_deleted = false)
+  );
+create policy "Owners manage property amenities" on property_amenities
+  for all using (
+    auth.uid() in (select owner_id from properties where id = property_id)
+  );
+
+-- ── Property Setup ──
+create policy "Public read property setup" on property_setup
+  for select using (
+    exists (select 1 from properties where id = property_id and status = 'approved' and is_deleted = false)
+  );
+create policy "Owners manage own setup" on property_setup
+  for all using (
+    auth.uid() in (select owner_id from properties where id = property_id)
+  );
+
+-- ── Property Pricing ──
+create policy "Public read property pricing" on property_pricing
+  for select using (
+    exists (select 1 from properties where id = property_id and status = 'approved' and is_deleted = false)
+  );
+create policy "Owners manage own pricing" on property_pricing
+  for all using (
+    auth.uid() in (select owner_id from properties where id = property_id)
+  );
+
+-- ── Property Legal  (owner + admin only) ──
+create policy "Owners read own legal" on property_legal
+  for all using (
+    auth.uid() in (select owner_id from properties where id = property_id)
+  );
+create policy "Admins manage legal" on property_legal
   for all using (
     exists (select 1 from profiles where id = auth.uid() and role in ('admin','superadmin'))
   );
