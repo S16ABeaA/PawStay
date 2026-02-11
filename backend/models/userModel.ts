@@ -1,4 +1,4 @@
-import { supabase } from "../config/supabaseAdmin";
+import { supabaseAdmin } from "../config/supabaseAdmin";
 
 export type Role = "customer" | "proprietor" | "admin";
 
@@ -16,7 +16,7 @@ export const userModel = {
     lastName,
     role = "customer",
   }: User) => {
-    const { error } = await supabase.from("profiles").insert([
+    const { error } = await supabaseAdmin.from("profiles").insert([
       {
         id,
         first_name: firstName,
@@ -29,7 +29,7 @@ export const userModel = {
   },
 
   getUserById: async (id: string) => {
-    const { data, error } = await supabase
+    const { data, error } = await supabaseAdmin
       .from("profiles")
       .select("id, first_name, last_name, role, phone, address, avatar_url")
       .eq("id", id)

@@ -42,30 +42,6 @@ const Profile = () => {
   //   avatar: "",
   //   isAdmin: true, // Simulated admin role
   // });
-  
-  // const [user, setUser] = useState<any>(null); // start as null
-
-  // useEffect(() => {
-  //   const fetchProfile = async () => {
-  //     const profile = await authApi.getProfile();
-  //     console.log("[FRONTEND] Profile response:", profile);
-  //     if(!profile?.user){
-  //       navigate("/signin");
-  //     }
-  //     // AuthHelper.saveUser(profile.user);
-  //     setUser({
-  //       firstName: profile.user.first_name,
-  //       lastName: profile.user.last_name,
-  //       email: profile.user.email,
-  //       phone: profile.user.phone || "",
-  //       address: profile.user.address || "",
-  //       avatar: profile.user.avatar_url || "",
-  //       isAdmin: profile.user.role === "admin",
-  //       isSuperAdmin: profile.user.role === "super_admin",
-  //     });
-  //   };
-  //   fetchProfile();
-  // }, []);
 
   const [user, setUser] = useState<any>(null);
 

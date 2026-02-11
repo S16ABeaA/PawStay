@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
@@ -55,15 +55,20 @@ const SignIn = () => {
         lastName,
         isPartner: isPartnerFlow,
       });
-      if (!result?.user) {
+
+      if (!result?.userId) {
         toast({ title: "Error", description: "Signup failed." });
         return;
       }
+
       toast({
         title: "Account Created!", //Sign-up Successful
         description: "Please check your email to confirm your account.",
       });
-
+      
+      await authApi.resendConfirmation({email});
+      navigate("/check-email", { state: { email } });
+      
       // reset form
       // setFirstName("");
       // setLastName("");
@@ -71,7 +76,8 @@ const SignIn = () => {
       // setConfirmPassword("");
       // setTermsChecked(false);
 
-      navigate(redirectTo || "/");
+      // navigate(redirectTo || "/");
+      return;
     } catch(err) {
       toast({ title: "Error", description: err.message || "Failed to sign up." });
     }
@@ -86,15 +92,19 @@ const SignIn = () => {
 
     try{
       const result = await authApi.signIn({email, password});
+      
+      if (result?.message?.includes("confirm your email")) {
+        toast({
+          title: "Email Not Confirmed",
+          description: result.message,
+        });
+        return;
+      }
+      
       if (!result?.user) {
         toast({ title: "Error", description: "Sign-in failed. Check your credentials." });
         return;
       }
-      console.log(" [Frontend] Full response:", result);
-    console.log(" [Frontend] User object:", result?.user);
-    console.log(" [Frontend] User keys:", Object.keys(result?.user || {}));
-    console.log(" [Frontend] User role:", result?.user?.role);
-    console.log(" [Frontend] User email:", result?.user?.email);
       
       // Demo: redirect based on email for testing admin panels
       //  if (email.includes("admin@")) {
@@ -157,6 +167,10 @@ const SignIn = () => {
   const handleGoogleAuth = async () => {
     try{
       // await authApi.signInWithGoogle();
+      // const result  = await authApi.signInWithGoogle();
+      // if (result?.url) window.location.href = result.url;
+      // else toast({ title: "Error", description: "Failed to get Google sign-in URL." });
+
     }catch(err){
       toast({ title: "Error", description: err.message });
     }

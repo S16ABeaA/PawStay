@@ -12,6 +12,7 @@ import Veterinary from "./pages/Veterinary";
 import VeterinaryDetail from "./pages/VeterinaryDetail";
 import About from "./pages/About";
 import SignIn from "./pages/SignIn";
+import CheckEmail from "./pages/CheckEmail";
 import ListProperty from "./pages/ListProperty";
 import Favorites from "./pages/Favorites";
 import Booking from "./pages/Booking";
@@ -54,6 +55,7 @@ const App = () => (
           <Route path="/veterinary/:id" element={<VeterinaryDetail />} />
           <Route path="/about" element={<About />} />
           <Route path="/signin" element={<SignIn />} />
+          <Route path="/check-email" element={<CheckEmail />} />
           <Route path="/list-property" element={<ListProperty />} />
           <Route path="/favorites" element={<Favorites />} />
           <Route path="/booking" element={<Booking />} />

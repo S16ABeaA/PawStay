@@ -1,13 +1,11 @@
 import { Request, Response } from "express";
-import { supabase } from "../config/supabaseAdmin";
+import { supabaseAdmin } from "../config/supabaseAdmin";
 import { supabaseClient } from "../config/supabaseClient";
 import { userModel } from "../models/userModel";
 import { clearAuthCookies } from "../middleware/authMiddleware";
 
 export const authController = {
   signUp: async (req: Request, res: Response) => {
-    console.log("signUp controller hit");
-
     const { email, password, firstName, lastName, isPartner } = req.body;
 
     if(!email || !password || !firstName || !lastName){
@@ -25,116 +23,97 @@ export const authController = {
 
     try {
       // Check if user already exists
-      // const { data: existingUser } = await supabase.auth.admin.listUsers();
-      // const userExists = existingUser?.users?.some(u => u.email === email);
-      // if (userExists) {
-      //     return res.status(409).json({ message: "User with this email already exists." });
-      // }
+      const { data: existingUser } = await supabaseAdmin.auth.admin.listUsers();
+      const userExists = existingUser?.users?.some(u => u.email === email);
+      if (userExists) {
+          return res.status(409).json({ message: "User with this email already exists." });
+      }
 
       // Test 1: List all users (admin only)
-      const { data: users, error: usersError } = await supabase.auth.admin.listUsers();
-      console.log("Admin users test:", { users: users?.users?.length, usersError });
+      // const { data: users, error: usersError } = await supabaseAdmin.auth.admin.listUsers();
+      // console.log("Admin users test:", { users: users?.users?.length, usersError });
+
+      // /*
+      console.log("Creating user in Auth...");
+      // */
 
       // Create user in Supabase Auth
-      
-      console.log("Creating user in Auth...");
-
-      const { data: signUpData, error: signUpError } = await supabase.auth.admin.createUser({
+      const { data: signUpData, error: signUpError } = await supabaseAdmin.auth.admin.createUser({
         email,
         password,
-        email_confirm: true, // Skip email confirmation for testing
+        email_confirm: false,
+        // email_confirm: true, // Skip email confirmation for testing
         user_metadata: { firstName, lastName, role: isPartner ? "proprietor" : "customer" }
       });
       if (signUpError) return res.status(400).json({ error: signUpError.message });
 
       console.log("SignUpData:", signUpData);
-      console.log("Creating user profile...");
 
       const userId = signUpData.user?.id;
       if (!userId) throw new Error("User ID not returned from Supabase");
-      console.log("userId:", userId);
-      console.log("firstname:", firstName);
-      console.log("lastname:", lastName);
-      console.log("isPartner:", isPartner);
-      // Create user profile in profiles table (db)
-      await userModel.createUser({
-        id: userId,
-        firstName,
-        lastName,
-        role: isPartner ? "proprietor" : "customer",
-      });
-// console.log("Waiting for profile commit...");
-// await new Promise(resolve => setTimeout(resolve, 1000));
-await new Promise(r => setTimeout(r, 300));
 
-console.log("Signing in...");
-      //Sign in the user immediately after signup
-      const { data: signInData, error: signInError } = await supabaseClient.auth.signInWithPassword({
-        email,
-
-        password,
-      });
-      if (signInError) throw signInError;
-console.log("SignInData:", signInData);
-      res.cookie("sb-access-token", signInData.session.access_token, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "lax",
-        maxAge: 7 * 24 * 60 * 60 * 1000,
-        path: "/",
-      });
-
-      res.cookie("sb-refresh-token", signInData.session.refresh_token, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "lax",
-        maxAge: 7 * 24 * 60 * 60 * 1000,
-        path: "/",
-      });
-      // Create session for the new user
-
-
-      // const session = await sessionModel.createSession(userId);
-
-      // Set cookie
-      // res.cookie("session_id", session.id, {
-      //   httpOnly: true,
-      //   secure: process.env.NODE_ENV === "production",
-      //   sameSite: "lax",
-      //   maxAge: SESSION_DURATION_MS,
-      //   path: "/",
-      // });
-      
-      // Return user profile
-      const userProfile = await userModel.getUserById(userId);
-      if (!userProfile) {
-        return res.status(404).json({ error: "User not found" });
-      }
-      const user = {
-        id: userProfile.id,
-        first_name: userProfile.first_name,
-        last_name: userProfile.last_name,
-        role: userProfile.role,
-        phone: userProfile.phone || "",
-        address: userProfile.address || "",
-        avatar_url: userProfile.avatar_url || "",
-        email: signUpData.user?.email,
-      };
-      console.log("User profile created:", user);
-      return res.status(201).json({ user
-        // , session: {
-        //   access_token: signInData.session.access_token,
-        //   expires_at: signInData.session.expires_at
-      //   } 
+      return res.status(201).json({
+        message: "Signup successful! Please check your email to confirm your account.",
+        userId: signUpData.user?.id,
       });
     } catch (err: any) {
+      // If user was created in Auth but something else failed, delete the Auth user
+      // if (signUpData?.user?.id) {
+      //   await supabaseAdmin.auth.admin.deleteUser(signUpData.user.id);
+      //   console.log("Rolled back Auth user due to error:", err.message);
+      // }
       console.error("SignUp Error:", err);
       return res.status(500).json({ error: "Internal server error." });
     }
   },
-  
+
+  resendConfirmation: async (req: Request, res: Response) => {
+    const { email } = req.body;
+    if (!email) return res.status(400).json({ message: "Email is required." });
+
+    const { data: users } = await supabaseAdmin.auth.admin.listUsers();
+    const user = users?.users.find(u => u.email === email);
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found." });
+    }
+
+    // Check if already confirmed
+    if (user.confirmed_at) {
+      return res.status(400).json({ message: "Email is already confirmed." });
+    }
+
+    // check last resend timestamp from your DB
+    // const profile = await userModel.getUserById(user.id);
+    // const lastSent = profile?.last_confirmation_sent;
+    // if (lastSent && Date.now() - lastSent < 45000) { // 45s cooldown
+    //   return res.status(429).json({ message: "Please wait before resending email." });
+    // }
+
+    try {
+      const { error } = await supabaseClient.auth.resend({
+        type: "signup",
+        email,
+        options: {
+          emailRedirectTo: `${process.env.VITE_FRONTEND_URL}/check-email?confirmed=true`
+        }
+      });
+
+      if (error) {
+        return res.status(500).json({ message: error.message });
+      }
+
+      // update last resend timestamp in DB
+      // await userModel.updateUser(user.id, { last_confirmation_sent: Date.now() });
+
+      return res.status(200).json({ message: "Confirmation email resent successfully." });
+    } catch (err: any) {
+      console.error("Resend Confirmation Error:", err);
+      return res.status(500).json({ message: "Internal server error." });
+    }
+  },
+    
   signIn: async (req: Request, res: Response) => {
-    console.log("signIn controller hit");
     const { email, password } = req.body;
     if (!email || !password) {
       return res.status(400).json({ message: "Email and password required." });
@@ -143,6 +122,10 @@ console.log("SignInData:", signInData);
     try {
       const { data: signInData, error: signInError } = await supabaseClient.auth.signInWithPassword({ email, password });
       if (signInError) return res.status(401).json({ error: signInError.message });
+
+      if (!signInData.user?.email_confirmed_at) {
+        return res.status(403).json({ message: "Please confirm your email before signing in." });
+      }
 
       const userId = signInData.user.id;
 
@@ -163,17 +146,6 @@ console.log("SignInData:", signInData);
         path: "/",
       });
 
-      // Create session
-      // const session = await sessionModel.createSession(userId);
-
-      // // Set cookie
-      // res.cookie("session_id", session.id, {
-      //   httpOnly: true,
-      //   secure: process.env.NODE_ENV === "production",
-      //   sameSite: "lax",
-      //   maxAge: SESSION_DURATION_MS,
-      // });
-
       // Return profile info
       const userProfile = await userModel.getUserById(userId);
       if (!userProfile) {
@@ -190,14 +162,17 @@ console.log("SignInData:", signInData);
         avatar_url: userProfile.avatar_url || "",
         email: signInData.user?.email,
       };
-      return res.json({ user
-        // , session: {
-        //   access_token: signInData.session.access_token,
-        //   expires_at: signInData.session.expires_at
-        // } 
-      });
+      return res.json({ user });
     } catch (err: any) {
       res.status(500).json({ error: err.message });
+    }
+  },
+
+  signInWithGoogle: async (req: Request, res: Response) => {
+    try {
+      
+    } catch (err: any){
+
     }
   },
 
@@ -209,7 +184,11 @@ console.log("SignInData:", signInData);
     // console.log("[BACKEND] Fetching profile for userId:", userId);
     try{
       const userProfile = await userModel.getUserById(user.id);
+      
+      // /*
       console.log("[BACKEND] Fetched user profile:", userProfile?.id);
+      // */
+
       if (!userProfile) {
         return res.status(404).json({ error: "User not found" });
       }
@@ -223,7 +202,6 @@ console.log("SignInData:", signInData);
           address: userProfile.address || "",
           avatar_url: userProfile.avatar_url || "",
           email: user.email, // Get email from token
-          // role: user.role
         }
       });
     }catch(err: any){
@@ -262,170 +240,6 @@ console.log("SignInData:", signInData);
     }
   },
 
-  // signUp: async (req: Request, res: Response) => {
-  //   const { email, password, firstName, lastName, isPartner } = req.body;
-
-  //   if(!email || !password || !firstName || !lastName){
-  //     return res.status(400).json({ message: "All fields are required." });
-  //   }
-  //   // Validate email format
-  //   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  //   if (!emailRegex.test(email)) {
-  //       return res.status(400).json({ message: "Invalid email format." });
-  //   }
-  //   // Validate password strength
-  //   if (password.length < 6) {
-  //       return res.status(400).json({ message: "Password must be at least 6 characters." });
-  //   }
-
-  //   try{
-      
-  //     // Check if user already exists
-  //     const { data: existingUser } = await supabase.auth.admin.listUsers();
-  //     const userExists = existingUser?.users?.some(u => u.email === email);
-  //     if (userExists) {
-  //         return res.status(409).json({ message: "User with this email already exists." });
-  //     }
-      
-  //     //Create user in Supabase Auth
-  //     const { data, error } = await supabase.auth.admin.createUser({
-  //       email,
-  //       password,
-  //       email_confirm: true, // Skip email confirmation for testing
-  //       user_metadata: { firstName, lastName, role: isPartner ? "proprietor" : "customer" }
-  //     });
-  //     if (error) {
-  //           console.error("Auth creation error:", error);
-  //           throw error;
-  //       }
-  //     if (error) throw error;
-
-  //     //Insert user in profiles table
-  //     const userId = data.user?.id;
-  //     if (!userId) throw new Error("User ID not returned from Supabase");
-
-  //     await UserModel.createUser({
-  //       id: userId,
-  //       firstName,
-  //       lastName,
-  //       role: isPartner ? "proprietor" : "customer",
-  //     });
-
-  //     //Sign in the user immediately after signup
-  //     const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
-  //       email,
-  //       password,
-  //     });
-  //     if (signInError) throw signInError;
-
-  //     // Set cookies
-  //     res.cookie('access_token', signInData.session.access_token, {
-  //       httpOnly: true,
-  //       secure: process.env.NODE_ENV === 'production',
-  //       sameSite: 'strict',
-  //       maxAge: 15 * 60 * 1000,
-  //       path: '/',
-  //     });
-
-  //     res.cookie('refresh_token', signInData.session.refresh_token, {
-  //       httpOnly: true,
-  //       secure: process.env.NODE_ENV === 'production',
-  //       sameSite: 'strict',
-  //       maxAge: 7 * 24 * 60 * 60 * 1000,
-  //       path: '/',
-  //     });
-
-  //     res.status(200).json({  message: "User created successfully", userId, session: signInData.session });
-  //   }catch (err: any){
-  //     console.error(err);
-  //     res.status(500).json({ message: err.message || "Signup failed." });
-  //   }
-  // },
-
-  // signIn: async (req: Request, res: Response) => {
-  //   const { email, password } = req.body;
-  //   if(!email || !password){
-  //     return res.status(400).json({ message: "Email and password required." });
-  //   }
-
-  //   try{
-  //     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-  //     if (error) throw error;
-
-  //     if (!data?.session) {
-  //       return res.status(401).json({ 
-  //         success: false,
-  //         message: "Authentication failed - no session created" 
-  //       });
-  //     }
-
-  //     const userId =  data.user?.id;
-  //     if (!userId) {
-  //       console.log("No user returned");
-  //       return res.status(401).json({ message: "Invalid credentials" });
-  //     }
-
-  //     // Set authentication cookies
-  //     res.cookie('access_token', data.session.access_token, {
-  //       httpOnly: true,
-  //       secure: process.env.NODE_ENV === 'production', // HTTPS only in production
-  //       sameSite: 'strict',
-  //       maxAge: 15 * 60 * 1000, // 15 minutes
-  //       path: '/', // Available on all routes
-  //     });
-
-  //     res.cookie('refresh_token', data.session.refresh_token, {
-  //       httpOnly: true,
-  //       secure: process.env.NODE_ENV === 'production',
-  //       sameSite: 'strict',
-  //       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-  //       path: '/',
-  //     });
-
-  //     // Check if user exists in profiles table
-  //     let profile = await UserModel.getUserById(userId);
-  //     console.log("Profile:", profile); 
-  //     if (!profile) {
-  //       return res.status(404).json({ message: "Profile not found. Please sign up first.", user: data.user });
-  //     }
-  //     res.status(200).json({ 
-  //       success: true,
-  //       message: "Signed in successfully", 
-  //       user: {
-  //         ...profile,
-  //         email: data.user.email
-  //       }
-  //     });
-
-  //     // res.status(200).json({ 
-  //     //   message: "Signed in successfully", 
-  //     //   session: data.session,
-  //     //   user: {
-  //     //     ...profile,
-  //     //     email: data.user.email
-  //     //   }
-  //     // });
-  //   }catch (err: any){
-  //     res.status(500).json({ error: err.message });
-  //     // let errorMessage = "Sign in failed";
-  //     // let statusCode = 500;
-      
-  //     // if (err.message?.includes("Invalid login credentials")) {
-  //     //   errorMessage = "Invalid email or password";
-  //     //   statusCode = 401;
-  //     // } else if (err.message?.includes("Email not confirmed")) {
-  //     //   errorMessage = "Please confirm your email address";
-  //     //   statusCode = 403;
-  //     // }
-      
-  //     // res.status(statusCode).json({ 
-  //     //   success: false,
-  //     //   message: errorMessage,
-  //     //   ...(process.env.NODE_ENV === 'development' && { error: err.message })
-  //     // });
-  //   }
-  // },
-
   // signInWithGoogle: async (req: Request, res: Response) => {
   //   try{
   //     const { data, error } = await supabase.auth.signInWithOAuth({
@@ -437,139 +251,6 @@ console.log("SignInData:", signInData);
   //     if (error) throw error;
   //     res.status(200).json({ url: data.url });
   //   }catch (err: any) {
-  //     res.status(500).json({ error: err.message });
-  //   }
-  // },
-
-  // signOut: async (req: Request, res: Response) => {
-  //   try{
-  //     const token = req.cookies.access_token;
-  //     if (token) {
-  //       await supabase.auth.signOut(token);
-  //     }
-      
-  //     // Clear authentication cookies
-  //     res.clearCookie('access_token', {
-  //       path: '/',
-  //     });
-      
-  //     res.clearCookie('refresh_token', {
-  //       path: '/',
-  //     });
-
-  //     // Clear any other auth-related cookies
-  //     res.clearCookie('sb-access-token', { path: '/' });
-  //     res.clearCookie('sb-refresh-token', { path: '/' });
-
-  //     res.status(200).json({ 
-  //       success: true,
-  //       message: "Signed out successfully." 
-  //     });
-  //   }catch(err: any){
-  //     //clear cookies anyway
-  //     res.clearCookie('access_token', { path: '/' });
-  //     res.clearCookie('refresh_token', { path: '/' });
-  //     res.status(200).json({ 
-  //       success: true,
-  //       message: "Signed out (session cleared)" 
-  //     });
-  //     }
-  // },
-
-  // refreshToken: async (req: Request, res: Response) => {
-  //   try {
-  //     const refreshToken = req.cookies.refresh_token;
-      
-  //     if (!refreshToken) {
-  //       return res.status(401).json({ 
-  //         success: false,
-  //         message: "No refresh token available" 
-  //       });
-  //     }
-
-  //     const { data, error } = await supabase.auth.refreshSession({
-  //       refresh_token: refreshToken
-  //     });
-
-  //     if (error) throw error;
-
-  //     if (!data?.session) {
-  //       // Clear cookies since refresh failed
-  //       res.clearCookie('access_token', { path: '/' });
-  //       res.clearCookie('refresh_token', { path: '/' });
-        
-  //       return res.status(401).json({ 
-  //         success: false,
-  //         message: "Session expired. Please sign in again.",
-  //         code: "SESSION_EXPIRED" 
-  //       });
-  //     }
-
-  //     // Set new access token cookie
-  //     res.cookie('access_token', data.session.access_token, {
-  //       httpOnly: true,
-  //       secure: process.env.NODE_ENV === 'production',
-  //       sameSite: 'strict',
-  //       maxAge: 15 * 60 * 1000,
-  //       path: '/',
-  //     });
-
-  //     // Update refresh token if a new one was provided
-  //     if (data.session.refresh_token !== refreshToken) {
-  //       res.cookie('refresh_token', data.session.refresh_token, {
-  //         httpOnly: true,
-  //         secure: process.env.NODE_ENV === 'production',
-  //         sameSite: 'strict',
-  //         maxAge: 7 * 24 * 60 * 60 * 1000,
-  //         path: '/',
-  //       });
-  //     }
-
-  //     res.status(200).json({ 
-  //       success: true,
-  //       message: "Token refreshed successfully" 
-  //       // ,user: {
-  //       //   id: data.user?.id,
-  //       //   email: data.user?.email
-  //       // }
-  //     });
-      
-  //   } catch (err: any) {
-  //     console.error("Token refresh error:", err);
-      
-  //     // Clear all auth cookies on refresh failure
-  //     res.clearCookie('access_token', { path: '/' });
-  //     res.clearCookie('refresh_token', { path: '/' });
-      
-  //     res.status(401).json({ 
-  //       success: false,
-  //       message: "Session expired. Please sign in again.",
-  //       code: "SESSION_EXPIRED"
-  //     });
-  //   }
-  // },
-
-  // getUserById: async (req: Request, res: Response) => {
-  //   const userId = (req as any).user.id;
-  //   if (!userId) {
-  //     return res.status(401).json({ error: "User ID not found in token" });
-  //   }
-  //   // console.log("[BACKEND] Fetching profile for userId:", userId);
-  //   try{
-  //     const user = await UserModel.getUserById(userId);
-  //     console.log("[BACKEND] Fetched user:", user);
-  //     if (!user) {
-  //       return res.status(404).json({ error: "User not found" });
-  //     }
-  //     res.status(200).json({ 
-  //       user: {
-  //         ...user,
-  //         email: (req as any).user.email, // Get email from token
-  //         role: (req as any).user.role || user.role
-  //       }
-  //     });
-  //   }catch(err: any){
-  //     console.error("[BACKEND] Error in getUserById:", err.message); 
   //     res.status(500).json({ error: err.message });
   //   }
   // },
