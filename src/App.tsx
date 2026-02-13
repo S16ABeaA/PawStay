@@ -12,6 +12,7 @@ import Veterinary from "./pages/Veterinary";
 import VeterinaryDetail from "./pages/VeterinaryDetail";
 import About from "./pages/About";
 import SignIn from "./pages/SignIn";
+import CheckEmail from "./pages/CheckEmail";
 import ListProperty from "./pages/ListProperty";
 import Favorites from "./pages/Favorites";
 import Booking from "./pages/Booking";

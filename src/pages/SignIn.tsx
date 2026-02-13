@@ -10,6 +10,8 @@ import { Separator } from "@/components/ui/separator";
 import { PawPrint, Mail, Lock, Eye, EyeOff } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
+import { authApi } from "../services/authApi";
+
 const SignIn = () => {
   const location = useLocation();
   const searchParams = useMemo(
@@ -27,37 +29,191 @@ const SignIn = () => {
   const { toast } = useToast();
   const navigate = useNavigate();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  // For sign-up
+  const [firstName, setFirstName] = useState(""); 
+  const [lastName, setLastName] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [termsChecked, setTermsChecked] = useState(false);
+
+  const handleSignUp = async () => {
+    if (isSignUp && !termsChecked) {
+      toast({ title: "Error", description: "You must agree to the terms." });
+      return;
+    }
+
+    if(password !== confirmPassword){
+      toast({ title: "Error", description: "Passwords do not match." });
+      return;
+    }
+
+    try {
+      const result  = await authApi.signUp({
+        email,
+        password,
+        firstName,
+        lastName,
+        isPartner: isPartnerFlow,
+      });
+
+      if (!result?.userId) {
+        toast({ title: "Error", description: "Signup failed." });
+        return;
+      }
+
+      toast({
+        title: "Account Created!", //Sign-up Successful
+        description: "Please check your email to confirm your account.",
+      });
+      
+      await authApi.resendConfirmation({email});
+      navigate("/check-email", { state: { email } });
+      
+      // reset form
+      // setFirstName("");
+      // setLastName("");
+      // setPassword("");
+      // setConfirmPassword("");
+      // setTermsChecked(false);
+
+      // navigate(redirectTo || "/");
+      return;
+    } catch(err) {
+      toast({ title: "Error", description: err.message || "Failed to sign up." });
+    }
+  };
+
+  // Signin
+  const handleSignIn = async () => {
+    if (!email || !password) {
+      toast({ title: "Error", description: "Email and password are required." });
+      return;
+    }
+
+    try{
+      const result = await authApi.signIn({email, password});
+      
+      if (result?.message?.includes("confirm your email")) {
+        toast({
+          title: "Email Not Confirmed",
+          description: result.message,
+        });
+        return;
+      }
+      
+      if (!result?.user) {
+        toast({ title: "Error", description: "Sign-in failed. Check your credentials." });
+        return;
+      }
+      
+      // Demo: redirect based on email for testing admin panels
+      //  if (email.includes("admin@")) {
+      //   toast({
+      //     title: "Welcome Admin!",
+      //     description: "Redirecting to admin dashboard...",
+      //   });
+      //   navigate("/admin");
+      //   return;
+      // }
+      // if (result.user.role === "admin") {
+      //   toast({ 
+      //    title: "Welcome Admin!", 
+      //    description: "Redirecting to admin dashboard..." 
+      //   });
+      //   navigate("/admin");
+      //   return;
+      // }
+      
+      // if (email.includes("super@") || email.includes("superadmin@")) {
+      //   toast({
+      //     title: "Welcome Super Admin!",
+      //     description: "Redirecting to super admin dashboard...",
+      //   });
+      //   navigate("/superadmin");
+      //   return;
+      // }
+      // if (result.user.role === "superadmin") {
+      //   toast({ 
+      //     title: "Welcome Super Admin!", 
+      //     description: "Redirecting to super admin dashboard..." 
+      //   });
+      //   navigate("/superadmin");
+      //   return;
+      // }
+
+      // For proprietors (partners)
+      // if (result.user.role === "proprietor") {
+      //   toast({
+      //     title: "Welcome Partner!",
+      //     description: "Redirecting to partner dashboard...",
+      //   });
+      //   navigate("/"); /////////
+      //   return;
+      // }
+
+      // Regular customers
+      toast({
+        title: "Welcome Back!",
+        description: `Logged in as ${result.user.email}`,
+      });
+
+      console.log("User role:", result.user.role);
+      navigate(redirectTo || "/");
+    } catch(err) {
+      toast({ title: "Error", description: err.message || "Invalid email or password" });
+    }   
+  };
+
+  const handleGoogleAuth = async () => {
+    try{
+      // await authApi.signInWithGoogle();
+      // const result  = await authApi.signInWithGoogle();
+      // if (result?.url) window.location.href = result.url;
+      // else toast({ title: "Error", description: "Failed to get Google sign-in URL." });
+
+    }catch(err){
+      toast({ title: "Error", description: err.message });
+    }
+  };  
+
+  
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     localStorage.setItem("pawstay.authenticated", "true");
     
-    // Demo: redirect based on email for testing admin panels
-    if (email.includes("admin@")) {
-      toast({
-        title: "Welcome Admin!",
-        description: "Redirecting to admin dashboard...",
-      });
-      navigate("/admin");
-      return;
-    }
+    // // Demo: redirect based on email for testing admin panels
+    // if (email.includes("admin@")) {
+    //   toast({
+    //     title: "Welcome Admin!",
+    //     description: "Redirecting to admin dashboard...",
+    //   });
+    //   navigate("/admin");
+    //   return;
+    // }
     
-    if (email.includes("super@") || email.includes("superadmin@")) {
-      toast({
-        title: "Welcome Super Admin!",
-        description: "Redirecting to super admin dashboard...",
-      });
-      navigate("/superadmin");
-      return;
+    // if (email.includes("super@") || email.includes("superadmin@")) {
+    //   toast({
+    //     title: "Welcome Super Admin!",
+    //     description: "Redirecting to super admin dashboard...",
+    //   });
+    //   navigate("/superadmin");
+    //   return;
+    // }
+    if(isSignUp){
+      await handleSignUp();
     }
-    
-    toast({
-      title: isSignUp ? "Account Created!" : "Welcome Back!",
-      description: isSignUp
-        ? "Your account has been created successfully."
-        : "You have signed in successfully.",
-    });
-    navigate(redirectTo || "/");
+    else{
+      await handleSignIn();
+    }
+    // toast({
+    //   title: isSignUp ? "Account Created!" : "Welcome Back!",
+    //   description: isSignUp
+    //     ? "Your account has been created successfully."
+    //     : "You have signed in successfully.",
+    // });
+    // navigate(redirectTo || "/");
   };
 
   const heading = isPartnerFlow
@@ -100,11 +256,11 @@ const SignIn = () => {
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="firstName">First Name</Label>
-                      <Input id="firstName" placeholder="John" />
+                      <Input id="firstName" placeholder="John" value={firstName} onChange={(e) => setFirstName(e.target.value)} />
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="lastName">Last Name</Label>
-                      <Input id="lastName" placeholder="Doe" />
+                      <Input id="lastName" placeholder="Doe" value={lastName} onChange={(e) => setLastName(e.target.value)} />
                     </div>
                   </div>
                 )}
@@ -136,6 +292,8 @@ const SignIn = () => {
                       type={showPassword ? "text" : "password"} 
                       placeholder="••••••••" 
                       className="pl-10 pr-10" 
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
                     />
                     <button
                       type="button"
@@ -157,6 +315,8 @@ const SignIn = () => {
                         type={showPassword ? "text" : "password"} 
                         placeholder="••••••••" 
                         className="pl-10" 
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
                       />
                     </div>
                   </div>
@@ -178,7 +338,7 @@ const SignIn = () => {
 
                 {isSignUp && (
                   <div className="flex items-start gap-2">
-                    <Checkbox id="terms" className="mt-1" />
+                    <Checkbox id="terms" className="mt-1" checked={termsChecked} onCheckedChange={(checked) => setTermsChecked(!!checked)} />
                     <Label htmlFor="terms" className="text-sm cursor-pointer text-muted-foreground">
                       I agree to the <a href="#" className="text-primary hover:underline">Terms of Service</a> and <a href="#" className="text-primary hover:underline">Privacy Policy</a>
                     </Label>
@@ -199,7 +359,7 @@ const SignIn = () => {
 
               {/* Social Login */}
               <div className="space-y-3">
-                <Button variant="outline" className="w-full gap-2">
+                <Button variant="outline" className="w-full gap-2" onClick={handleGoogleAuth}>
                   <svg className="h-5 w-5" viewBox="0 0 24 24">
                     <path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
                     <path fill="currentColor" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
