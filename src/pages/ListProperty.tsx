@@ -648,9 +648,12 @@ const ListProperty = () => {
       if (formData.lguPermits.length > 0) {
         const permitUrls = await PropertyService.uploadMultipleFiles(
           formData.lguPermits,
-          'documents',
+          'legal-documents',
           `applications/${Date.now()}/permits`
         );
+        if (permitUrls.length !== formData.lguPermits.length) {
+          throw new Error('Some permit files failed to upload. Ensure the "legal-documents" bucket exists in Supabase Storage.');
+        }
         uploadedPermits.push(...permitUrls);
       }
 
@@ -658,20 +661,26 @@ const ListProperty = () => {
       if (formData.baiDocument) {
         const baiUrl = await PropertyService.uploadFile(
           formData.baiDocument,
-          'documents',
+          'legal-documents',
           `applications/${Date.now()}/bai-${Date.now()}.pdf`
         );
-        if (baiUrl) uploadedBAI = baiUrl;
+        if (!baiUrl) {
+          throw new Error('BAI document upload failed. Ensure the "legal-documents" bucket exists in Supabase Storage.');
+        }
+        uploadedBAI = baiUrl;
       }
 
       // Upload contract document
       if (formData.contractDocument) {
         const contractUrl = await PropertyService.uploadFile(
           formData.contractDocument,
-          'documents',
+          'legal-documents',
           `applications/${Date.now()}/contract-${Date.now()}.pdf`
         );
-        if (contractUrl) uploadedContract = contractUrl;
+        if (!contractUrl) {
+          throw new Error('Contract document upload failed. Ensure the "legal-documents" bucket exists in Supabase Storage.');
+        }
+        uploadedContract = contractUrl;
       }
 
       // Prepare submission data
@@ -754,7 +763,7 @@ const ListProperty = () => {
       console.error('Submission error:', error);
       toast({
         title: "Submission Failed",
-        description: "An unexpected error occurred. Please try again.",
+        description: error instanceof Error ? error.message : "An unexpected error occurred. Please try again.",
         variant: "destructive",
       });
     } finally {

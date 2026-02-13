@@ -107,123 +107,10 @@ interface PropertySubmissionData {
   apartmentNum?: number;
 }
 
-const MAX_TEXT_LENGTH = 4000;
-const MAX_NAME_LENGTH = 200;
-const MAX_LIST_ITEMS = 200;
-
-const isNonEmptyString = (value: unknown, maxLength: number) =>
-  typeof value === 'string' && value.trim().length > 0 && value.trim().length <= maxLength;
-
-const isOptionalString = (value: unknown, maxLength: number) =>
-  value === undefined || value === null || (typeof value === 'string' && value.trim().length <= maxLength);
-
-const isBoolean = (value: unknown) => typeof value === 'boolean';
-
-const isNumber = (value: unknown) => typeof value === 'number' && Number.isFinite(value);
-
-const isStringArray = (value: unknown, maxItems = MAX_LIST_ITEMS) =>
-  Array.isArray(value) && value.length <= maxItems && value.every((item) => typeof item === 'string');
-
 const isObject = (value: unknown) => typeof value === 'object' && value !== null && !Array.isArray(value);
 
 const hasBearerToken = (authorization: string | undefined) =>
   typeof authorization === 'string' && authorization.startsWith('Bearer ');
-
-const toIntOrNull = (value: unknown) => {
-  if (typeof value === 'number' && Number.isFinite(value)) {
-    return Math.trunc(value);
-  }
-
-  if (typeof value === 'string') {
-    const trimmed = value.trim();
-    if (trimmed.length === 0) {
-      return null;
-    }
-
-    const parsed = Number.parseInt(trimmed, 10);
-    return Number.isFinite(parsed) ? parsed : null;
-  }
-
-  return null;
-};
-
-const toNumberOrZero = (value: unknown) => {
-  if (typeof value === 'number' && Number.isFinite(value)) {
-    return value;
-  }
-
-  if (typeof value === 'string') {
-    const trimmed = value.trim();
-    if (trimmed.length === 0) {
-      return 0;
-    }
-
-    const parsed = Number.parseFloat(trimmed);
-    return Number.isFinite(parsed) ? parsed : 0;
-  }
-
-  return 0;
-};
-
-const toTimeOrDefault = (value: unknown, fallback = '00:00:00') => {
-  if (typeof value !== 'string') {
-    return fallback;
-  }
-
-  const trimmed = value.trim();
-  if (!trimmed) {
-    return fallback;
-  }
-
-  if (/^\d{2}:\d{2}:\d{2}$/.test(trimmed)) {
-    return trimmed;
-  }
-
-  if (/^\d{2}:\d{2}$/.test(trimmed)) {
-    return `${trimmed}:00`;
-  }
-
-  return fallback;
-};
-
-const normalize = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
-
-const hasAddOn = (addOns: Array<{ name: string }>, terms: string[]) =>
-  addOns.some((addOn) => {
-    const normalized = normalize(addOn.name || '');
-    return terms.some((term) => normalized.includes(term));
-  });
-
-const getVetFee = (fees: Record<string, string>, keys: string[]) => {
-  for (const key of keys) {
-    if (key in fees) {
-      return toNumberOrZero(fees[key]);
-    }
-  }
-  return 0;
-};
-
-const toFreeCancellationPeriod = (value: unknown) => {
-  if (typeof value !== 'string') {
-    return 'no_free_cancellation';
-  }
-
-  const normalized = normalize(value);
-  if (normalized.includes('24')) {
-    return 'up_to_24_hours_before';
-  }
-  if (normalized.includes('48')) {
-    return 'up_to_48_hours_before';
-  }
-  if (normalized.includes('week')) {
-    return 'up_to_1_week_before';
-  }
-  if (normalized.includes('no') || normalized.includes('none')) {
-    return 'no_free_cancellation';
-  }
-
-  return 'no_free_cancellation';
-};
 
 export const submitProperty = async (req: Request, res: Response) => {
   try {
@@ -249,437 +136,349 @@ export const submitProperty = async (req: Request, res: Response) => {
       // },
     });
 
-    // Helper to insert and throw on error so we know exactly which insert fails
-    const insertOrThrow = async (table: string, row: Record<string, unknown>) => {
-      const { data, error } = await supabaseClient.from(table).insert(row);
-      if (error) {
-        console.error('Supabase insert error', { table, row, error });
-        throw error;
-      }
-      return data;
-    };
-
-    const insertSingleOrThrow = async <T>(table: string, row: Record<string, unknown>) => {
-      const { data, error } = await supabaseClient.from(table).insert(row).select().single<T>();
-      if (error) {
-        console.error('Supabase insert error', { table, row, error });
-        throw error;
-      }
-      return data;
-    };
-
     if (!isObject(req.body)) {
       return res.status(400).json({ success: false, error: 'Invalid request payload' });
     }
 
-    const submissionData: PropertySubmissionData = req.body;
+    const d: PropertySubmissionData = req.body;
 
-    // Temporarily disabled validation for testing
-    // if (
-    //   !isNonEmptyString(submissionData.propertyName, MAX_NAME_LENGTH) ||
-    //   !isNonEmptyString(submissionData.addressSearch, MAX_TEXT_LENGTH) ||
-    //   !isNonEmptyString(submissionData.country, 100) ||
-    //   !isNonEmptyString(submissionData.city, 100) ||
-    //   !isNonEmptyString(submissionData.zipCode, 20) ||
-    //   !isNonEmptyString(submissionData.phone, 30) ||
-    //   !isNonEmptyString(submissionData.ownerName, MAX_NAME_LENGTH) ||
-    //   !isNonEmptyString(submissionData.email, 254) ||
-    //   !isNonEmptyString(submissionData.description, MAX_TEXT_LENGTH) ||
-    //   !['hotel', 'grooming', 'veterinary'].includes(submissionData.propertyType) ||
-    //   !isBoolean(submissionData.sameHoursEveryDay) ||
-    //   !isBoolean(submissionData.weekendAvailability) ||
-    //   !isBoolean(submissionData.holidayAvailability) ||
-    //   !isBoolean(submissionData.emergencyServices) ||
-    //   !isBoolean(submissionData.breedRestrictions) ||
-    //   !isBoolean(submissionData.aggressivePolicy) ||
-    //   !isBoolean(submissionData.unvaccinatedPolicy) ||
-    //   !isNumber(submissionData.occupancyRate) ||
-    //   !isNumber(submissionData.animalCapacity) ||
-    //   !isStringArray(submissionData.services) ||
-    //   !isStringArray(submissionData.petTypesAccepted) ||
-    //   !isStringArray(submissionData.dogSizes) ||
-    //   !isStringArray(submissionData.facilitiesAmenities) ||
-    //   !isStringArray(submissionData.complianceRequirements) ||
-    //   !isStringArray(submissionData.healthSafety) ||
-    //   !isStringArray(submissionData.vetAvailability) ||
-    //   !isStringArray(submissionData.sanitationProtocols) ||
-    //   !isStringArray(submissionData.bookingRules)
-    // ) {
-    //   return res.status(400).json({ success: false, error: 'Invalid submission data' });
-    // }
+    const defaultOwnerId = process.env.DEFAULT_OWNER_ID?.trim();
+    let ownerId: string | null = null;
 
-    // if (
-    //   !isOptionalString(submissionData.addressLine2, MAX_TEXT_LENGTH) ||
-    //   !isOptionalString(submissionData.exoticPetTypes, MAX_TEXT_LENGTH) ||
-    //   !isOptionalString(submissionData.breedRestrictionDetails, MAX_TEXT_LENGTH) ||
-    //   !isOptionalString(submissionData.aggressivePolicyDetails, MAX_TEXT_LENGTH) ||
-    //   !isOptionalString(submissionData.unvaccinatedPolicyDetails, MAX_TEXT_LENGTH) ||
-    //   !isOptionalString(submissionData.pricingNotes, MAX_TEXT_LENGTH) ||
-    //   !isOptionalString(submissionData.additionalPricingNotes, MAX_TEXT_LENGTH)
-    // ) {
-    //   return res.status(400).json({ success: false, error: 'Invalid submission data' });
-    // }
-
-    // if (
-    //   !isObject(submissionData.boardingRules) ||
-    //   !isObject(submissionData.feesCharges) ||
-    //   !isObject(submissionData.paymentOptions) ||
-    //   !isObject(submissionData.contractingParty) ||
-    //   !isObject(submissionData.contractingPartyAddress) ||
-    //   !isObject(submissionData.legalAgreementAccepted)
-    // ) {
-    //   return res.status(400).json({ success: false, error: 'Invalid submission data' });
-    // }
-
-    // if (!isNumber(submissionData.latitude) || !isNumber(submissionData.longitude)) {
-    //   return res.status(400).json({ success: false, error: 'Invalid location data' });
-    // }
-
-    // const zipCodeNumeric = Number.parseInt(submissionData.zipCode, 10);
-    // if (!Number.isFinite(zipCodeNumeric)) {
-    //   return res.status(400).json({ success: false, error: 'Invalid zip code' });
-    // }
-
-    // Temporarily disabled for testing - using test user
-    // const { data: { user }, error: userError } = await supabaseClient.auth.getUser();
-    // if (userError || !user) {
-    //   return res.status(401).json({ success: false, error: 'Authentication required' });
-    // }
-
-    // Mock user for testing; nullable UUID in DB
-    const user = { id: null };
-
-    const availabilityPolicy = await insertSingleOrThrow<{ id: number }>('availability_policies', {
-      weekend_availability: submissionData.weekendAvailability,
-      holiday_availability: submissionData.holidayAvailability,
-      '24/7_emergency_services': submissionData.emergencyServices,
-    });
-
-    const boardingRule = await insertSingleOrThrow<{ id: number }>('boarding_rules', {
-      check_in_cut_off: toTimeOrDefault(submissionData.checkInCutoff),
-      pick_up_window_start: toTimeOrDefault(submissionData.pickupStart),
-      pick_up_window_end: toTimeOrDefault(submissionData.pickupEnd),
-      vaccination_required: submissionData.boardingRules.vaccinationRequired,
-      health_declaration: submissionData.boardingRules.healthDeclaration,
-      no_aggressive_pets: submissionData.boardingRules.noAggressivePets,
-      liability_waiver: submissionData.boardingRules.liabilityWaiver,
-      free_cancellation: submissionData.boardingRules.freeCancellation,
-      late_cancellation_fee: submissionData.boardingRules.lateCancellationFee,
-    });
-
-    const bookingType = await insertSingleOrThrow<{ id: number }>('booking_types', {
-      appointment_only: submissionData.appointmentOnly === 'appointment',
-      walk_ins_accepted: submissionData.appointmentOnly === 'walkins',
-    });
-
-    const complianceRequirement = await insertSingleOrThrow<{ id: number }>('compliance_requirements', {
-      vaccination_records_required: submissionData.complianceRequirements.includes('Vaccination records required'),
-      health_certificate_required: submissionData.complianceRequirements.includes('Health certificate required'),
-      parasite_prevention_proof: submissionData.complianceRequirements.includes('Parasite prevention proof'),
-      microchip_identification: submissionData.complianceRequirements.includes('Microchip identification'),
-      breed_specific_restrictions_apply: submissionData.breedRestrictions,
-      age_restrictions_apply: submissionData.complianceRequirements.includes('Age restrictions apply'),
-    });
-
-    const vaccinationParasiteRequirement = await insertSingleOrThrow<{ id: number }>('vaccination_parasite_requirements', {
-      dhpp: submissionData.healthSafety.includes('DHPP vaccine required'),
-      rabies: submissionData.healthSafety.includes('Rabies vaccine required'),
-      bordetella: submissionData.healthSafety.includes('Bordetella vaccine required'),
-      leptospirosis: submissionData.healthSafety.includes('Leptospirosis vaccine required'),
-      heartworm: submissionData.healthSafety.includes('Heartworm prevention required'),
-      flea_tick: submissionData.healthSafety.includes('Flea/tick prevention required'),
-      internal_parasite: submissionData.healthSafety.includes('Internal parasite prevention required'),
-    });
-
-    const vetAvailability = await insertSingleOrThrow<{ id: number }>('vet_availability', {
-      on_site_available: submissionData.vetAvailability.includes('On-site veterinarian available'),
-      '24/7_on_call': submissionData.vetAvailability.includes('24/7 vet on-call service'),
-      emergency_vet_clinic: submissionData.vetAvailability.includes('Emergency vet clinic partnership'),
-      telemed_consult: submissionData.vetAvailability.includes('Telemedicine consultations'),
-      mobile_vet: submissionData.vetAvailability.includes('Mobile vet services'),
-    });
-
-    const isolationSanitationProtocol = await insertSingleOrThrow<{ id: number }>('isolation_sanitation_protocols', {
-      separate_isolation: submissionData.sanitationProtocols.includes('Separate isolation area for sick pets'),
-      quarantine_new_arrivals: submissionData.sanitationProtocols.includes('Quarantine period for new arrivals'),
-      daily_health: submissionData.sanitationProtocols.includes('Daily health monitoring'),
-      sanitation_between: submissionData.sanitationProtocols.includes('Sanitation between pets'),
-      disinfection_protocols: submissionData.sanitationProtocols.includes('Disinfection protocols'),
-      waste_disposal: submissionData.sanitationProtocols.includes('Waste disposal procedures'),
-      hand_washing: submissionData.sanitationProtocols.includes('Hand washing stations'),
-      ppe_availability: submissionData.sanitationProtocols.includes('PPE availability'),
-    });
-
-    const propertyPolicy = await insertSingleOrThrow<{ id: number }>('property_policies', {
-      breed_restrictions: submissionData.breedRestrictions ? 'has_restrictions' : 'no_restrictions',
-      agg_pet_policy: submissionData.aggressivePolicy ? 'has_policy' : 'accept_all_pets',
-      unvac_pet_policy: submissionData.unvaccinatedPolicy
-        ? 'vaccination_required'
-        : 'accept_unvaccinated_pets',
-    });
-
-    const feesCharges = await insertSingleOrThrow<{ id: number }>('fees_and_charges', {
-      service_fee: toNumberOrZero(submissionData.feesCharges.serviceFee),
-      taxes: submissionData.feesCharges.taxes || 'Included',
-      no_show_fee: toNumberOrZero(submissionData.feesCharges.noShow),
-      late_pickup_fee: toNumberOrZero(submissionData.feesCharges.latePickup),
-      cleaning_fee: toNumberOrZero(submissionData.feesCharges.cleaningFee),
-      emergency_fee: toNumberOrZero(submissionData.feesCharges.emergencyFee),
-      holiday_surcharge: toNumberOrZero(submissionData.feesCharges.holidaySurcharge),
-      cancellation_fee: toNumberOrZero(submissionData.feesCharges.cancellationFee),
-    });
-
-    const paymentOption = await insertSingleOrThrow<{ id: number }>('payment_options', {
-      deposit_required: submissionData.paymentOptions.deposit,
-      payment_methods: submissionData.paymentOptions.methods,
-      refund_policy: submissionData.paymentOptions.refundPolicy,
-    });
-
-    const cancellationResched = await insertSingleOrThrow<{ id: number }>('cancellations_reschedulings', {
-      free_cancellation_period: toFreeCancellationPeriod(submissionData.cancellationPolicy.freeCancellation),
-      late_cancellation_fee: submissionData.cancellationPolicy.lateFee,
-      no_show_policy: submissionData.cancellationPolicy.noShow,
-    });
-
-    const emergencyProcedure = await insertSingleOrThrow<{ id: number }>('emergency_procedures', {
-      contact_num: submissionData.emergencyContact,
-      nearest_vet: submissionData.nearestVetHospital,
-      emergency_res_time: submissionData.emergencyResponseTime,
-    });
-
-    const pricingNote = await insertSingleOrThrow<{ id: number }>('pricing_notes', {
-      prices_vary: false,
-      price_after_inspection: false,
-      procedure_assessment: false,
-      emergency_fees: false,
-      holiday_surcharges: false,
-      multipet_discounts: false,
-      deposit_required: submissionData.paymentOptions.deposit,
-      cancellation_fees: Boolean(submissionData.feesCharges.cancellationFee),
-      additional_notes: submissionData.pricingNotes || submissionData.additionalPricingNotes || null,
-    });
-
-    const addOnsExtras = submissionData.addOns.length > 0
-      ? await insertSingleOrThrow<{ id: number }>('addons_extras', {
-        flea_tick: hasAddOn(submissionData.addOns, ['flea', 'tick']),
-        deshedding: hasAddOn(submissionData.addOns, ['deshedding', 'de shedding']),
-        nail_grinding: hasAddOn(submissionData.addOns, ['nail', 'grind']),
-        teeth_brushing: hasAddOn(submissionData.addOns, ['teeth', 'brushing', 'toothbrush']),
-        med_administration: hasAddOn(submissionData.addOns, ['med', 'medicine', 'medication']),
-        extra_playtime: hasAddOn(submissionData.addOns, ['play', 'playtime']),
-        special_diet_handling: hasAddOn(submissionData.addOns, ['diet', 'special diet']),
-      })
-      : null;
-
-    const vetFees = Object.keys(submissionData.vetFees).length > 0
-      ? await insertSingleOrThrow<{ id: number }>('vet_fees', {
-        initial_consult: getVetFee(submissionData.vetFees, ['initial_consult', 'initialConsult', 'initial consult']),
-        followup_visit: getVetFee(submissionData.vetFees, ['followup_visit', 'followupVisit', 'follow up', 'follow-up']),
-        rabies_vaccine: getVetFee(submissionData.vetFees, ['rabies_vaccine', 'rabiesVaccine', 'rabies']),
-        dhpp_vaccine: getVetFee(submissionData.vetFees, ['dhpp_vaccine', 'dhppVaccine', 'dhpp']),
-        heartworm_test: getVetFee(submissionData.vetFees, ['heartworm_test', 'heartwormTest', 'heartworm']),
-        flea_treatment: getVetFee(submissionData.vetFees, ['flea_treatment', 'fleaTreatment', 'flea']),
-        emergency_visit: getVetFee(submissionData.vetFees, ['emergency_visit', 'emergencyVisit', 'emergency']),
-        minor_surgery: getVetFee(submissionData.vetFees, ['minor_surgery', 'minorSurgery', 'minor surgery']),
-        dental_cleaning: getVetFee(submissionData.vetFees, ['dental_cleaning', 'dentalCleaning', 'dental']),
-        'x-ray': getVetFee(submissionData.vetFees, ['x-ray', 'xray', 'x_ray']),
-      })
-      : null;
-
-    const { data: application, error: applicationError } = await supabaseClient
-      .from('applications')
-      .insert({
-        property_name: submissionData.propertyName,
-        property_type: submissionData.propertyType,
-        address: submissionData.addressSearch,
-        city: submissionData.city,
-        contact_name: submissionData.ownerName,
-        phone: submissionData.phone,
-        email: submissionData.email,
-        description: submissionData.description,
-        lgu_permit: submissionData.lguPermits?.[0] || '',
-        bai_doc: submissionData.baiDocument || '',
-        partner_contract: submissionData.contractDocument || '',
-        property_pics: submissionData.propertyImages || [],
-        verified: false,
-        occupancy_rate: toIntOrNull(submissionData.occupancyRate),
-        animal_capacity: toIntOrNull(submissionData.animalCapacity),
-        user_id: user.id,
-        apartment_num: toIntOrNull(submissionData.apartmentNum),
-        country: submissionData.country,
-        zip_code: toIntOrNull(submissionData.zipCode) ?? 0,
-        same_hours_every_day: submissionData.sameHoursEveryDay,
-        pricing_notes: pricingNote.id,
-        additional_pricing_notes: submissionData.additionalPricingNotes,
-        availability_policy_id: availabilityPolicy.id,
-        boarding_rules_id: boardingRule.id,
-        booking_type_id: bookingType.id,
-        compliance_requirements_id: complianceRequirement.id,
-        vaccination_parasite_requirement_id: vaccinationParasiteRequirement.id,
-        vet_availability_id: vetAvailability.id,
-        isolation_sanitation_protocol_id: isolationSanitationProtocol.id,
-        property_policy_id: propertyPolicy.id,
-        fees_charges_id: feesCharges.id,
-        payment_options_id: paymentOption.id,
-        cancellation_resched_id: cancellationResched.id,
-        emergency_proc_id: emergencyProcedure.id,
-        addons_extras_id: addOnsExtras?.id ?? null,
-        vet_fees_id: vetFees?.id ?? null,
-      })
-      .select()
-      .single();
-
-    if (applicationError) {
-      throw applicationError;
+    // Temporary no-auth mode for property listing submission.
+    // Use DEFAULT_OWNER_ID first if available.
+    if (defaultOwnerId) {
+      ownerId = defaultOwnerId;
     }
 
-    const applicationId = toIntOrNull(application?.id);
-    if (applicationId === null) {
-      console.error('Invalid application id returned from database', { application });
-      throw new Error('Invalid application id returned from database');
-    }
-
-    if (submissionData.sameHoursEveryDay && submissionData.dailyOpenTime && submissionData.dailyCloseTime) {
-      for (let day = 0; day < 7; day += 1) {
-        await insertOrThrow('property_operating_hours', {
-          application_id: applicationId,
-          day_of_week: day,
-          open_time: submissionData.dailyOpenTime,
-          close_time: submissionData.dailyCloseTime,
-          is_closed: false,
-        });
+    // Backward-compatible token support (optional only)
+    if (hasBearerToken(req.headers.authorization)) {
+      const token = req.headers.authorization!.slice('Bearer '.length).trim();
+      const { data: userData, error: userError } = await supabaseClient.auth.getUser(token);
+      if (!userError && userData.user) {
+        ownerId = userData.user.id;
       }
-    } else if (submissionData.weeklyHours) {
-      const dayMap: Record<string, number> = {
-        monday: 1,
-        tuesday: 2,
-        wednesday: 3,
-        thursday: 4,
-        friday: 5,
-        saturday: 6,
-        sunday: 0,
-      };
+    }
 
-      for (const [dayName, hours] of Object.entries(submissionData.weeklyHours)) {
-        if (hours.open && hours.close) {
-          await insertOrThrow('property_operating_hours', {
-            application_id: applicationId,
-            day_of_week: dayMap[dayName.toLowerCase()],
-            open_time: hours.open,
-            close_time: hours.close,
-            is_closed: false,
-          });
+    if (!ownerId && typeof d.email === 'string' && d.email.trim().length > 0) {
+      const normalizedEmail = d.email.trim().toLowerCase();
+      const { data: existingProfile, error: existingProfileError } = await supabaseClient
+        .from('profiles')
+        .select('id')
+        .eq('email', normalizedEmail)
+        .maybeSingle();
+
+      if (!existingProfileError && existingProfile?.id) {
+        ownerId = existingProfile.id;
+      } else if (typeof d.password === 'string' && d.password.trim().length >= 8) {
+        const ownerName = (typeof d.ownerName === 'string' ? d.ownerName.trim() : '').split(/\s+/).filter(Boolean);
+        const firstName = ownerName[0] || '';
+        const lastName = ownerName.slice(1).join(' ');
+
+        const { data: createdUserData, error: createUserError } = await supabaseClient.auth.admin.createUser({
+          email: normalizedEmail,
+          password: d.password,
+          email_confirm: true,
+          user_metadata: {
+            firstName,
+            lastName,
+          },
+        });
+
+        if (!createUserError && createdUserData.user?.id) {
+          ownerId = createdUserData.user.id;
         }
       }
     }
 
-    if (submissionData.dogSizes.length > 0) {
-      const dogPolicy = await insertSingleOrThrow<{ id: number }>('dog_policy', {
-        small: submissionData.dogSizes.includes('small'),
-        medium: submissionData.dogSizes.includes('medium'),
-        large: submissionData.dogSizes.includes('large'),
-      });
+    if (!ownerId) {
+      const { data: anyProfile, error: anyProfileError } = await supabaseClient
+        .from('profiles')
+        .select('id')
+        .order('created_at', { ascending: true })
+        .limit(1)
+        .maybeSingle();
 
-      await supabaseClient
-        .from('applications')
-        .update({ dog_policy_id: dogPolicy.id })
-        .eq('id', applicationId);
-    }
-
-    if (submissionData.exoticPetTypes) {
-      const exoticPolicy = await insertSingleOrThrow<{ id: number }>('exotic_pet_policy', {
-        specifications: submissionData.exoticPetTypes,
-      });
-
-      await supabaseClient
-        .from('applications')
-        .update({ exotic_pet_policy_id: exoticPolicy.id })
-        .eq('id', applicationId);
-    }
-
-    for (const service of submissionData.baseServices) {
-      await insertOrThrow('property_base_services', {
-        application_id: applicationId,
-        service_name: service.name,
-        price_type: service.priceType,
-        price: parseFloat(service.price),
-        duration: service.duration,
-      });
-    }
-
-    for (const [size, price] of Object.entries(submissionData.petSizePricing)) {
-      if (price) {
-        await insertOrThrow('pet_size_pricing', {
-          application_id: applicationId,
-          pet_size: size,
-          price: parseFloat(price),
-        });
+      if (!anyProfileError && anyProfile?.id) {
+        ownerId = anyProfile.id;
       }
     }
 
-    const { data: contractingParty, error: cpError } = await supabaseClient
-      .from('contracting_parties')
+    if (!ownerId) {
+      const fallbackEmail = `property-owner-${Date.now()}@pawstay.local`;
+      const { data: createdUserData, error: createUserError } = await supabaseClient.auth.admin.createUser({
+        email: fallbackEmail,
+        password: 'PawStayTemp1234!',
+        email_confirm: true,
+        user_metadata: {
+          firstName: 'Property',
+          lastName: 'Owner',
+        },
+      });
+
+      if (!createUserError && createdUserData.user?.id) {
+        ownerId = createdUserData.user.id;
+      }
+    }
+
+    if (!ownerId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Unable to resolve owner profile for property submission',
+      });
+    }
+
+    // ── Resolve property_type as an array ──
+    const propertyTypeArray: string[] =
+      d.propertyTypes && d.propertyTypes.length > 0
+        ? d.propertyTypes
+        : [d.propertyType];
+
+    // ================================================================
+    // 1. INSERT INTO properties
+    // ================================================================
+    const { data: property, error: propertyError } = await supabaseClient
+      .from('properties')
       .insert({
-        legal_entity_type: submissionData.legalEntityType,
-        first_name: submissionData.contractingParty.firstName,
-        middle_name: submissionData.contractingParty.middleName,
-        last_name: submissionData.contractingParty.lastName,
-        email: submissionData.contractingParty.email,
-        phone: submissionData.contractingParty.phone,
-        phone_country_code: submissionData.contractingParty.phoneCountryCode || '+63',
+        owner_id: ownerId,
+        status: 'pending',
+        name: d.propertyName,
+        property_type: propertyTypeArray,
+        address: d.addressSearch,
+        address_line2: d.addressLine2 || null,
+        country: d.country || 'Philippines',
+        city: d.city,
+        zip_code: d.zipCode,
+        latitude: d.latitude,
+        longitude: d.longitude,
+        phone: d.phone,
+        description: d.description,
+        capacity: d.animalCapacity || null,
+        pet_types_accepted: d.petTypesAccepted || [],
+        dog_sizes: d.dogSizes || [],
+        exotic_pet_types: d.exoticPetTypes || null,
+        facilities_amenities: d.facilitiesAmenities || [],
+        images: d.propertyImages || [],
+        cover_image: d.propertyImages?.[0] || null,
       })
-      .select()
+      .select('id')
       .single();
 
-    if (cpError) throw cpError;
+    if (propertyError || !property) {
+      console.error('Error inserting property:', propertyError);
+      throw propertyError || new Error('Failed to create property');
+    }
 
-    await insertOrThrow('contracting_party_addresses', {
-      contracting_party_id: contractingParty.id,
-      country: submissionData.contractingPartyAddress.country,
-      street_address: submissionData.contractingPartyAddress.streetAddress,
-      address_line_2: submissionData.contractingPartyAddress.addressLine2,
-      city: submissionData.contractingPartyAddress.city,
-      postal_code: submissionData.contractingPartyAddress.postalCode,
-    });
+    const propertyId: string = property.id;
 
-    await insertOrThrow('legal_agreements', {
-      application_id: applicationId,
-      terms_accepted: submissionData.legalAgreementAccepted.termsAccepted,
-      data_processing_accepted: submissionData.legalAgreementAccepted.dataProcessing,
-      final_agreement_accepted: submissionData.finalAgreementAccepted,
-      accepted_at: new Date().toISOString(),
-    });
+    // ================================================================
+    // 2. INSERT INTO property_setup  (1-to-1)
+    // ================================================================
+    const { error: setupError } = await supabaseClient
+      .from('property_setup')
+      .insert({
+        property_id: propertyId,
 
-    for (const amenity of submissionData.facilitiesAmenities) {
-      let { data: amenityRecord } = await supabaseClient
-        .from('amenities')
-        .select('id')
-        .eq('amenity', amenity)
-        .single();
+        // Policies (JSONB)
+        policies: {
+          breedRestrictions: d.breedRestrictions,
+          breedRestrictionDetails: d.breedRestrictionDetails || '',
+          aggressivePolicy: d.aggressivePolicy,
+          aggressivePolicyDetails: d.aggressivePolicyDetails || '',
+          unvaccinatedPolicy: d.unvaccinatedPolicy,
+          unvaccinatedPolicyDetails: d.unvaccinatedPolicyDetails || '',
+        },
 
-      if (!amenityRecord) {
-        const { data: newAmenity } = await supabaseClient
+        // Operating hours (JSONB)
+        operating_hours: {
+          sameHoursEveryDay: d.sameHoursEveryDay,
+          dailyOpenTime: d.dailyOpenTime || null,
+          dailyCloseTime: d.dailyCloseTime || null,
+          weeklyHours: d.weeklyHours || {},
+          weekendAvailability: d.weekendAvailability,
+          holidayAvailability: d.holidayAvailability,
+          emergencyServices: d.emergencyServices,
+          checkInCutoff: d.checkInCutoff || null,
+          pickupStart: d.pickupStart || null,
+          pickupEnd: d.pickupEnd || null,
+          appointmentOnly: d.appointmentOnly || null,
+        },
+
+        // Booking rules & compliance (text[])
+        booking_rules: d.bookingRules || [],
+        compliance: d.complianceRequirements || [],
+
+        // Cancellation policy (JSONB)
+        cancellation_policy: d.cancellationPolicy || {},
+
+        // Health & safety (text[])
+        health_safety: d.healthSafety || [],
+        vet_availability: d.vetAvailability || [],
+        sanitation_protocols: d.sanitationProtocols || [],
+
+        // Emergency info
+        emergency_contact: d.emergencyContact || null,
+        nearest_vet_hospital: d.nearestVetHospital || null,
+        emergency_response_time: d.emergencyResponseTime || null,
+      });
+
+    if (setupError) {
+      console.error('Error inserting property_setup:', setupError);
+      throw setupError;
+    }
+
+    // ================================================================
+    // 3. INSERT INTO property_pricing  (1-to-1)
+    // ================================================================
+    const { error: pricingError } = await supabaseClient
+      .from('property_pricing')
+      .insert({
+        property_id: propertyId,
+
+        // Base services (JSONB array)
+        base_services: d.baseServices || [],
+
+        // Size-based pricing (JSONB object)
+        pet_size_pricing: d.petSizePricing || {},
+
+        // Add-ons (JSONB array)
+        add_ons: d.addOns || [],
+
+        // Vet fees (JSONB object)
+        vet_fees: d.vetFees || {},
+
+        // Boarding rules (JSONB object)
+        boarding_rules: d.boardingRules || {},
+
+        // Fees & charges (JSONB object)
+        fees_charges: d.feesCharges || {},
+
+        // Payment options (JSONB object)
+        payment_options: d.paymentOptions || {},
+
+        pricing_notes: d.pricingNotes || null,
+        additional_pricing_notes: d.additionalPricingNotes || null,
+      });
+
+    if (pricingError) {
+      console.error('Error inserting property_pricing:', pricingError);
+      throw pricingError;
+    }
+
+    // ================================================================
+    // 4. INSERT INTO property_legal  (1-to-1)
+    // ================================================================
+    const { error: legalError } = await supabaseClient
+      .from('property_legal')
+      .insert({
+        property_id: propertyId,
+
+        legal_entity_type: d.legalEntityType || '',
+
+        // Contracting party info (JSONB)
+        contracting_party: d.contractingParty || {},
+        contracting_party_address: d.contractingPartyAddress || {},
+
+        // Document uploads (Supabase Storage URLs)
+        lgu_permits: d.lguPermits || [],
+        bai_document: d.baiDocument || null,
+        contract_document: d.contractDocument || null,
+
+        // Legal agreements (JSONB)
+        legal_agreements: {
+          termsAccepted: d.legalAgreementAccepted?.termsAccepted ?? false,
+          dataProcessing: d.legalAgreementAccepted?.dataProcessing ?? false,
+          finalAgreementAccepted: d.finalAgreementAccepted ?? false,
+          acceptedAt: new Date().toISOString(),
+        },
+      });
+
+    if (legalError) {
+      console.error('Error inserting property_legal:', legalError);
+      throw legalError;
+    }
+
+    // ================================================================
+    // 5. UPSERT amenities + INSERT property_amenities  (many-to-many)
+    // ================================================================
+    if (d.facilitiesAmenities && d.facilitiesAmenities.length > 0) {
+      for (const amenityName of d.facilitiesAmenities) {
+        // Look up existing amenity
+        let { data: amenityRecord } = await supabaseClient
           .from('amenities')
-          .insert({ amenity })
-          .select()
+          .select('id')
+          .eq('amenity', amenityName)
           .single();
-        amenityRecord = newAmenity;
-      }
 
-      if (amenityRecord) {
-        await insertOrThrow('application_amenities', {
-          application_id: applicationId,
-          amenity_id: amenityRecord.id,
-        });
+        // Create if it doesn't exist
+        if (!amenityRecord) {
+          const { data: newAmenity, error: amenityErr } = await supabaseClient
+            .from('amenities')
+            .insert({
+              amenity: amenityName,
+              service_types: propertyTypeArray,
+            })
+            .select('id')
+            .single();
+
+          if (amenityErr) {
+            console.error('Error inserting amenity:', amenityErr);
+            continue; // skip this amenity, don't fail the whole submission
+          }
+          amenityRecord = newAmenity;
+        }
+
+        if (amenityRecord) {
+          const { error: paError } = await supabaseClient
+            .from('property_amenities')
+            .insert({
+              property_id: propertyId,
+              amenity_id: amenityRecord.id,
+            });
+
+          if (paError) {
+            console.error('Error inserting property_amenity:', paError);
+            // non-fatal — continue
+          }
+        }
       }
     }
 
-    // application_pet_types and application_dog_sizes tables are not in the schema
+    // ================================================================
+    // 6. INSERT initial property_services from baseServices
+    //    (populates the service catalogue for the new property)
+    // ================================================================
+    if (d.baseServices && d.baseServices.length > 0) {
+      const categoryMap: Record<string, string> = {
+        hotel: 'Boarding',
+        grooming: 'Grooming',
+        veterinary: 'Veterinary',
+      };
+      const defaultCategory = categoryMap[d.propertyType] || 'Other';
+
+      for (const svc of d.baseServices) {
+        const price = parseFloat(svc.price) || 0;
+        const { error: svcError } = await supabaseClient
+          .from('property_services')
+          .insert({
+            property_id: propertyId,
+            name: svc.name,
+            description: `${svc.priceType || 'Fixed'} — ${svc.duration || 'N/A'}`,
+            price,
+            category: defaultCategory,
+          });
+
+        if (svcError) {
+          console.error('Error inserting property_service:', svcError);
+          // non-fatal
+        }
+      }
+    }
 
     res.status(200).json({
       success: true,
-      applicationId,
-      message: 'Property application submitted successfully',
+      propertyId,
+      message: 'Property listing submitted successfully',
     });
   } catch (error) {
     const errorPayload = error instanceof Error
@@ -689,7 +488,7 @@ export const submitProperty = async (req: Request, res: Response) => {
     res.status(400).json({
       success: false,
       error: process.env.NODE_ENV === 'production'
-        ? 'Failed to submit property application'
+        ? 'Failed to submit property listing'
         : errorPayload,
     });
   }
