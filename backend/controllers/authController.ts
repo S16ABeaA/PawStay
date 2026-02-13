@@ -95,7 +95,7 @@ export const authController = {
         type: "signup",
         email,
         options: {
-          emailRedirectTo: `${process.env.VITE_FRONTEND_URL}/check-email?confirmed=true`
+          emailRedirectTo: `${process.env.FRONTEND_URL}/check-email?confirmed=true`
         }
       });
 
@@ -170,9 +170,131 @@ export const authController = {
 
   signInWithGoogle: async (req: Request, res: Response) => {
     try {
-      
-    } catch (err: any){
+      // console.log("=== Starting Google OAuth flow ===");
+      // console.log("1. Environment check:");
+      // console.log("   - API_BASE_URL:", process.env.API_BASE_URL);
+      // console.log("   - FRONTEND_URL:", process.env.FRONTEND_URL);
+      // console.log("   - NODE_ENV:", process.env.NODE_ENV);
+      // const redirectTo = `${process.env.API_BASE_URL}/api/auth/oauth/callback`;
+      // console.log("2. Redirect URL being sent to Supabase:", redirectTo);
 
+      const { data, error } = await supabaseClient.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          redirectTo: `${process.env.API_BASE_URL}/api/auth/oauth/callback`,
+          queryParams: {
+            access_type: 'offline',
+            prompt: 'consent',
+          },
+        }
+      });
+
+      if (error) {
+        return res.status(400).json({ message: error.message });
+      }
+
+      // console.log("3. OAuth URL generated successfully");
+      // console.log("4. URL preview:", data.url.substring(0, 100) + "...");
+      // console.log("=== End Google OAuth flow ===\n");
+
+      return res.json({ url: data.url });
+
+    } catch (err: any) {
+      return res.status(500).json({ message: err.message });
+    }
+  },
+
+  oauthCallback: async (req: Request, res: Response) => {
+    // console.log("\n=== OAuth Callback Received ===");
+    // console.log("1. Timestamp:", new Date().toISOString());
+    // console.log("2. Full URL:", req.protocol + '://' + req.get('host') + req.originalUrl);
+    // console.log("3. Query parameters:", req.query);
+    // console.log("4. Headers:", {
+    //   host: req.get('host'),
+    //   referer: req.get('referer'),
+    //   'user-agent': req.get('user-agent')
+    // });
+    
+    try {
+      const { code } = req.query;
+      
+      if (!code) {
+        // console.error("5. ERROR: No code parameter received");
+        // console.log("=== End Callback (Error) ===\n");
+        return res.status(400).send("Missing OAuth code");
+      }
+
+      // console.log("5. Code received successfully");
+      // console.log("6. Code preview:", code.toString().substring(0, 20) + "...");
+      // console.log("7. Exchanging code for session...");
+
+      const { data, error } = await supabaseClient.auth.exchangeCodeForSession(
+        code as string
+      );
+
+      if (error) {
+        // console.error("8. Exchange error:", error);
+        // console.log("=== End Callback (Error) ===\n");
+        return res.status(400).send("OAuth failed: " + error.message);
+      }
+
+      if (!data.session) {
+        // console.error("8. ERROR: No session returned");
+        // console.log("=== End Callback (Error) ===\n");
+        return res.status(400).send("No session created");
+      }
+
+      // console.log("8. Session created successfully");
+      // console.log("9. User:", {
+      //   id: data.session.user.id,
+      //   email: data.session.user.email,
+      //   name: data.session.user.user_metadata?.full_name
+      // });
+
+      // Set cookies
+      // console.log("10. Setting cookies...");
+      res.cookie("sb-access-token", data.session.access_token, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax",
+        maxAge: 7 * 24 * 60 * 60 * 1000,
+        path: "/",
+      });
+
+      res.cookie("sb-refresh-token", data.session.refresh_token, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax",
+        maxAge: 7 * 24 * 60 * 60 * 1000,
+        path: "/",
+      });
+
+      // Set user info
+      if (data.session.user) {
+        res.cookie("sb-user", JSON.stringify({
+          id: data.session.user.id,
+          email: data.session.user.email,
+          name: data.session.user.user_metadata?.full_name || data.session.user.email,
+          avatar: data.session.user.user_metadata?.avatar_url,
+        }), {
+          httpOnly: false,
+          secure: process.env.NODE_ENV === "production",
+          sameSite: "lax",
+          maxAge: 7 * 24 * 60 * 60 * 1000,
+          path: "/",
+        });
+      }
+
+      // console.log("11. Redirecting to frontend:", process.env.FRONTEND_URL || "http://localhost:8080");
+      // console.log("=== End Callback (Success) ===\n");
+      
+      return res.redirect(`${process.env.FRONTEND_URL || "http://localhost:8080"}/`);
+
+    } catch (err: any) {
+      // console.error("=== OAuth Callback Error ===");
+      // console.error(err);
+      // console.log("=== End Callback (Exception) ===\n");
+      return res.status(500).send(err.message);
     }
   },
 
@@ -239,19 +361,4 @@ export const authController = {
       return res.status(500).json({ error: "Internal server error." });
     }
   },
-
-  // signInWithGoogle: async (req: Request, res: Response) => {
-  //   try{
-  //     const { data, error } = await supabase.auth.signInWithOAuth({
-  //       provider: "google",
-  //       options: {
-  //         redirectTo: "http://localhost:8080/profile", //test
-  //       },
-  //     });
-  //     if (error) throw error;
-  //     res.status(200).json({ url: data.url });
-  //   }catch (err: any) {
-  //     res.status(500).json({ error: err.message });
-  //   }
-  // },
 };

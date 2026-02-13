@@ -165,18 +165,21 @@ const SignIn = () => {
   };
 
   const handleGoogleAuth = async () => {
-    try{
-      // await authApi.signInWithGoogle();
-      // const result  = await authApi.signInWithGoogle();
-      // if (result?.url) window.location.href = result.url;
-      // else toast({ title: "Error", description: "Failed to get Google sign-in URL." });
+    // authApi.signInWithGoogle();
+    try {
+      const result = await authApi.signInWithGoogle();
 
-    }catch(err){
-      toast({ title: "Error", description: err.message });
+      if (result?.url) {
+        window.location.href = result.url;
+      }
+    } catch (err: any) {
+      toast({
+        title: "Error",
+        description: err.message || "Google sign-in failed.",
+      });
     }
   };  
 
-  
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

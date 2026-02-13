@@ -9,18 +9,6 @@ dotenv.config({ path: "../.env" });
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// app.use(cors({
-//   origin: "http://localhost:8080", // your frontend
-//   credentials: true,
-//   methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-//   allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
-// }));
-
-// app.use(cors({
-//   origin: "http://localhost:8080",
-//   credentials: true
-// }));
-
 app.use(cors({
   origin: "http://localhost:8080",
   // methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
