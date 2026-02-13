@@ -1,6 +1,6 @@
 import { authHelper } from "../helpers/authHelper";
 
-const API_BASE_URL = "http://localhost:5000";
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5001";
 
 export const authApi = {
   signUp: async (data: any) => authHelper.post(`${API_BASE_URL}/api/auth/signUp`, data),
