@@ -160,7 +160,7 @@ export const authController = {
         phone: userProfile.phone || "",
         address: userProfile.address || "",
         avatar_url: userProfile.avatar_url || "",
-        email: signInData.user?.email,
+        email: userProfile.email || signInData.user?.email,
       };
       return res.json({ user });
     } catch (err: any) {
@@ -170,14 +170,6 @@ export const authController = {
 
   signInWithGoogle: async (req: Request, res: Response) => {
     try {
-      // console.log("=== Starting Google OAuth flow ===");
-      // console.log("1. Environment check:");
-      // console.log("   - API_BASE_URL:", process.env.API_BASE_URL);
-      // console.log("   - FRONTEND_URL:", process.env.FRONTEND_URL);
-      // console.log("   - NODE_ENV:", process.env.NODE_ENV);
-      // const redirectTo = `${process.env.API_BASE_URL}/api/auth/oauth/callback`;
-      // console.log("2. Redirect URL being sent to Supabase:", redirectTo);
-
       const { data, error } = await supabaseClient.auth.signInWithOAuth({
         provider: "google",
         options: {
@@ -193,10 +185,6 @@ export const authController = {
         return res.status(400).json({ message: error.message });
       }
 
-      // console.log("3. OAuth URL generated successfully");
-      // console.log("4. URL preview:", data.url.substring(0, 100) + "...");
-      // console.log("=== End Google OAuth flow ===\n");
-
       return res.json({ url: data.url });
 
     } catch (err: any) {
@@ -205,54 +193,26 @@ export const authController = {
   },
 
   oauthCallback: async (req: Request, res: Response) => {
-    // console.log("\n=== OAuth Callback Received ===");
-    // console.log("1. Timestamp:", new Date().toISOString());
-    // console.log("2. Full URL:", req.protocol + '://' + req.get('host') + req.originalUrl);
-    // console.log("3. Query parameters:", req.query);
-    // console.log("4. Headers:", {
-    //   host: req.get('host'),
-    //   referer: req.get('referer'),
-    //   'user-agent': req.get('user-agent')
-    // });
-    
     try {
       const { code } = req.query;
       
       if (!code) {
-        // console.error("5. ERROR: No code parameter received");
-        // console.log("=== End Callback (Error) ===\n");
-        return res.status(400).send("Missing OAuth code");
+        return res.redirect(`${process.env.FRONTEND_URL}/signin?error=missing_code`);
       }
-
-      // console.log("5. Code received successfully");
-      // console.log("6. Code preview:", code.toString().substring(0, 20) + "...");
-      // console.log("7. Exchanging code for session...");
 
       const { data, error } = await supabaseClient.auth.exchangeCodeForSession(
         code as string
       );
 
       if (error) {
-        // console.error("8. Exchange error:", error);
-        // console.log("=== End Callback (Error) ===\n");
-        return res.status(400).send("OAuth failed: " + error.message);
+        return res.redirect(`${process.env.FRONTEND_URL}/signin?error=auth_failed`);
       }
 
       if (!data.session) {
-        // console.error("8. ERROR: No session returned");
-        // console.log("=== End Callback (Error) ===\n");
-        return res.status(400).send("No session created");
+        return res.redirect(`${process.env.FRONTEND_URL}/signin?error=session_failed`);
       }
 
-      // console.log("8. Session created successfully");
-      // console.log("9. User:", {
-      //   id: data.session.user.id,
-      //   email: data.session.user.email,
-      //   name: data.session.user.user_metadata?.full_name
-      // });
-
       // Set cookies
-      // console.log("10. Setting cookies...");
       res.cookie("sb-access-token", data.session.access_token, {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
@@ -268,6 +228,10 @@ export const authController = {
         maxAge: 7 * 24 * 60 * 60 * 1000,
         path: "/",
       });
+      
+      // Get user info for welcome message
+      const user = data.session.user;
+      const userEmail = user.email || "";
 
       // Set user info
       if (data.session.user) {
@@ -284,17 +248,12 @@ export const authController = {
           path: "/",
         });
       }
-
-      // console.log("11. Redirecting to frontend:", process.env.FRONTEND_URL || "http://localhost:8080");
-      // console.log("=== End Callback (Success) ===\n");
       
-      return res.redirect(`${process.env.FRONTEND_URL || "http://localhost:8080"}/`);
+      return res.redirect(`${process.env.FRONTEND_URL || "http://localhost:8080"}/signin?` +
+      `oauth_success=true&email=${encodeURIComponent(userEmail)}`);
 
     } catch (err: any) {
-      // console.error("=== OAuth Callback Error ===");
-      // console.error(err);
-      // console.log("=== End Callback (Exception) ===\n");
-      return res.status(500).send(err.message);
+      return res.redirect(`${process.env.FRONTEND_URL}/signin?error=server_error`);
     }
   },
 
@@ -323,7 +282,7 @@ export const authController = {
           phone: userProfile.phone || "",
           address: userProfile.address || "",
           avatar_url: userProfile.avatar_url || "",
-          email: user.email, // Get email from token
+          email: userProfile.email || user.email, // Get email from DB or token
         }
       });
     }catch(err: any){
