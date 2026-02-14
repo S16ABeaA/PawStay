@@ -28,27 +28,13 @@ import {
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
-<<<<<<< HEAD
-=======
 import { authApi } from "../services/authApi";
 
->>>>>>> signin
 const Profile = () => {
   const { toast } = useToast();
   const navigate = useNavigate();
   
   // Simulated user data - in real app, this would come from auth context
-<<<<<<< HEAD
-  const [user, setUser] = useState({
-    firstName: "John",
-    lastName: "Doe",
-    email: "john.doe@example.com",
-    phone: "+1 234 567 8900",
-    address: "123 Pet Street, San Francisco, CA",
-    avatar: "",
-    isAdmin: true, // Simulated admin role
-  });
-=======
   // const [user, setUser] = useState({
   //   firstName: "John",
   //   lastName: "Doe",
@@ -90,7 +76,6 @@ const Profile = () => {
 
     fetchProfile();
   }, []);
->>>>>>> signin
 
   const [isEditing, setIsEditing] = useState(false);
 
@@ -122,17 +107,10 @@ const Profile = () => {
     });
   };
 
-<<<<<<< HEAD
-  const handleLogout = () => {
-    toast({
-      title: "Signed Out",
-      description: "You have been signed out successfully.",
-    });
-    navigate("/");
-=======
   const handleLogout =  async() => {
     try{
       await authApi.signOut();
+      localStorage.removeItem("pawstay.authenticated");
       toast({
         title: "Signed Out",
         description: "You have been signed out successfully.",
@@ -146,15 +124,11 @@ const Profile = () => {
       });
       return;
     }
->>>>>>> signin
   };
 
   const handleSwitchToAdmin = () => {
     navigate("/admin");
   };
-<<<<<<< HEAD
-
-=======
   if(!user){
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -162,7 +136,6 @@ const Profile = () => {
       </div>
     );
   }
->>>>>>> signin
   return (
     <div className="min-h-screen bg-background">
       <Header />

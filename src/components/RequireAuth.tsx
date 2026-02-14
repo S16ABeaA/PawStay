@@ -1,6 +1,6 @@
 import { ReactNode, useEffect, useState } from "react";
 import { Navigate, useLocation } from "react-router-dom";
-import supabase from "@/config/supabaseClient";
+import { authApi } from "@/services/authApi";
 
 type RequireAuthProps = {
   children: ReactNode;
@@ -15,20 +15,25 @@ const RequireAuth = ({ children }: RequireAuthProps) => {
     let isMounted = true;
 
     const checkAuth = async () => {
-      const localAuthenticated = localStorage.getItem("pawstay.authenticated") === "true";
+      try {
+        const result = await authApi.getProfile();
+        const hasSession = Boolean(result?.user);
 
-      if (localAuthenticated) {
         if (isMounted) {
-          setIsAuthenticated(true);
+          setIsAuthenticated(hasSession);
+          if (hasSession) {
+            localStorage.setItem("pawstay.authenticated", "true");
+          } else {
+            localStorage.removeItem("pawstay.authenticated");
+          }
           setIsLoading(false);
         }
-        return;
-      }
-
-      const { data, error } = await supabase.auth.getSession();
-      if (isMounted) {
-        setIsAuthenticated(Boolean(!error && data.session));
-        setIsLoading(false);
+      } catch {
+        if (isMounted) {
+          setIsAuthenticated(false);
+          localStorage.removeItem("pawstay.authenticated");
+          setIsLoading(false);
+        }
       }
     };
 

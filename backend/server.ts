@@ -3,24 +3,18 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
-import { submitProperty } from './routes/submit-property';
-import express from "express";
 import cookieParser from 'cookie-parser';
-import dotenv from "dotenv";
-import authRoute from "./routes/authRoute";
-import cors from "cors";
+import { submitProperty } from './routes/submit-property';
+import { authMiddleware } from './middleware/authMiddleware';
+import authRoute from './routes/authRoute';
 
 dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT || 3000;
-
-const allowedOrigins = (process.env.CORS_ORIGINS || '')
-  .split(',')
 const PORT = process.env.PORT || 5000;
 
-const allowedOrigins = (process.env.CORS_ORIGINS || "http://localhost:8080")
-  .split(",")
+const allowedOrigins = (process.env.CORS_ORIGINS || 'http://localhost:8080')
+  .split(',')
   .map((origin) => origin.trim())
   .filter(Boolean);
 
@@ -30,10 +24,11 @@ const corsOptions: cors.CorsOptions = {
       callback(null, true);
       return;
     }
-    callback(new Error('Not allowed by CORS'));
+    callback(new Error(`CORS blocked for origin: ${origin}`));
   },
-  methods: ['POST', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
 };
 
 const apiLimiter = rateLimit({
@@ -46,10 +41,14 @@ const apiLimiter = rateLimit({
 app.disable('x-powered-by');
 app.use(helmet());
 app.use(cors(corsOptions));
-app.use(express.json({ limit: '1mb' }));
+app.options(/.*/, cors(corsOptions));
+app.use(cookieParser());
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
 // Routes
-app.post('/api/submit-property', apiLimiter, submitProperty);
+app.use('/api/auth', authRoute);
+app.post('/api/submit-property', apiLimiter, authMiddleware, submitProperty);
 
 // Simple health/root route
 app.get('/', (_req, res) => {
@@ -59,42 +58,3 @@ app.get('/', (_req, res) => {
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
 });
-    if (!origin || allowedOrigins.includes(origin)) {
-      callback(null, true);
-      return;
-    }
-
-    callback(new Error(`CORS blocked for origin: ${origin}`));
-  },
-  credentials: true,
-  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
-};
-
-// app.use(cors({
-//   origin: "http://localhost:8080", // your frontend
-//   credentials: true,
-//   methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-//   allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
-// }));
-
-// app.use(cors({
-//   origin: "http://localhost:8080",
-//   credentials: true
-// }));
-
-app.use(cors(corsOptions));
-app.options(/.*/, cors(corsOptions));
-
-// Middleware
-app.use(cookieParser());
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-
-// Routes
-app.use("/api/auth", authRoute);
-
-app.get("/", (req, res) => res.send("API is running"));
-
-// Start server
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));

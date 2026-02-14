@@ -109,9 +109,6 @@ interface PropertySubmissionData {
 
 const isObject = (value: unknown) => typeof value === 'object' && value !== null && !Array.isArray(value);
 
-const hasBearerToken = (authorization: string | undefined) =>
-  typeof authorization === 'string' && authorization.startsWith('Bearer ');
-
 export const submitProperty = async (req: Request, res: Response) => {
   try {
     const supabaseUrl = process.env.VITE_PAW_STAY_SUPABASE_URL;
@@ -142,89 +139,12 @@ export const submitProperty = async (req: Request, res: Response) => {
 
     const d: PropertySubmissionData = req.body;
 
-    const defaultOwnerId = process.env.DEFAULT_OWNER_ID?.trim();
-    let ownerId: string | null = null;
-
-    // Temporary no-auth mode for property listing submission.
-    // Use DEFAULT_OWNER_ID first if available.
-    if (defaultOwnerId) {
-      ownerId = defaultOwnerId;
-    }
-
-    // Backward-compatible token support (optional only)
-    if (hasBearerToken(req.headers.authorization)) {
-      const token = req.headers.authorization!.slice('Bearer '.length).trim();
-      const { data: userData, error: userError } = await supabaseClient.auth.getUser(token);
-      if (!userError && userData.user) {
-        ownerId = userData.user.id;
-      }
-    }
-
-    if (!ownerId && typeof d.email === 'string' && d.email.trim().length > 0) {
-      const normalizedEmail = d.email.trim().toLowerCase();
-      const { data: existingProfile, error: existingProfileError } = await supabaseClient
-        .from('profiles')
-        .select('id')
-        .eq('email', normalizedEmail)
-        .maybeSingle();
-
-      if (!existingProfileError && existingProfile?.id) {
-        ownerId = existingProfile.id;
-      } else if (typeof d.password === 'string' && d.password.trim().length >= 8) {
-        const ownerName = (typeof d.ownerName === 'string' ? d.ownerName.trim() : '').split(/\s+/).filter(Boolean);
-        const firstName = ownerName[0] || '';
-        const lastName = ownerName.slice(1).join(' ');
-
-        const { data: createdUserData, error: createUserError } = await supabaseClient.auth.admin.createUser({
-          email: normalizedEmail,
-          password: d.password,
-          email_confirm: true,
-          user_metadata: {
-            firstName,
-            lastName,
-          },
-        });
-
-        if (!createUserError && createdUserData.user?.id) {
-          ownerId = createdUserData.user.id;
-        }
-      }
-    }
-
-    if (!ownerId) {
-      const { data: anyProfile, error: anyProfileError } = await supabaseClient
-        .from('profiles')
-        .select('id')
-        .order('created_at', { ascending: true })
-        .limit(1)
-        .maybeSingle();
-
-      if (!anyProfileError && anyProfile?.id) {
-        ownerId = anyProfile.id;
-      }
-    }
-
-    if (!ownerId) {
-      const fallbackEmail = `property-owner-${Date.now()}@pawstay.local`;
-      const { data: createdUserData, error: createUserError } = await supabaseClient.auth.admin.createUser({
-        email: fallbackEmail,
-        password: 'PawStayTemp1234!',
-        email_confirm: true,
-        user_metadata: {
-          firstName: 'Property',
-          lastName: 'Owner',
-        },
-      });
-
-      if (!createUserError && createdUserData.user?.id) {
-        ownerId = createdUserData.user.id;
-      }
-    }
+    const ownerId = (req as any).user?.id as string | undefined;
 
     if (!ownerId) {
       return res.status(400).json({
         success: false,
-        error: 'Unable to resolve owner profile for property submission',
+        error: 'Authentication required to submit property',
       });
     }
 

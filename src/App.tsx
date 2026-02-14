@@ -2,7 +2,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Index from "./pages/Index";
 import Hotels from "./pages/Hotels";
 import HotelDetail from "./pages/HotelDetail";
@@ -20,6 +20,7 @@ import SearchResults from "./pages/SearchResults";
 import NotFound from "./pages/NotFound";
 import Profile from "./pages/Profile";
 import MyPets from "./pages/MyPets";
+import RequireAuth from "./components/RequireAuth";
 
 // Admin pages
 import AdminDashboard from "./pages/admin/Dashboard";
@@ -39,20 +40,6 @@ import SuperAdminSettings from "./pages/superadmin/Settings";
 
 const queryClient = new QueryClient();
 
-const AUTH_STORAGE_KEY = "pawstay.authenticated";
-
-const RequireAuth = ({ children }: { children: JSX.Element }) => {
-  const location = useLocation();
-  const isSignedIn = typeof window !== "undefined" && localStorage.getItem(AUTH_STORAGE_KEY) === "true";
-
-  if (!isSignedIn) {
-    const redirectParam = encodeURIComponent(location.pathname + location.search);
-    return <Navigate to={`/signin?intent=partner&redirect=${redirectParam}`} replace />;
-  }
-
-  return children;
-};
-
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
@@ -70,6 +57,7 @@ const App = () => (
           <Route path="/veterinary/:id" element={<VeterinaryDetail />} />
           <Route path="/about" element={<About />} />
           <Route path="/signin" element={<SignIn />} />
+          <Route path="/check-email" element={<CheckEmail />} />
           <Route
             path="/list-property"
             element={
@@ -81,7 +69,14 @@ const App = () => (
           <Route path="/favorites" element={<Favorites />} />
           <Route path="/booking" element={<Booking />} />
           <Route path="/search" element={<SearchResults />} />
-          <Route path="/profile" element={<Profile />} />
+          <Route
+            path="/profile"
+            element={
+              <RequireAuth>
+                <Profile />
+              </RequireAuth>
+            }
+          />
           <Route path="/my-pets" element={<MyPets />} />
           
           {/* Admin routes */}

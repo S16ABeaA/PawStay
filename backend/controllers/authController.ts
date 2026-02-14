@@ -7,6 +7,8 @@ import { clearAuthCookies } from "../middleware/authMiddleware";
 export const authController = {
   signUp: async (req: Request, res: Response) => {
     const { email, password, firstName, lastName, isPartner } = req.body;
+    const isPartnerSignup = isPartner === true || isPartner === "true";
+    const role = isPartnerSignup ? "proprietor" : "customer";
 
     if(!email || !password || !firstName || !lastName){
       return res.status(400).json({ message: "All fields are required." });
@@ -43,7 +45,7 @@ export const authController = {
         password,
         email_confirm: false,
         // email_confirm: true, // Skip email confirmation for testing
-        user_metadata: { firstName, lastName, role: isPartner ? "proprietor" : "customer" }
+        user_metadata: { firstName, lastName, role }
       });
       if (signUpError) return res.status(400).json({ error: signUpError.message });
 
@@ -51,6 +53,23 @@ export const authController = {
 
       const userId = signUpData.user?.id;
       if (!userId) throw new Error("User ID not returned from Supabase");
+
+      const { error: profileUpsertError } = await supabaseAdmin
+        .from("profiles")
+        .upsert(
+          {
+            id: userId,
+            first_name: firstName,
+            last_name: lastName,
+            role,
+          },
+          { onConflict: "id" }
+        );
+
+      if (profileUpsertError) {
+        await supabaseAdmin.auth.admin.deleteUser(userId);
+        return res.status(500).json({ error: "Failed to create profile." });
+      }
 
       return res.status(201).json({
         message: "Signup successful! Please check your email to confirm your account.",
@@ -91,11 +110,12 @@ export const authController = {
     // }
 
     try {
+      const frontendUrl = process.env.VITE_FRONTEND_URL || process.env.FRONTEND_URL || "http://localhost:8080";
       const { error } = await supabaseClient.auth.resend({
         type: "signup",
         email,
         options: {
-          emailRedirectTo: `${process.env.VITE_FRONTEND_URL}/check-email?confirmed=true`
+          emailRedirectTo: `${frontendUrl}/check-email?confirmed=true`
         }
       });
 

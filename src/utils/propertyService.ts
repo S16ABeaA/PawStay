@@ -150,20 +150,15 @@ export interface PropertySubmissionResponse {
 
 export class PropertyService {
   private static readonly CONFIGURED_BACKEND_BASE_URL =
+    import.meta.env.VITE_API_BASE_URL ||
     import.meta.env.VITE_BACKEND_URL ||
     import.meta.env.VITE_AUTH_API_URL ||
-    'http://localhost:3000'
+    'http://localhost:5001'
 
   private static readonly BACKEND_BASE_URLS = Array.from(
     new Set(
       [
         this.CONFIGURED_BACKEND_BASE_URL,
-        this.CONFIGURED_BACKEND_BASE_URL.includes(':5001')
-          ? this.CONFIGURED_BACKEND_BASE_URL.replace(':5001', ':3000')
-          : this.CONFIGURED_BACKEND_BASE_URL.includes(':3000')
-            ? this.CONFIGURED_BACKEND_BASE_URL.replace(':3000', ':5001')
-            : null,
-        'http://localhost:3000',
         'http://localhost:5001',
       ].filter((url): url is string => Boolean(url)),
     ),
@@ -180,6 +175,7 @@ export class PropertyService {
 
       const requestInit: RequestInit = {
         method: 'POST',
+        credentials: 'include',
         headers,
         body: JSON.stringify(data),
       }

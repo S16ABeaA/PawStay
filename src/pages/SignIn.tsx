@@ -157,8 +157,9 @@ const SignIn = () => {
         description: `Logged in as ${result.user.email}`,
       });
 
+      localStorage.setItem("pawstay.authenticated", "true");
       console.log("User role:", result.user.role);
-      navigate(redirectTo || "/");
+      navigate("/", { replace: true });
     } catch(err) {
       toast({ title: "Error", description: err.message || "Invalid email or password" });
     }   
@@ -180,8 +181,6 @@ const SignIn = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
-    localStorage.setItem("pawstay.authenticated", "true");
     
     // // Demo: redirect based on email for testing admin panels
     // if (email.includes("admin@")) {
