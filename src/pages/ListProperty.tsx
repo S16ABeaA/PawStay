@@ -749,9 +749,8 @@ const ListProperty = () => {
           title: "Application Submitted! 🎉",
           description: "We'll review your property and contact you within 24-48 hours.",
         });
-
-        // Reset form or redirect
-        // You might want to redirect to a success page or reset the form
+        // Redirect to home after successful submission
+        navigate('/', { replace: true });
       } else {
         toast({
           title: "Submission Failed",
@@ -1299,13 +1298,17 @@ const ListProperty = () => {
                           <div className="bg-secondary/30 rounded-xl p-6">
                             <h3 className="text-lg font-medium mb-6">Operating Hours</h3>
                             
-                            <div className="space-y-4">
-                              <div className="flex items-center gap-3">
+                              <div className="space-y-4">
+                              <div
+                                className="flex items-center gap-3 cursor-pointer"
+                                onClick={() => setFormData((prev) => ({ ...prev, sameHoursEveryDay: !prev.sameHoursEveryDay }))}
+                              >
                                 <input
                                   type="checkbox"
                                   className="w-5 h-5"
                                   checked={formData.sameHoursEveryDay || false}
                                   onChange={(e) => setFormData((prev) => ({ ...prev, sameHoursEveryDay: e.target.checked }))}
+                                  onClick={(e) => e.stopPropagation()}
                                 />
                                 <Label className="text-sm font-medium">Same hours every day</Label>
                               </div>
@@ -1369,7 +1372,10 @@ const ListProperty = () => {
                           <div className="bg-secondary/30 rounded-xl p-6">
                             <h3 className="text-lg font-medium mb-6">Availability</h3>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                              <div className="flex items-center justify-between p-3 bg-background rounded-lg border">
+                              <div
+                                className="flex items-center justify-between p-3 bg-background rounded-lg border cursor-pointer"
+                                onClick={() => setFormData((prev) => ({ ...prev, weekendAvailability: !prev.weekendAvailability }))}
+                              >
                                 <div>
                                   <Label className="text-sm font-medium">Weekend availability</Label>
                                   <p className="text-xs text-muted-foreground">Open on weekends</p>
@@ -1379,9 +1385,13 @@ const ListProperty = () => {
                                   className="w-5 h-5"
                                   checked={formData.weekendAvailability || false}
                                   onChange={(e) => setFormData((prev) => ({ ...prev, weekendAvailability: e.target.checked }))}
+                                  onClick={(e) => e.stopPropagation()}
                                 />
                               </div>
-                              <div className="flex items-center justify-between p-3 bg-background rounded-lg border">
+                              <div
+                                className="flex items-center justify-between p-3 bg-background rounded-lg border cursor-pointer"
+                                onClick={() => setFormData((prev) => ({ ...prev, holidayAvailability: !prev.holidayAvailability }))}
+                              >
                                 <div>
                                   <Label className="text-sm font-medium">Holiday availability</Label>
                                   <p className="text-xs text-muted-foreground">Open on holidays</p>
@@ -1391,10 +1401,14 @@ const ListProperty = () => {
                                   className="w-5 h-5"
                                   checked={formData.holidayAvailability || false}
                                   onChange={(e) => setFormData((prev) => ({ ...prev, holidayAvailability: e.target.checked }))}
+                                  onClick={(e) => e.stopPropagation()}
                                 />
                               </div>
                               {hasVet && (
-                                <div className="flex items-center justify-between p-3 bg-background rounded-lg border md:col-span-2">
+                                <div
+                                  className="flex items-center justify-between p-3 bg-background rounded-lg border md:col-span-2 cursor-pointer"
+                                  onClick={() => setFormData((prev) => ({ ...prev, emergencyServices: !prev.emergencyServices }))}
+                                >
                                   <div>
                                     <Label className="text-sm font-medium">24/7 emergency services</Label>
                                     <p className="text-xs text-muted-foreground">Available for emergencies</p>
@@ -1404,6 +1418,7 @@ const ListProperty = () => {
                                     className="w-5 h-5"
                                     checked={formData.emergencyServices || false}
                                     onChange={(e) => setFormData((prev) => ({ ...prev, emergencyServices: e.target.checked }))}
+                                    onClick={(e) => e.stopPropagation()}
                                   />
                                 </div>
                               )}
@@ -1505,7 +1520,16 @@ const ListProperty = () => {
                             <h3 className="text-lg font-medium mb-6">Booking Rules</h3>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                               {visibleBookingRules.map((rule) => (
-                                <div key={rule.name} className="flex items-center justify-between p-3 bg-background rounded-lg border">
+                                <div
+                                  key={rule.name}
+                                  className="flex items-center justify-between p-3 bg-background rounded-lg border cursor-pointer"
+                                  onClick={() => {
+                                    const newRules = formData.bookingRules.includes(rule.name)
+                                      ? formData.bookingRules.filter(r => r !== rule.name)
+                                      : [...formData.bookingRules, rule.name];
+                                    setFormData((prev) => ({ ...prev, bookingRules: newRules }));
+                                  }}
+                                >
                                   <div>
                                     <Label className="text-sm font-medium">{rule.name}</Label>
                                     <p className="text-xs text-muted-foreground">{rule.description}</p>
@@ -1520,6 +1544,7 @@ const ListProperty = () => {
                                         : [...formData.bookingRules, rule.name];
                                       setFormData((prev) => ({ ...prev, bookingRules: newRules }));
                                     }}
+                                    onClick={(e) => e.stopPropagation()}
                                   />
                                 </div>
                               ))}
@@ -1538,7 +1563,16 @@ const ListProperty = () => {
                                 { name: "Breed-specific restrictions apply", required: false, description: "Certain breeds not accepted" },
                                 { name: "Age restrictions apply", required: false, description: "Minimum/maximum pet age" }
                               ].map((requirement) => (
-                                <div key={requirement.name} className="flex items-start gap-3 p-3 bg-background rounded-lg border">
+                                <div
+                                  key={requirement.name}
+                                  className="flex items-start gap-3 p-3 bg-background rounded-lg border cursor-pointer"
+                                  onClick={() => {
+                                    const newRequirements = formData.complianceRequirements?.includes(requirement.name)
+                                      ? formData.complianceRequirements.filter(r => r !== requirement.name)
+                                      : [...(formData.complianceRequirements || []), requirement.name];
+                                    setFormData((prev) => ({ ...prev, complianceRequirements: newRequirements }));
+                                  }}
+                                >
                                   <input
                                     type="checkbox"
                                     className="w-4 h-4 mt-1"
@@ -1549,6 +1583,7 @@ const ListProperty = () => {
                                         : [...(formData.complianceRequirements || []), requirement.name];
                                       setFormData((prev) => ({ ...prev, complianceRequirements: newRequirements }));
                                     }}
+                                    onClick={(e) => e.stopPropagation()}
                                   />
                                   <div className="flex-1">
                                     <div className="flex items-center gap-2">
@@ -1593,7 +1628,16 @@ const ListProperty = () => {
                                   "Flea and tick prevention",
                                   "Internal parasite prevention"
                                 ].map((requirement) => (
-                                  <div key={requirement} className="flex items-center justify-between p-3 bg-background rounded-lg border">
+                                  <div
+                                    key={requirement}
+                                    className="flex items-center justify-between p-3 bg-background rounded-lg border cursor-pointer"
+                                    onClick={() => {
+                                      const newRequirements = formData.healthSafety.includes(requirement)
+                                        ? formData.healthSafety.filter(r => r !== requirement)
+                                        : [...formData.healthSafety, requirement];
+                                      setFormData((prev) => ({ ...prev, healthSafety: newRequirements }));
+                                    }}
+                                  >
                                     <div>
                                       <Label className="text-sm font-medium">{requirement}</Label>
                                       <p className="text-xs text-muted-foreground">Required for all pets</p>
@@ -1608,6 +1652,7 @@ const ListProperty = () => {
                                           : [...formData.healthSafety, requirement];
                                         setFormData((prev) => ({ ...prev, healthSafety: newRequirements }));
                                       }}
+                                      onClick={(e) => e.stopPropagation()}
                                     />
                                   </div>
                                 ))}
@@ -1658,7 +1703,16 @@ const ListProperty = () => {
                                   "Telemedicine consultations",
                                   "Mobile vet services"
                                 ].map((service) => (
-                                  <div key={service} className="flex items-center justify-between p-3 bg-background rounded-lg border">
+                                  <div
+                                    key={service}
+                                    className="flex items-center justify-between p-3 bg-background rounded-lg border cursor-pointer"
+                                    onClick={() => {
+                                      const newServices = formData.vetAvailability?.includes(service)
+                                        ? formData.vetAvailability.filter(s => s !== service)
+                                        : [...(formData.vetAvailability || []), service];
+                                      setFormData((prev) => ({ ...prev, vetAvailability: newServices }));
+                                    }}
+                                  >
                                     <div>
                                       <Label className="text-sm font-medium">{service}</Label>
                                       <p className="text-xs text-muted-foreground">
@@ -1679,6 +1733,7 @@ const ListProperty = () => {
                                           : [...(formData.vetAvailability || []), service];
                                         setFormData((prev) => ({ ...prev, vetAvailability: newServices }));
                                       }}
+                                      onClick={(e) => e.stopPropagation()}
                                     />
                                   </div>
                                 ))}
@@ -1699,8 +1754,17 @@ const ListProperty = () => {
                                 "Waste disposal procedures",
                                 "Hand washing stations",
                                 "PPE availability"
-                              ].map((protocol) => (
-                                <div key={protocol} className="flex items-start gap-3 p-3 bg-background rounded-lg border">
+                                ].map((protocol) => (
+                                <div
+                                  key={protocol}
+                                  className="flex items-start gap-3 p-3 bg-background rounded-lg border cursor-pointer"
+                                  onClick={() => {
+                                    const newProtocols = formData.sanitationProtocols?.includes(protocol)
+                                      ? formData.sanitationProtocols.filter(p => p !== protocol)
+                                      : [...(formData.sanitationProtocols || []), protocol];
+                                    setFormData((prev) => ({ ...prev, sanitationProtocols: newProtocols }));
+                                  }}
+                                >
                                   <input
                                     type="checkbox"
                                     className="w-4 h-4 mt-1"
@@ -1711,6 +1775,7 @@ const ListProperty = () => {
                                         : [...(formData.sanitationProtocols || []), protocol];
                                       setFormData((prev) => ({ ...prev, sanitationProtocols: newProtocols }));
                                     }}
+                                    onClick={(e) => e.stopPropagation()}
                                   />
                                   <div className="flex-1">
                                     <Label className="text-sm font-medium">{protocol}</Label>
@@ -2481,9 +2546,9 @@ const ListProperty = () => {
 
                           <div className="bg-secondary/30 rounded-xl p-6">
                             <h3 className="text-lg font-medium mb-4">Deposit Requirements</h3>
-                            <div className="flex items-center justify-between">
+                            <label className="flex items-center justify-between cursor-pointer">
                               <div>
-                                <Label className="text-sm font-medium">Require deposit for bookings</Label>
+                                <div className="text-sm font-medium">Require deposit for bookings</div>
                                 <p className="text-xs text-muted-foreground">Deposit amount will be set separately</p>
                               </div>
                               <input
@@ -2495,7 +2560,7 @@ const ListProperty = () => {
                                   paymentOptions: { ...prev.paymentOptions, deposit: e.target.checked }
                                 }))}
                               />
-                            </div>
+                            </label>
                           </div>
 
                           <div className="bg-secondary/30 rounded-xl p-6">
