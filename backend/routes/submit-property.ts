@@ -111,7 +111,7 @@ const isObject = (value: unknown) => typeof value === 'object' && value !== null
 
 export const submitProperty = async (req: Request, res: Response) => {
   try {
-    const supabaseUrl = process.env.VITE_PAW_STAY_SUPABASE_URL;
+    const supabaseUrl = process.env.PAW_STAY_SUPABASE_URL || process.env.SUPABASE_URL;
     const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_PAW_STAY_SUPABASE_ANON_KEY;
 
     console.log('Supabase URL:', supabaseUrl);

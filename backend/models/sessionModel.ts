@@ -1,4 +1,4 @@
-import { supabase } from "../config/supabaseAdmin";
+import { supabaseAdmin } from "../config/supabaseAdmin";
 
 export interface Session {
   id: string;
@@ -12,7 +12,7 @@ export const sessionModel = {
   createSession: async (userId: string) => {
     const expiresAt = new Date(Date.now() + SESSION_DURATION_MS).toISOString();
 
-    const { data, error } = await supabase
+    const { data, error } = await supabaseAdmin
       .from("sessions")
       .insert([{ user_id: userId, expires_at: expiresAt }])
       .select("id, user_id, expires_at")
@@ -24,7 +24,7 @@ export const sessionModel = {
   },
 
   getSessionById: async (sessionId: string) => {
-    const { data, error } = await supabase
+    const { data, error } = await supabaseAdmin
       .from("sessions")
       .select("id, user_id, expires_at")
       .eq("id", sessionId)
@@ -39,7 +39,7 @@ export const sessionModel = {
   },
 
   updateSessionExpiration: async (sessionId: string, expiresAt: string) => {
-    const { error } = await supabase
+    const { error } = await supabaseAdmin
         .from("sessions")
         .update({ expires_at: expiresAt })
         .eq("id", sessionId);
