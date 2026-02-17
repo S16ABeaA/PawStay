@@ -7,7 +7,7 @@ import cookieParser from 'cookie-parser';
 import { submitProperty } from './routes/submit-property';
 import { authMiddleware } from './middleware/authMiddleware';
 import authRoute from './routes/authRoute';
-
+ 
 dotenv.config();
 
 const app = express();
