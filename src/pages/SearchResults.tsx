@@ -1,4 +1,4 @@
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams, useNavigate } from "react-router-dom";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import HotelCard from "@/components/HotelCard";
@@ -10,7 +10,7 @@ import {
   SlidersHorizontal, ArrowUpDown, Grid3X3, List, 
   MapPin, Star, Search
 } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 const hotels = [
   {
@@ -67,10 +67,51 @@ const hotels = [
 
 const SearchResults = () => {
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
+
   const location = searchParams.get("location") || "";
+
+  const rawPet = searchParams.get("pet") || "Dog";
+  const defaultPet = rawPet.charAt(0).toUpperCase() + rawPet.slice(1).toLowerCase();
+  const defaultService = (searchParams.get("service") as "hotel" | "grooming" | "vet") || "hotel";
+  const defaultMinPrice = Number(searchParams.get("minPrice")) || 0;
+  const defaultMaxPrice = Number(searchParams.get("maxPrice")) || 150;
+  const defaultRating = Number(searchParams.get("rating")) || null;
+  const defaultAmenities = searchParams.get("amenities")?.split(",") || [];
+
+  // States
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
-  const [priceRange, setPriceRange] = useState([0, 150]);
-  const [showFilters, setShowFilters] = useState(false);
+
+  const [selectedPet, setSelectedPet] = useState(defaultPet);
+  const [selectedService, setSelectedService] = useState<"hotel" | "grooming" | "vet" | null>(defaultService);
+  const [priceRange, setPriceRange] = useState([defaultMinPrice, defaultMaxPrice]);
+  const [selectedRating, setSelectedRating] = useState<number | null>(defaultRating);
+  const [selectedAmenities, setSelectedAmenities] = useState<string[]>(defaultAmenities);
+
+  // Reset all filters
+  const handleResetAll = () => {
+    setSelectedPet(defaultPet);
+    setSelectedService(defaultService);
+    setPriceRange([0, 150]);
+    setSelectedRating(null);
+    setSelectedAmenities([]);
+    navigate(`/search?location=${location}&pet=${defaultPet}`);
+  };
+
+  // Apply filters (update URL)
+  const handleApplyFilters = () => {
+    const params = new URLSearchParams();
+    if (location) params.set("location", location);
+    if (selectedPet) params.set("pet", selectedPet);
+    if (selectedService) params.set("service", selectedService);
+    if (priceRange) {
+      params.set("minPrice", String(priceRange[0]));
+      params.set("maxPrice", String(priceRange[1]));
+    }
+    if (selectedRating) params.set("rating", String(selectedRating));
+    if (selectedAmenities.length) params.set("amenities", selectedAmenities.join(","));
+    navigate(`/search?${params.toString()}`);
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -82,11 +123,7 @@ const SearchResults = () => {
             <div className="flex flex-col md:flex-row gap-4">
               <div className="flex-1 relative">
                 <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-                <Input 
-                  defaultValue={location}
-                  placeholder="Where are you going?" 
-                  className="pl-10"
-                />
+                <Input defaultValue={location} placeholder="Where are you going?" className="pl-10" />
               </div>
               <Button variant="hero" className="gap-2">
                 <Search className="h-5 w-5" />
@@ -100,21 +137,73 @@ const SearchResults = () => {
             <h1 className="font-display text-3xl md:text-4xl font-bold text-foreground mb-2">
               {location ? `Pet Hotels in ${location}` : "Search Results"}
             </h1>
-            <p className="text-muted-foreground">
-              {hotels.length} properties found
-            </p>
+            <p className="text-muted-foreground">{hotels.length} properties found</p>
           </div>
 
           <div className="flex flex-col lg:flex-row gap-8">
             {/* Filters Sidebar */}
-            <aside className={`lg:w-72 shrink-0 ${showFilters ? 'block' : 'hidden lg:block'}`}>
-              <div className="bg-card rounded-2xl p-6 shadow-soft sticky top-24">
-                <h3 className="font-semibold text-lg mb-6">Filters</h3>
+            <aside className="lg:w-72 shrink-0">
+              <div className="bg-card rounded-2xl p-6 shadow-soft">
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="font-semibold text-lg">Filters</h3>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 px-2 text-xs hover:bg-destructive/10 hover:text-destructive"
+                    onClick={handleResetAll}
+                  >
+                    Reset All
+                  </Button>
+                </div>
+
+                {/* Service Type */}
+                <div className="pb-6 border-b border-border/50">
+                  <label className="text-sm font-semibold text-foreground mb-3 block">Service Type</label>
+                  <div className="flex gap-2">
+                    {[
+                      { value: "hotel" as const, label: "Hotel" },
+                      { value: "grooming" as const, label: "Grooming" },
+                      { value: "vet" as const, label: "Veterinary" },
+                    ].map(({ value, label }) => (
+                      <button
+                        key={value}
+                        onClick={() => setSelectedService(selectedService === value ? null : value)}
+                        className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                          selectedService === value
+                            ? "bg-primary text-primary-foreground shadow-sm"
+                            : "bg-muted text-muted-foreground hover:bg-muted/80"
+                        } ${value === defaultService && selectedService !== value ? 'ring-2 ring-primary/20' : ''}`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Pet Type */}
+                <div className="pb-6 border-b border-border/50">
+                  <label className="text-sm font-semibold text-foreground mb-3 block">Pet Type</label>
+                  <div className="flex gap-2">
+                    {["Dog", "Cat"].map((pet) => (
+                      <button
+                        key={pet}
+                        onClick={() => setSelectedPet(pet)}
+                        className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                          selectedPet === pet
+                            ? "bg-primary text-primary-foreground shadow-sm"
+                            : "bg-muted text-muted-foreground hover:bg-muted/80"
+                        } ${pet === defaultPet ? 'ring-2 ring-primary/20' : ''}`}
+                      >
+                        {pet}
+                      </button>
+                    ))}
+                  </div>
+                </div>
 
                 {/* Price Range */}
                 <div className="mb-6">
-                  <label className="text-sm font-medium text-foreground mb-4 block">
-                    Price Range: ${priceRange[0]} - ${priceRange[1]}
+                  <label className="text-sm font-semibold text-foreground mb-4 block">
+                    Price Range: <span className="text-primary">${priceRange[0]} - ${priceRange[1]}</span>
                   </label>
                   <Slider
                     value={priceRange}
@@ -126,13 +215,18 @@ const SearchResults = () => {
                 </div>
 
                 {/* Rating */}
-                <div className="mb-6">
-                  <label className="text-sm font-medium text-foreground mb-3 block">Rating</label>
+                <div className="py-6 border-b border-border/50">
+                  <label className="text-sm font-semibold text-foreground mb-3 block">Rating</label>
                   <div className="flex gap-2">
                     {[3, 4, 4.5].map((rating) => (
                       <button
                         key={rating}
-                        className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-secondary hover:bg-secondary/80 text-sm transition-colors"
+                        onClick={() => setSelectedRating(selectedRating === rating ? null : rating)}
+                        className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm transition-colors ${
+                          selectedRating === rating
+                            ? "bg-primary text-primary-foreground"
+                            : "bg-muted/50 text-muted-foreground hover:bg-muted"
+                        }`}
                       >
                         <Star className="h-3.5 w-3.5 fill-rating text-rating" />
                         {rating}+
@@ -142,13 +236,23 @@ const SearchResults = () => {
                 </div>
 
                 {/* Amenities */}
-                <div className="mb-6">
-                  <label className="text-sm font-medium text-foreground mb-3 block">Amenities</label>
+                <div className="py-6">
+                  <label className="text-sm font-semibold text-foreground mb-3 block">Amenities</label>
                   <div className="space-y-3">
                     {["WiFi", "24/7 Care", "Vet On-site", "Parking", "Grooming"].map((amenity) => (
-                      <div key={amenity} className="flex items-center gap-2">
-                        <Checkbox id={`search-${amenity}`} />
-                        <label htmlFor={`search-${amenity}`} className="text-sm text-muted-foreground cursor-pointer">
+                      <div key={amenity} className="flex items-center gap-3">
+                        <Checkbox
+                          id={`search-${amenity}`}
+                          checked={selectedAmenities.includes(amenity)}
+                          onCheckedChange={(checked) => {
+                            if (checked) setSelectedAmenities([...selectedAmenities, amenity]);
+                            else setSelectedAmenities(selectedAmenities.filter((a) => a !== amenity));
+                          }}
+                        />
+                        <label
+                          htmlFor={`search-${amenity}`}
+                          className="text-sm text-foreground cursor-pointer hover:text-primary transition-colors"
+                        >
                           {amenity}
                         </label>
                       </div>
@@ -156,7 +260,9 @@ const SearchResults = () => {
                   </div>
                 </div>
 
-                <Button variant="hero" className="w-full">Apply Filters</Button>
+                <Button variant="hero" className="w-full mt-6" onClick={handleApplyFilters}>
+                  Apply Filters
+                </Button>
               </div>
             </aside>
 
@@ -164,14 +270,7 @@ const SearchResults = () => {
             <div className="flex-1">
               {/* Controls */}
               <div className="flex items-center justify-between mb-6">
-                <Button 
-                  variant="outline" 
-                  className="lg:hidden gap-2"
-                  onClick={() => setShowFilters(!showFilters)}
-                >
-                  <SlidersHorizontal className="h-4 w-4" />
-                  Filters
-                </Button>
+                
 
                 <div className="flex items-center gap-2 ml-auto">
                   <Button variant="outline" size="sm" className="gap-2">
@@ -200,11 +299,11 @@ const SearchResults = () => {
               </div>
 
               {/* Results */}
-              <div className={`grid gap-6 ${
-                viewMode === "grid" 
-                  ? "grid-cols-1 md:grid-cols-2" 
-                  : "grid-cols-1"
-              }`}>
+              <div
+                className={`grid gap-6 ${
+                  viewMode === "grid" ? "grid-cols-1 md:grid-cols-2" : "grid-cols-1"
+                }`}
+              >
                 {hotels.map((hotel) => (
                   <HotelCard key={hotel.id} hotel={hotel} />
                 ))}

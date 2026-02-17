@@ -1,4 +1,4 @@
-import { Home, Scissors, Stethoscope, Car } from "lucide-react";
+import { Home, Scissors, Stethoscope, Car, Users, Heart } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 
@@ -29,6 +29,20 @@ const services = [
     title: "Pet Taxi",
     description: "Safe pickup and drop-off for your fur babies",
     color: "bg-rating/10 text-rating",
+    comingSoon: true,
+  },
+  {
+    icon: Users,
+    title: "Animal Shelter",
+    description: "Rescue, adoption, and shelter resources",
+    color: "bg-success/10 text-success",
+    comingSoon: true,
+  },
+  {
+    icon: Heart,
+    title: "Cremation Services",
+    description: "Respectful aftercare and cremation options",
+    color: "bg-destructive/10 text-destructive",
     comingSoon: true,
   },
 ];

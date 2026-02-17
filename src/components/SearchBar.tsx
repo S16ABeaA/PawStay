@@ -10,8 +10,8 @@ const SearchBar = () => {
 
   const petTypes = [
     { id: "dog", icon: Dog, label: "Dog" },
-    { id: "cat", icon: Cat, label: "Cat" },
-    { id: "other", icon: Rabbit, label: "Other" },
+    { id: "cat", icon: Cat, label: "Cat" }//,
+    //{ id: "other", icon: Rabbit, label: "Other" },
   ];
 
   const handleSearch = () => {
