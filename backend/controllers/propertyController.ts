@@ -34,6 +34,7 @@ export const propertyController = {
         location: asString(source.location),
         checkin: asString(source.checkin || source.checkIn),
         checkout: asString(source.checkout || source.checkOut),
+        timeSlot: asString(source.timeSlot || source.time_slot),
         petType: asString(source.petType || source.pet)?.toLowerCase(),
         dogSize: asString(source.dogSize || source.dogsize)?.toLowerCase(),
         propertyType: asString(source.propertyType || source.type)?.toLowerCase(),

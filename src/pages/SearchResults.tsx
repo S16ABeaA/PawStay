@@ -60,6 +60,7 @@ const SearchResults = () => {
   const defaultCheckIn = searchParams.get("checkIn") || "";
   const defaultCheckOut = searchParams.get("checkOut") || "";
   const defaultKeyword = searchParams.get("keyword") || "";
+  const defaultTimeSlot = searchParams.get("timeSlot") || "";
 
   // States
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
@@ -75,6 +76,7 @@ const SearchResults = () => {
   const [checkOutDate, setCheckOutDate] = useState(defaultCheckOut);
   const [searchLocation, setSearchLocation] = useState(location);
   const [keyword, setKeyword] = useState(defaultKeyword);
+  const [timeSlot, setTimeSlot] = useState(defaultTimeSlot);
   const [scrollKey, setScrollKey] = useState(0);
 
   // Applied filters (only updated on Apply Filters)
@@ -88,6 +90,7 @@ const SearchResults = () => {
     amenities: defaultAmenities as string[],
     checkIn: defaultCheckIn,
     checkOut: defaultCheckOut,
+    timeSlot: defaultTimeSlot,
     keyword: defaultKeyword,
   });
   const [properties, setProperties] = useState<any[]>([]);
@@ -162,6 +165,7 @@ const SearchResults = () => {
           amenities: appliedAmenities,
           checkIn: appliedCheckIn,
           checkOut: appliedCheckOut,
+          timeSlot: appliedTimeSlot,
           keyword: appliedKeyword,
         } = appliedFilters;
 
@@ -195,6 +199,7 @@ const SearchResults = () => {
           serviceCategory: mappedServiceCategory,
           checkIn: appliedCheckIn || undefined,
           checkOut: appliedCheckOut || undefined,
+          timeSlot: appliedTimeSlot || undefined,
           rating: appliedRating ?? undefined,
           amenities: appliedAmenities,
           keyword: appliedKeyword || undefined,
@@ -246,6 +251,7 @@ const SearchResults = () => {
     setSelectedAmenities([]);
     setCheckInDate("");
     setCheckOutDate("");
+    setTimeSlot("");
     setKeyword("");
     setDateError(null);
     setSortBy("default");
@@ -259,6 +265,7 @@ const SearchResults = () => {
       amenities: [],
       checkIn: "",
       checkOut: "",
+      timeSlot: "",
       keyword: "",
     });
     navigate(`/search?location=${encodeURIComponent(location)}&pet=Dog&service=hotel`);
@@ -306,6 +313,7 @@ const SearchResults = () => {
     if (selectedAmenities.length) params.set("amenities", selectedAmenities.join(","));
     if (checkInDate) params.set("checkIn", checkInDate);
     if (checkOutDate) params.set("checkOut", checkOutDate);
+    if (timeSlot) params.set("timeSlot", timeSlot);
     if (keyword.trim()) params.set("keyword", keyword.trim());
     return params;
   };
@@ -320,8 +328,20 @@ const SearchResults = () => {
     amenities: selectedAmenities,
     checkIn: checkInDate,
     checkOut: checkOutDate,
+    timeSlot: timeSlot,
     keyword: keyword.trim(),
   });
+
+  const timeSlots = [
+  "09:00",
+  "10:00",
+  "11:00",
+  "13:00",
+  "14:00",
+  "15:00",
+  "16:00",
+  "17:00",
+];
 
   // ── Haversine distance (km) ──
 function haversineDistance(
@@ -697,7 +717,7 @@ function haversineDistance(
                   <label className="text-sm font-semibold text-foreground mb-3 block">Dates</label>
                   <div className="space-y-3">
                     <div>
-                      <label className="text-xs text-muted-foreground mb-1 block">Check-in</label>
+                      <label className="text-xs text-muted-foreground mb-1 block">{selectedService === "hotel" ? "Check-in" : "Appointment Date"}</label>
                       <Input
                         type="date"
                         value={checkInDate}
@@ -711,6 +731,8 @@ function haversineDistance(
                         className="w-full"
                       />
                     </div>
+                  
+                  {selectedService === "hotel"  && (
                     <div>
                       <label className="text-xs text-muted-foreground mb-1 block">Check-out</label>
                       <Input
@@ -726,6 +748,32 @@ function haversineDistance(
                         className="w-full"
                       />
                     </div>
+                  )}
+
+                    {(selectedService === "vet" || selectedService === "grooming")  && (
+                      <div>
+                        <label className="text-xs text-muted-foreground mb-1 block">
+                          Time Slot
+                        </label>
+
+                        <select
+                          value={timeSlot}
+                          onChange={(e) => setTimeSlot(e.target.value)}
+                          disabled={!checkInDate}
+                          className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm disabled:opacity-50"
+                        >
+                          <option value="">
+                            {checkInDate ? "Select time" : "Select date first"}
+                          </option>
+
+                          {timeSlots.map((slot) => (
+                            <option key={slot} value={slot}>
+                              {slot}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
                     {dateError && (
                       <div className="text-xs text-destructive">{dateError}</div>
                     )}
