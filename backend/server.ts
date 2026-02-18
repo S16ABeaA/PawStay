@@ -6,6 +6,9 @@ import rateLimit from 'express-rate-limit';
 import cookieParser from 'cookie-parser';
 import { submitProperty } from './routes/submit-property';
 import { authMiddleware } from './middleware/authMiddleware';
+import searchRoutes from "./routes/searchRoute";
+import amenitiesRoutes from "./routes/amenitiesRoute";
+import locationRoutes from "./routes/locationRoute";
 import authRoute from './routes/authRoute';
  
 dotenv.config();
@@ -49,6 +52,9 @@ app.use(express.urlencoded({ extended: true }));
 // Routes
 app.use('/api/auth', authRoute);
 app.post('/api/submit-property', apiLimiter, authMiddleware, submitProperty);
+app.use("/api/properties", searchRoutes);
+app.use("/api/amenities", amenitiesRoutes);
+app.use("/api/location", locationRoutes);
 
 // Simple health/root route
 app.get('/', (_req, res) => {

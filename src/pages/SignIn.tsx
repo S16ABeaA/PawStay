@@ -181,6 +181,8 @@ const SignIn = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    localStorage.setItem("pawstay.authenticated", "true");
     
     // // Demo: redirect based on email for testing admin panels
     // if (email.includes("admin@")) {
@@ -277,9 +279,6 @@ const SignIn = () => {
                       onChange={(e) => setEmail(e.target.value)}
                     />
                   </div>
-                  <p className="text-xs text-muted-foreground">
-                    Demo: Any email → User profile, "admin@" → Admin, "super@" → SuperAdmin
-                  </p>
                 </div>
 
                 <div className="space-y-2">
@@ -322,13 +321,13 @@ const SignIn = () => {
                 )}
 
                 {!isSignUp && (
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
+                  <div className="flex items-center justify-end">
+                    {/* <div className="flex items-center gap-2">
                       <Checkbox id="remember" />
                       <Label htmlFor="remember" className="text-sm cursor-pointer">
                         Remember me
                       </Label>
-                    </div>
+                    </div> */}
                     <a href="#" className="text-sm text-primary hover:underline">
                       Forgot password?
                     </a>

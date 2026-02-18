@@ -1,4 +1,4 @@
-import { Star, Heart, MapPin, Wifi, Car, Coffee, Shield } from "lucide-react";
+import { Star, Heart, MapPin, Wifi, Car, Coffee, Shield, Navigation } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useState } from "react";
@@ -6,7 +6,7 @@ import { Link } from "react-router-dom";
 
 interface HotelCardProps {
   hotel: {
-    id: number;
+    id: string | number;
     name: string;
     image: string;
     location: string;
@@ -17,6 +17,7 @@ interface HotelCardProps {
     amenities: string[];
     featured?: boolean;
     availability: string;
+    distance?: number | null;  // distance in km
   };
 }
 
@@ -60,10 +61,18 @@ const HotelCard = ({ hotel }: HotelCardProps) => {
         )}
 
         {/* Availability */}
-        <div className="absolute bottom-3 left-3">
+        <div className="absolute bottom-3 left-3 flex items-center gap-2">
           <Badge variant="secondary" className="bg-card/90 backdrop-blur-sm text-foreground">
             {hotel.availability}
           </Badge>
+          {hotel.distance != null && (
+            <Badge variant="secondary" className="bg-card/90 backdrop-blur-sm text-foreground gap-1">
+              <Navigation className="h-3 w-3" />
+              {hotel.distance < 1
+                ? `${(hotel.distance * 1000).toFixed(0)}m`
+                : `${hotel.distance.toFixed(1)}km`}
+            </Badge>
+          )}
         </div>
       </Link>
 
@@ -115,12 +124,18 @@ const HotelCard = ({ hotel }: HotelCardProps) => {
             <div className="flex items-baseline gap-1.5">
               {hotel.originalPrice && (
                 <span className="text-sm text-muted-foreground line-through">
-                  ${hotel.originalPrice}
+                  &#8369;{hotel.originalPrice}
                 </span>
               )}
-              <span className="text-2xl font-bold text-foreground">${hotel.price}</span>
+              {hotel.price > 0 ? (
+                <span className="text-2xl font-bold text-foreground">
+                  &#8369;{hotel.price}
+                </span>
+              ) : (
+                <span className="text-sm text-muted-foreground">Contact for price</span>
+              )}
             </div>
-            <span className="text-xs text-muted-foreground">per night</span>
+            <span className="text-xs text-muted-foreground">depends on service</span>
           </div>
           <Link to={`/hotels/${hotel.id}`}>
             <Button variant="hero" size="sm">
