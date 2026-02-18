@@ -11,6 +11,7 @@ import amenitiesRoutes from "./routes/amenitiesRoute";
 import locationRoutes from "./routes/locationRoute";
 import authRoute from './routes/authRoute';
  
+dotenv.config({ path: '../.env' });
 dotenv.config();
 
 const app = express();
