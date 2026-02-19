@@ -17,7 +17,17 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-const allowedOrigins = (process.env.CORS_ORIGINS || 'http://localhost:8080')
+const defaultDevOrigins = [
+  'http://localhost:8080',
+  'http://localhost:8081',
+  'http://127.0.0.1:5173',
+  'http://localhost:3000',
+  'http://127.0.0.1:3000'
+];
+
+const allowedOrigins = (process.env.CORS_ORIGINS
+  ? process.env.CORS_ORIGINS
+  : (process.env.NODE_ENV !== 'production' ? defaultDevOrigins.join(',') : ''))
   .split(',')
   .map((origin) => origin.trim())
   .filter(Boolean);
