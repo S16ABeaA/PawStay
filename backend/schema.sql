@@ -299,7 +299,7 @@ create table if not exists pets (
   owner_id      uuid not null references profiles(id) on delete restrict,
   name          text not null,
   species       text not null,          -- Dog, Cat, etc.
-  breed         text not null,
+  breed         text ,
   birthday      date not null,           -- pet's date of birth (age is calculated from this)
   weight        numeric(5,1) not null,  -- in kg
   photo_url     text,                   -- Supabase Storage URL
