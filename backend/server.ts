@@ -15,15 +15,19 @@ dotenv.config({ path: '../.env' });
 dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 5001;
 
 const defaultDevOrigins = [
   'http://localhost:8080',
   'http://localhost:8081',
+  'http://localhost:5173',
   'http://127.0.0.1:5173',
   'http://localhost:3000',
   'http://127.0.0.1:3000'
 ];
+
+const isLocalDevOrigin = (origin: string) =>
+  /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(origin);
 
 const allowedOrigins = (process.env.CORS_ORIGINS
   ? process.env.CORS_ORIGINS
@@ -34,7 +38,12 @@ const allowedOrigins = (process.env.CORS_ORIGINS
 
 const corsOptions: cors.CorsOptions = {
   origin: (origin, callback) => {
-    if (!origin || allowedOrigins.length === 0 || allowedOrigins.includes(origin)) {
+    if (
+      !origin ||
+      allowedOrigins.length === 0 ||
+      allowedOrigins.includes(origin) ||
+      (process.env.NODE_ENV !== 'production' && isLocalDevOrigin(origin))
+    ) {
       callback(null, true);
       return;
     }

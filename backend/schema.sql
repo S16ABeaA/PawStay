@@ -323,6 +323,7 @@ create table if not exists property_services (
   price         numeric(10,2) not null default 0,
   category      text not null
                 check (category in ('Boarding','Grooming','Veterinary','Transport','Daycare','Other')),
+  capacity      int,   -- concurrent slots: rooms for boarding, chairs for grooming, etc.
   is_active     boolean not null default true,
   is_deleted    boolean not null default false,
   created_at    timestamptz not null default now(),

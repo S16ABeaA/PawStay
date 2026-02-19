@@ -6,6 +6,7 @@ type PropertyFilters = {
   serviceCategory?: string;  // per-service filter: Boarding, Grooming, Veterinary, etc.
   checkIn?: string;
   checkOut?: string;
+  timeSlot?: string;          // for same-day services like grooming/vet
   minPrice?: number;
   maxPrice?: number;
   rating?: number;
