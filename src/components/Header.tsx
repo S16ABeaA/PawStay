@@ -2,18 +2,36 @@ import { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Menu, X, PawPrint, User, Heart } from "lucide-react";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { authApi } from "@/services/authApi";
 
 const Header = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const location = useLocation();
   
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [user, setUser] = useState<{ firstName: string; lastName: string; avatarUrl: string }>({
+    firstName: "",
+    lastName: "",
+    avatarUrl: "",
+  });
+
   useEffect(() => {
     const isSignedIn = typeof window !== "undefined" && localStorage.getItem("pawstay.authenticated") === "true";
     setIsLoggedIn(isSignedIn);
+
+    if (isSignedIn) {
+      authApi.getProfile().then((profile: any) => {
+        if (profile?.user) {
+          setUser({
+            firstName: profile.user.first_name || "",
+            lastName: profile.user.last_name || "",
+            avatarUrl: profile.user.avatar_url || "",
+          });
+        }
+      }).catch(() => {/* silent */});
+    }
   }, [location.pathname]);
-  const user = { firstName: "John", lastName: "Doe" };
 
   return (
     <header className="sticky top-0 z-50 w-full border-b border-border/50 bg-background/80 backdrop-blur-lg">
@@ -55,8 +73,9 @@ const Header = () => {
           {isLoggedIn ? (
             <Link to="/profile">
               <Avatar className="h-9 w-9 cursor-pointer hover:ring-2 hover:ring-primary/50 transition-all">
+                {user.avatarUrl && <AvatarImage src={user.avatarUrl} className="object-cover" />}
                 <AvatarFallback className="bg-gradient-hero text-sm text-white">
-                  {user.firstName[0]}{user.lastName[0]}
+                  {(user.firstName?.[0] || "")}{(user.lastName?.[0] || "")}
                 </AvatarFallback>
               </Avatar>
             </Link>
@@ -106,8 +125,9 @@ const Header = () => {
               <Link to="/profile" onClick={() => setIsMenuOpen(false)}>
                 <Button variant="outline" className="w-full gap-2">
                   <Avatar className="h-6 w-6">
+                    {user.avatarUrl && <AvatarImage src={user.avatarUrl} className="object-cover" />}
                     <AvatarFallback className="bg-gradient-hero text-xs text-white">
-                      {user.firstName[0]}{user.lastName[0]}
+                      {(user.firstName?.[0] || "")}{(user.lastName?.[0] || "")}
                     </AvatarFallback>
                   </Avatar>
                   My Profile

@@ -96,7 +96,7 @@ export interface PropertySubmissionData {
   }
 
   // Payment options
-  paymentOptions: { deposit: boolean; methods: string[]; refundPolicy: string }
+  paymentOptions: { deposit: boolean; methods: string[]; refundPolicy: string; qrCodeGCash?: string; qrCodePayMaya?: string }
 
   // Pricing notes
   pricingNotes: string

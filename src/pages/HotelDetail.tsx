@@ -12,6 +12,7 @@ import { useState } from "react";
 
 const hotelData = {
   id: 1,
+  propertyId: "a1000000-0000-0000-0000-000000000001",
   name: "Pawsome Paradise Resort",
   images: [
     "https://images.unsplash.com/photo-1587300003388-59208cc962cb?w=800&auto=format&fit=crop",
@@ -205,7 +206,7 @@ const HotelDetail = () => {
                   </div>
                 </div>
 
-                <Link to="/booking" state={{ shop: { type: "hotel", name: hotelData.name, location: hotelData.location, image: hotelData.images[0], price: selectedRoom.price, serviceName: selectedRoom.name } }}>
+                <Link to="/booking" state={{ shop: { type: "hotel", name: hotelData.name, location: hotelData.location, image: hotelData.images[0], price: selectedRoom.price, serviceName: selectedRoom.name, propertyId: hotelData.propertyId, qrCodeGCash: (hotelData as any).qrCodeGCash, qrCodePayMaya: (hotelData as any).qrCodePayMaya, acceptedPaymentMethods: (hotelData as any).acceptedPaymentMethods } }}>
                   <Button variant="hero" size="lg" className="w-full mb-4">
                     Reserve Now
                   </Button>

@@ -79,6 +79,7 @@
     "wrappy": "^1.0.2"
   },
   "scripts": {
+    "predev": "node scripts/free-port.js 5001",
     "dev": "nodemon --watch '*.ts' --exec ts-node server.ts",
     "start": "node dist/server.js",
     "build": "tsc",

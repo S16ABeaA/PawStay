@@ -27,6 +27,7 @@ const groomingData: Record<number, {
 }> = {
   1: {
     id: 1,
+    propertyId: "a1000000-0000-0000-0000-000000000002",
     name: "Pawsome Grooming Spa",
     images: [
       "https://images.unsplash.com/photo-1516734212186-a967f81ad0d7?w=800&auto=format&fit=crop",
@@ -264,7 +265,7 @@ const GroomingDetail = () => {
                   </div>
                 </div>
 
-                <Link to="/booking" state={{ shop: { type: "grooming", name: data.name, location: data.location, image: data.images[0], price: selectedService.price, serviceName: selectedService.name } }}>
+                <Link to="/booking" state={{ shop: { type: "grooming", name: data.name, location: data.location, image: data.images[0], price: selectedService.price, serviceName: selectedService.name, propertyId: (data as any).propertyId?.toString(), qrCodeGCash: (data as any).qrCodeGCash, qrCodePayMaya: (data as any).qrCodePayMaya, acceptedPaymentMethods: (data as any).acceptedPaymentMethods } }}>
                   <Button variant="hero" size="lg" className="w-full mb-4">
                     Book Appointment
                   </Button>

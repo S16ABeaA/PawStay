@@ -12,6 +12,7 @@ import { useState } from "react";
 
 const veterinaryData: Record<number, {
   id: number;
+  propertyId?: string;
   name: string;
   images: string[];
   location: string;
@@ -29,6 +30,7 @@ const veterinaryData: Record<number, {
 }> = {
   1: {
     id: 1,
+    propertyId: "a1000000-0000-0000-0000-000000000003",
     name: "PawStay Veterinary Clinic",
     images: [
       "https://images.unsplash.com/photo-1628009368231-7bb7cfcb0def?w=800&auto=format&fit=crop",
@@ -300,7 +302,7 @@ const VeterinaryDetail = () => {
                   </div>
                 </div>
 
-                <Link to="/booking" state={{ shop: { type: "veterinary", name: data.name, location: data.location, image: data.images[0], price: selectedService.price, serviceName: selectedService.name } }}>
+                <Link to="/booking" state={{ shop: { type: "veterinary", name: data.name, location: data.location, image: data.images[0], price: selectedService.price, serviceName: selectedService.name, propertyId: (data as any).propertyId?.toString(), qrCodeGCash: (data as any).qrCodeGCash, qrCodePayMaya: (data as any).qrCodePayMaya, acceptedPaymentMethods: (data as any).acceptedPaymentMethods } }}>
                   <Button variant="hero" size="lg" className="w-full mb-4">
                     Book Appointment
                   </Button>

@@ -10,6 +10,8 @@ import searchRoutes from "./routes/searchRoute";
 import amenitiesRoutes from "./routes/amenitiesRoute";
 import locationRoutes from "./routes/locationRoute";
 import authRoute from './routes/authRoute';
+import petRoutes from './routes/petRoute';
+import bookingRoutes from './routes/bookingRoute';
  
 dotenv.config({ path: '../.env' });
 dotenv.config();
@@ -66,8 +68,8 @@ app.use(helmet());
 app.use(cors(corsOptions));
 app.options(/.*/, cors(corsOptions));
 app.use(cookieParser());
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: '20mb' }));
+app.use(express.urlencoded({ extended: true, limit: '20mb' }));
 
 // Routes
 app.use('/api/auth', authRoute);
@@ -75,6 +77,8 @@ app.post('/api/submit-property', apiLimiter, authMiddleware, submitProperty);
 app.use("/api/properties", searchRoutes);
 app.use("/api/amenities", amenitiesRoutes);
 app.use("/api/location", locationRoutes);
+app.use("/api/pets", petRoutes);
+app.use("/api/bookings", bookingRoutes);
 
 // Simple health/root route
 app.get('/', (_req, res) => {

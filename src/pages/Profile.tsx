@@ -22,13 +22,20 @@ import {
   Heart,
   Calendar,
   PawPrint,
-   ChevronRight,
-   Scissors,
-   Stethoscope
+  ChevronRight
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 import { authApi } from "../services/authApi";
+import { petApi } from "@/services/petApi";
+
+type ProfilePet = {
+  id: string;
+  name: string;
+  species: string;
+  breed: string;
+  photo_url?: string | null;
+};
 
 const Profile = () => {
   const { toast } = useToast();
@@ -46,6 +53,7 @@ const Profile = () => {
   // });
 
   const [user, setUser] = useState<any>(null);
+  const [pets, setPets] = useState<ProfilePet[]>([]);
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -67,6 +75,21 @@ const Profile = () => {
           isAdmin: profile.user.role === "admin",
           isSuperAdmin: profile.user.role === "super_admin",
         });
+
+        // Fetch this user's pets for the profile overview
+        try {
+          const petRes = await petApi.list();
+          const mapped: ProfilePet[] = (petRes.pets ?? []).map((p: any) => ({
+            id: p.id,
+            name: p.name,
+            species: p.species,
+            breed: p.breed,
+            photo_url: p.photo_url,
+          }));
+          setPets(mapped);
+        } catch (petErr) {
+          console.error("Failed to load pets for profile:", petErr);
+        }
       } catch (err) {
         console.error("Failed to fetch profile:", err);
         toast({ title: "Error", description: "Failed to load profile. Please try again." });
@@ -78,26 +101,6 @@ const Profile = () => {
   }, []);
 
   const [isEditing, setIsEditing] = useState(false);
-
-   // Sample pets data - in real app this would be shared state/context
-   const pets = [
-     {
-       id: "1",
-       name: "Buddy",
-       species: "Dog",
-       breed: "Golden Retriever",
-       photo: "",
-       lastService: { type: "grooming", daysAgo: 5 }
-     },
-     {
-       id: "2", 
-       name: "Whiskers",
-       species: "Cat",
-       breed: "Persian",
-       photo: "",
-       lastService: { type: "checkup", daysAgo: 10 }
-     },
-   ];
 
   const handleSave = () => {
     setIsEditing(false);
@@ -294,7 +297,7 @@ const Profile = () => {
                        {pets.map((pet) => (
                          <div key={pet.id} className="flex items-center gap-3 p-3 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors">
                            <Avatar className="h-12 w-12 border-2 border-background">
-                             <AvatarImage src={pet.photo} className="object-cover" />
+                               <AvatarImage src={pet.photo_url || undefined} className="object-cover" />
                              <AvatarFallback className="bg-gradient-hero text-white text-sm">
                                {pet.name[0]}
                              </AvatarFallback>
@@ -302,15 +305,7 @@ const Profile = () => {
                            <div className="flex-1 min-w-0">
                              <p className="text-sm font-medium truncate">{pet.name}</p>
                              <p className="text-xs text-muted-foreground">{pet.breed}</p>
-                           </div>
-                           <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                             {pet.lastService.type === "grooming" ? (
-                               <Scissors className="h-3 w-3" />
-                             ) : (
-                               <Stethoscope className="h-3 w-3" />
-                             )}
-                             <span>{pet.lastService.daysAgo}d ago</span>
-                           </div>
+                             </div>
                          </div>
                        ))}
                        <Link to="/my-pets">
