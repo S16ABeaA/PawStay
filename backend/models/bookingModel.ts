@@ -84,17 +84,24 @@ export const bookingModel = {
     return result as BookingRow;
   },
 
-  /** Get bookings for a user */
-  async getByUser(userId: string): Promise<BookingRow[]> {
+  /** Get bookings for a user (with property name & image) */
+  async getByUser(userId: string): Promise<(BookingRow & { property_name?: string; property_image?: string })[]> {
     const { data, error } = await supabaseAdmin
       .from("bookings")
-      .select("*")
+      .select("*, properties:property_id(name, cover_image)")
       .eq("user_id", userId)
       .eq("is_deleted", false)
       .order("created_at", { ascending: false });
 
     if (error) throw error;
-    return data ?? [];
+
+    // Flatten the joined property data
+    return (data ?? []).map((row: any) => ({
+      ...row,
+      property_name: row.properties?.name ?? null,
+      property_image: row.properties?.cover_image ?? null,
+      properties: undefined,
+    }));
   },
 
   /** Get a single booking by id */

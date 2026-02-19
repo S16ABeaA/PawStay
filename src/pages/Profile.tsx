@@ -358,7 +358,7 @@ const Profile = () => {
                       My Favorites
                     </Button>
                   </Link>
-                  <Link to="/booking">
+                  <Link to="/my-bookings">
                     <Button variant="ghost" className="w-full justify-start">
                       <Calendar className="h-4 w-4 mr-3 text-muted-foreground" />
                       My Bookings

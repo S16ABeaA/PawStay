@@ -21,6 +21,7 @@ import SearchResults from "./pages/SearchResults";
 import NotFound from "./pages/NotFound";
 import Profile from "./pages/Profile";
 import MyPets from "./pages/MyPets";
+import MyBookings from "./pages/MyBookings";
 import RequireAuth from "./components/RequireAuth";
 
 // Admin pages
@@ -80,6 +81,14 @@ const App = () => (
             }
           />
           <Route path="/my-pets" element={<MyPets />} />
+          <Route
+            path="/my-bookings"
+            element={
+              <RequireAuth>
+                <MyBookings />
+              </RequireAuth>
+            }
+          />
           
           {/* Admin routes */}
           <Route path="/admin" element={<AdminDashboard />} />
