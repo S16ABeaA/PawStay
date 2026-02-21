@@ -1,4 +1,4 @@
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, useNavigate } from "react-router-dom";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { Button } from "@/components/ui/button";
@@ -8,7 +8,8 @@ import {
   ArrowLeft, Share2, Check,
   Phone, Mail, Clock
 } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { favoritesApi } from "../services/favoritesApi";
 
 const hotelData = {
   id: 1,
@@ -49,8 +50,48 @@ const hotelData = {
 
 const HotelDetail = () => {
   const { id } = useParams();
+  const navigate = useNavigate();
   const [isLiked, setIsLiked] = useState(false);
   const [selectedRoom, setSelectedRoom] = useState(hotelData.roomTypes[0]);
+  const isAuthenticated =
+    typeof window !== "undefined" &&
+    localStorage.getItem("pawstay.authenticated") === "true";
+
+  // Check if this property is already favorited on mount
+  useEffect(() => {
+    let mounted = true;
+    if (!isAuthenticated || !id) return;
+    const load = async () => {
+      try {
+        const fav = await favoritesApi.checkFavorite(id);
+        if (mounted) setIsLiked(Boolean(fav));
+      } catch (err) {
+        console.error("checkFavorite failed", err);
+      }
+    };
+    load();
+    return () => { mounted = false; };
+  }, [id, isAuthenticated]);
+
+  const handleLikeClick = async () => {
+    if (!isAuthenticated) {
+      navigate(`/signin?redirect=${encodeURIComponent(`/hotels/${id}`)}`);
+      return;
+    }
+    if (!id) return;
+    const previous = isLiked;
+    setIsLiked(!previous);
+    try {
+      if (previous) {
+        await favoritesApi.removeFavorite(id);
+      } else {
+        await favoritesApi.addFavorite(id);
+      }
+    } catch (err) {
+      console.error("favorite toggle failed", err);
+      setIsLiked(previous);
+    }
+  };
 
   const serviceFee = Math.round(selectedRoom.price * 0.10 * 100) / 100;
 
@@ -106,7 +147,7 @@ const HotelDetail = () => {
                   </div>
                 </div>
                 <div className="flex gap-2">
-                  <Button variant="outline" size="icon" onClick={() => setIsLiked(!isLiked)}>
+                  <Button variant="outline" size="icon" onClick={handleLikeClick}>
                     <Heart className={`h-5 w-5 ${isLiked ? "fill-primary text-primary" : ""}`} />
                   </Button>
                   <Button variant="outline" size="icon">

@@ -61,14 +61,18 @@ const Header = () => {
             About
           </Link>
         </nav>
+        <div className="hidden md:flex items-center gap-4">
 
-        {/* Desktop Actions */}
-        <div className="hidden md:flex items-center gap-3">
-          <Link to="/favorites">
-            <Button variant="ghost" size="icon" className="text-muted-foreground">
-              <Heart className="h-5 w-5" />
-            </Button>
-          </Link>
+       {/* Desktop Actions */}
+        {isLoggedIn && (
+          <div className="hidden md:flex items-center gap-3">
+            <Link to="/favorites">
+              <Button variant="ghost" size="icon" className="text-muted-foreground">
+                <Heart className="h-5 w-5" />
+              </Button>
+            </Link>
+          </div>
+        )}
           
           {isLoggedIn ? (
             <Link to="/profile">

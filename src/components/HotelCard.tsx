@@ -1,8 +1,9 @@
 import { Star, Heart, MapPin, Wifi, Car, Coffee, Shield, Navigation } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { useState } from "react";
-import { Link } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { favoritesApi } from "../services/favoritesApi";
 
 interface HotelCardProps {
   hotel: {
@@ -30,6 +31,52 @@ const amenityIcons: Record<string, React.ElementType> = {
 
 const HotelCard = ({ hotel }: HotelCardProps) => {
   const [isLiked, setIsLiked] = useState(false);
+  const navigate = useNavigate();
+  const isAuthenticated =
+    typeof window !== "undefined" &&
+    localStorage.getItem("pawstay.authenticated") === "true";
+
+  useEffect(() => {
+    let mounted = true;
+    const load = async () => {
+      if (!isAuthenticated) return;
+      try {
+        const fav = await favoritesApi.checkFavorite(hotel.id);
+        if (mounted) setIsLiked(Boolean(fav));
+      } catch (err) {
+        console.error("checkFavorite failed", err);
+      }
+    };
+    load();
+    return () => {
+      mounted = false;
+    };
+  }, [hotel.id, isAuthenticated]);
+
+  const handleLikeClick = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (!isAuthenticated) {
+      const redirect = `/hotels/${hotel.id}`;
+      navigate(`/signin?redirect=${encodeURIComponent(redirect)}`);
+      return;
+    }
+
+    const previous = isLiked;
+    // optimistic UI
+    setIsLiked(!previous);
+    try {
+      if (previous) {
+        await favoritesApi.removeFavorite(hotel.id);
+      } else {
+        await favoritesApi.addFavorite(hotel.id);
+      }
+    } catch (err) {
+      console.error("favorite toggle failed", err);
+      setIsLiked(previous);
+    }
+  };
 
   return (
     <div className="group bg-card rounded-2xl overflow-hidden shadow-soft hover:shadow-elevated transition-all duration-300 hover:-translate-y-1">
@@ -43,7 +90,7 @@ const HotelCard = ({ hotel }: HotelCardProps) => {
         
         {/* Like Button */}
         <button
-          onClick={(e) => { e.preventDefault(); setIsLiked(!isLiked); }}
+          onClick={handleLikeClick}
           className="absolute top-3 right-3 p-2 rounded-full bg-card/80 backdrop-blur-sm hover:bg-card transition-colors"
         >
           <Heart
