@@ -79,8 +79,13 @@ const CheckEmail = () => {
               We've sent a confirmation link to <strong>{email}</strong>. 
               Please click the link in your email to activate your account.
             </p>
-            <Button
+            {/* <Button
               className="w-full mb-4"
+              onClick={handleResendEmail}
+              disabled={resendLoading || cooldown > 0}
+            > */}
+            <Button
+              className="w-full"
               onClick={handleResendEmail}
               disabled={resendLoading || cooldown > 0}
             >
