@@ -193,7 +193,7 @@ export const authController = {
       const { data, error } = await supabaseClient.auth.signInWithOAuth({
         provider: "google",
         options: {
-          redirectTo: `${process.env.API_BASE_URL}/api/auth/oauth/callback`,
+          redirectTo: `${process.env.BACKEND_URL}/api/auth/oauth/callback`,
           queryParams: {
             access_type: 'offline',
             prompt: 'consent',

@@ -166,7 +166,6 @@ const SignIn = () => {
   };
 
   const handleGoogleAuth = async () => {
-    // authApi.signInWithGoogle();
     try {
       const result = await authApi.signInWithGoogle();
 
@@ -188,9 +187,10 @@ const SignIn = () => {
     const userEmail = searchParams.get("email");
 
     if (oauthSuccess === "true") {
+      localStorage.setItem("pawstay.authenticated", "true");
       // Show welcome toast
       toast({
-        title: "Welcome! 🎉",
+        title: "Welcome ! 🎉",
         description: `Logged in as ${userEmail || "Google User"}`,
       });
       navigate("/");
@@ -216,7 +216,7 @@ const SignIn = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    localStorage.setItem("pawstay.authenticated", "true");
+    // localStorage.setItem("pawstay.authenticated", "true");
     
     // // Demo: redirect based on email for testing admin panels
     // if (email.includes("admin@")) {
