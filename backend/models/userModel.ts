@@ -31,7 +31,7 @@ export const userModel = {
   getUserById: async (id: string) => {
     const { data, error } = await supabaseAdmin
       .from("profiles")
-      .select("id, first_name, last_name, role, phone, address, avatar_url")
+      .select("id, first_name, last_name, email, role, phone, address, avatar_url")
       .eq("id", id)
       .maybeSingle();
       // .single();

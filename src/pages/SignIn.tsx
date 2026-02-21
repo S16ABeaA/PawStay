@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
@@ -153,7 +153,7 @@ const SignIn = () => {
 
       // Regular customers
       toast({
-        title: "Welcome Back!",
+        title: "Welcome! 🎉",
         description: `Logged in as ${result.user.email}`,
       });
 
@@ -166,18 +166,52 @@ const SignIn = () => {
   };
 
   const handleGoogleAuth = async () => {
-    try{
-      // await authApi.signInWithGoogle();
-      // const result  = await authApi.signInWithGoogle();
-      // if (result?.url) window.location.href = result.url;
-      // else toast({ title: "Error", description: "Failed to get Google sign-in URL." });
+    // authApi.signInWithGoogle();
+    try {
+      const result = await authApi.signInWithGoogle();
 
-    }catch(err){
-      toast({ title: "Error", description: err.message });
+      if (result?.url) {
+        window.location.href = result.url;
+      }
+    } catch (err: any) {
+      toast({
+        title: "Error",
+        description: err.message || "Google sign-in failed.",
+      });
     }
   };  
 
-  
+  // CHECK FOR OAUTH RETURN
+  useEffect(() => {
+    const oauthSuccess = searchParams.get("oauth_success");
+    const oauthError = searchParams.get("error");
+    const userEmail = searchParams.get("email");
+
+    if (oauthSuccess === "true") {
+      // Show welcome toast
+      toast({
+        title: "Welcome! 🎉",
+        description: `Logged in as ${userEmail || "Google User"}`,
+      });
+      navigate("/");
+
+    } else if (oauthError) {
+      const errorMessages: Record<string, string> = {
+        missing_code: "Authentication failed. Please try again.",
+        auth_failed: "Authentication failed. Please try again.",
+        session_failed: "Could not create session. Please try again.",
+        server_error: "Server error. Please try again later."
+      };
+      
+      toast({
+        title: "Sign In Failed",
+        description: errorMessages[oauthError] || "Google sign-in failed. Please try again.",
+        variant: "destructive",
+      });
+
+      navigate("/signin", { replace: true });
+    }
+  }, [searchParams, navigate, toast]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
