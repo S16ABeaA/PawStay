@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Star, MapPin, Loader2, Check, Phone, Mail, Clock, Heart } from "lucide-react";
 import { favoritesApi } from "../services/favoritesApi";
 import { Card } from "@/components/ui/card";
+import { fetchPropertyById } from "../services/propertyApi";
 
 const HotelDetail = () => {
   const { id } = useParams();
@@ -23,16 +24,16 @@ const HotelDetail = () => {
   useEffect(() => {
     const fetchDetail = async () => {
       try {
-        const res = await fetch(`/api/properties/search`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ keyword: id })
-        });
-        const data = await res.json();
-        const item = data.properties.find((p: any) => p.id === id);
+        const item = await fetchPropertyById(id || "");
         setProperty(item);
         
-        setSelectedService({ name: "Boarding", price: item?.cheapest_service_price || 0 });
+        // Set first service or default boarding service
+        if (item?.property_services?.length > 0) {
+          const activeServices = item.property_services.filter((s: any) => s.is_active);
+          setSelectedService(activeServices[0] || { name: "Boarding", price: item.cheapest_service_price || 0 });
+        } else {
+          setSelectedService({ name: "Boarding", price: item?.cheapest_service_price || 0 });
+        }
       } catch (err) {
         console.error(err);
       } finally {
@@ -131,19 +132,62 @@ const HotelDetail = () => {
                   </div>
                 </div>
               )}
+
+              {/* Services Section */}
+              {property.property_services && property.property_services.filter((s: any) => s.is_active).length > 0 && (
+                <div className="mb-8">
+                  <h2 className="text-2xl font-semibold mb-4">Available Services</h2>
+                  <div className="space-y-3">
+                    {property.property_services.filter((s: any) => s.is_active).map((service: any) => (
+                      <div
+                        key={service.id}
+                        onClick={() => setSelectedService(service)}
+                        className={`p-4 rounded-xl border-2 cursor-pointer transition-all ${
+                          selectedService?.id === service.id
+                            ? "border-primary bg-primary/5"
+                            : "border-border hover:border-primary/50"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <h3 className="font-semibold text-foreground">{service.name}</h3>
+                            <p className="text-sm text-muted-foreground">{service.description || service.category}</p>
+                            {service.duration_minutes && (
+                              <div className="flex items-center gap-1 mt-1 text-xs text-muted-foreground">
+                                <Clock className="h-3 w-3" />
+                                <span>{service.duration_minutes} min</span>
+                              </div>
+                            )}
+                          </div>
+                          <div className="text-right">
+                            <p className="text-xl font-bold text-foreground">₱{service.price}</p>
+                            <span className="text-sm text-muted-foreground">/ night</span>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
             
             <div className="lg:col-span-1">
               <Card className="p-6 sticky top-24">
                 <div className="flex items-center justify-between mb-4">
                   <div>
-                    <div className="text-2xl font-bold">₱{property.cheapest_service_price || 0}</div>
+                    <div className="text-2xl font-bold">₱{selectedService?.price || property.cheapest_service_price || 0}</div>
                     <span className="text-sm text-muted-foreground">/ night</span>
                   </div>
                   <Button variant="ghost" size="icon" onClick={handleLikeClick}>
                     <Heart className={`h-5 w-5 ${isLiked ? "fill-primary text-primary" : ""}`} />
                   </Button>
                 </div>
+
+                {selectedService && (
+                  <div className="mb-4 p-3 bg-secondary rounded-lg">
+                    <span className="text-sm font-medium">{selectedService.name}</span>
+                  </div>
+                )}
                 
                 {property.rating && (
                   <div className="flex items-center gap-1 mb-4">
@@ -163,9 +207,10 @@ const HotelDetail = () => {
                         name: property.name,
                         location: property.city,
                         image: property.cover_image,
-                        price: property.cheapest_service_price,
+                        price: selectedService?.price || property.cheapest_service_price,
                         propertyId: property.id,
-                        serviceName: "Standard Boarding"
+                        serviceId: selectedService?.id,
+                        serviceName: selectedService?.name || "Standard Boarding"
                       }
                     }
                   })}

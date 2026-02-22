@@ -89,15 +89,19 @@ const VeterinaryDetail = () => {
     );
   }
 
-  const services = property.property_amenities?.map((a: any) => ({
-    name: a.amenities.amenity,
-    price: property.cheapest_service_price || 75,
-    duration: "30 min",
-    description: `Professional ${a.amenities.amenity.toLowerCase()} service`
-  })) || [
-    { name: "Consultation", price: 75, duration: "30 min", description: "Comprehensive health checkup" },
-    { name: "Vaccination", price: 120, duration: "20 min", description: "Core vaccines for pets" }
-  ];
+  // Use actual property_services if available, otherwise fallback
+  const services = property.property_services?.filter((s: any) => s.is_active)?.length > 0
+    ? property.property_services.filter((s: any) => s.is_active).map((s: any) => ({
+        id: s.id,
+        name: s.name,
+        price: s.price || 75,
+        duration: s.duration_minutes ? `${s.duration_minutes} min` : "30 min",
+        description: s.description || `Professional ${s.name.toLowerCase()} service`
+      }))
+    : [
+        { id: "default-1", name: "Consultation", price: 75, duration: "30 min", description: "Comprehensive health checkup" },
+        { id: "default-2", name: "Vaccination", price: 120, duration: "20 min", description: "Core vaccines for pets" }
+      ];
 
   const selected = selectedService || services[0];
   const serviceFee = Math.round(selected.price * 0.10 * 100) / 100;
@@ -212,10 +216,10 @@ const VeterinaryDetail = () => {
                 <div className="space-y-3">
                   {services.map((service: any) => (
                     <div
-                      key={service.name}
+                      key={service.id || service.name}
                       onClick={() => setSelectedService(service)}
                       className={`p-4 rounded-xl border-2 cursor-pointer transition-all ${
-                        selected.name === service.name
+                        selected.id === service.id || selected.name === service.name
                           ? "border-primary bg-primary/5"
                           : "border-border hover:border-primary/50"
                       }`}
@@ -230,7 +234,7 @@ const VeterinaryDetail = () => {
                           </div>
                         </div>
                         <div className="text-right">
-                          <p className="text-xl font-bold text-foreground">${service.price}</p>
+                          <p className="text-xl font-bold text-foreground">₱{service.price}</p>
                         </div>
                       </div>
                     </div>
@@ -247,7 +251,7 @@ const VeterinaryDetail = () => {
                   <span className="font-medium">{selected.name}</span>
                 </div>
                 <div className="flex items-baseline gap-2 mb-6">
-                  <span className="text-3xl font-bold text-foreground">${selected.price}</span>
+                  <span className="text-3xl font-bold text-foreground">₱{selected.price}</span>
                   <span className="text-muted-foreground">• {selected.duration}</span>
                 </div>
 
@@ -255,19 +259,19 @@ const VeterinaryDetail = () => {
                 <div className="border-t border-border pt-4 mb-4 space-y-2">
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">{selected.name}</span>
-                    <span>${selected.price}</span>
+                    <span>₱{selected.price}</span>
                   </div>
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">Service fee (10%)</span>
-                    <span>${serviceFee}</span>
+                    <span>₱{serviceFee}</span>
                   </div>
                   <div className="flex justify-between font-semibold pt-2 border-t border-border">
                     <span>Total</span>
-                    <span>${selected.price + serviceFee}</span>
+                    <span>₱{selected.price + serviceFee}</span>
                   </div>
                 </div>
 
-                <Link to="/booking" state={{ shop: { type: "veterinary", name: property.name, location: property.city, image: coverImage, price: selected.price, serviceName: selected.name, propertyId: property.id, qrCodeGCash: property.qrCodeGCash, qrCodePayMaya: property.qrCodePayMaya, acceptedPaymentMethods: property.acceptedPaymentMethods } }}>
+                <Link to="/booking" state={{ shop: { type: "veterinary", name: property.name, location: property.city, image: coverImage, price: selected.price, serviceName: selected.name, serviceId: selected.id, propertyId: property.id } }}>
                   <Button variant="hero" size="lg" className="w-full mb-4">
                     Book Appointment
                   </Button>

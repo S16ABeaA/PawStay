@@ -1,5 +1,5 @@
 import { Request, Response } from "express";
-import { getProperties, getRandomProperties, HotelFilters } from "../services/property.service";
+import { getProperties, getPropertyById, HotelFilters } from "../services/property.service";
 
 export const propertyController = {
   searchProperties: async (req: Request, res: Response) => {
@@ -63,10 +63,33 @@ export const propertyController = {
   randomProperties: async (req: Request, res: Response) => {
     try {
       const limit = Number(req.body?.limit) || 6;
-      const properties = await getRandomProperties(limit);
+      // Use getProperties with no filters to get all, then shuffle and slice
+      const allProperties = await getProperties({});
+      const shuffled = allProperties.sort(() => Math.random() - 0.5);
+      const properties = shuffled.slice(0, limit);
       res.status(200).json({ properties });
     } catch (err: any) {
       res.status(500).json({ message: err.message || "Failed to fetch random properties" });
+    }
+  },
+
+  getById: async (req: Request, res: Response) => {
+    try {
+      const id = req.params.id as string;
+      
+      // Basic UUID validation regex
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!id || !uuidRegex.test(id)) {
+        return res.status(400).json({ message: "Invalid Property ID format" });
+      }
+      
+      const property = await getPropertyById(id);
+      if (!property) {
+        return res.status(404).json({ message: "Property not found" });
+      }
+      res.status(200).json({ property });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message || "Failed to fetch property" });
     }
   },
 };

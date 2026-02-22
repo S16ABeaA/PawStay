@@ -6,5 +6,6 @@ const router = Router();
 router.get("/search", propertyController.searchProperties);
 router.post("/search", propertyController.searchProperties);
 router.post("/randomproperty", propertyController.randomProperties);
+router.get("/:id", propertyController.getById);
 
 export default router;

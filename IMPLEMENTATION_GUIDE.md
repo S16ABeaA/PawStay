@@ -8,54 +8,92 @@ Successfully connected the PawStay frontend (Hotels, Veterinary sections) with t
 
 ## What Was Changed
 
-### 1. API Service Layer
-**File:** `src/services/propertyApi.ts`
+### 1. Backend API Changes
 
-Added the `fetchPropertyById()` function to fetch individual properties by ID:
+**File:** `backend/services/property.service.ts`
+
+Added `getPropertyById()` function to fetch individual properties with all related data:
 ```typescript
-export async function fetchPropertyById(id: string) {
-  const res = await fetch("/api/properties/search", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ keyword: id }),
-  });
-  if (!res.ok) throw new Error("Failed to fetch property details");
-  const data = await res.json();
-  return data.properties[0];
+export async function getPropertyById(id: string) {
+  const { data, error } = await supabaseAdmin
+    .from("properties")
+    .select(`
+      *,
+      property_amenities(amenity_id, amenities(amenity)),
+      property_services(id, name, category, price, duration_minutes, description, is_active)
+    `)
+    .eq("id", id)
+    .single();
+  // ... returns property with cheapest_service_price
 }
 ```
 
-### 2. Hotels Pages
+**File:** `backend/controllers/propertyController.ts`
+
+Added `getById` controller method:
+```typescript
+getById: async (req: Request, res: Response) => {
+  const id = req.params.id as string;
+  const property = await getPropertyById(id);
+  res.status(200).json({ property });
+}
+```
+
+**File:** `backend/routes/searchRoute.ts`
+
+Added new route for fetching by ID:
+```typescript
+router.get("/:id", propertyController.getById);
+```
+
+### 2. Frontend API Service
+**File:** `src/services/propertyApi.ts`
+
+Updated `fetchPropertyById()` to use the new dedicated endpoint:
+```typescript
+export async function fetchPropertyById(id: string) {
+  const res = await fetch(`/api/properties/${id}`, {
+    method: "GET",
+    headers: { "Content-Type": "application/json" },
+  });
+  if (!res.ok) throw new Error("Failed to fetch property details");
+  const data = await res.json();
+  return data.property;
+}
+```
+
+### 3. Hotels Pages
 **Files:** `src/pages/Hotels.tsx`, `src/pages/HotelDetail.tsx`
 
 **Hotels.tsx:**
-- Replaced 8 hardcoded hotels with dynamic fetching
+- Replaced hardcoded hotels with dynamic fetching
 - Added state management for loading and data
-- Filters: `propertyType: "hotel"`, `serviceCategory: "Boarding"`
-- Price range slider triggers re-fetching with new filters
+- Filters: `propertyType: "hotel"`, location, minPrice, maxPrice
+- Price range slider + location input triggers re-fetching
 - Loading states and empty state handling
 
 **HotelDetail.tsx:**
-- Removed static `hotelData` constant
-- Fetches property by ID from backend on mount
-- Maps Supabase data to component format
-- Preserves favorite functionality with existing API
+- Uses `fetchPropertyById()` with new GET `/api/properties/:id` endpoint
+- Displays actual property_services from database (selectable)
+- Shows amenities from property_amenities
+- Booking button passes selected service ID and price
+- Favorite functionality preserved
 
-### 3. Veterinary Pages
+### 4. Veterinary Pages
 **Files:** `src/pages/Veterinary.tsx`, `src/pages/VeterinaryDetail.tsx`
 
 **Veterinary.tsx:**
-- Replaced 8 hardcoded clinics with dynamic fetching
-- Added state management for loading and data
-- Filters: `propertyType: "veterinary"`, `serviceCategory: "Veterinary"`
-- Price range slider triggers re-fetching with new filters
+- Replaced hardcoded clinics with dynamic fetching
+- Added filters sidebar (location, price range)
+- Filters: `propertyType: "veterinary"`, location, minPrice, maxPrice
 - Loading states and empty state handling
 
 **VeterinaryDetail.tsx:**
-- Removed static `veterinaryData` and `defaultData` objects
-- Fetches property by ID from backend on mount
-- Maps Supabase data to component format
-- Preserves favorite functionality with existing API
+- Uses `fetchPropertyById()` with new GET `/api/properties/:id` endpoint
+- Displays actual property_services from database (selectable)
+- Service selection updates price and booking data
+- Booking button passes selected service ID and price
+- Favorite functionality preserved
 
 ---
 
@@ -331,12 +369,14 @@ const mapped = useMemo(() => {
 
 | File | Changes | Status |
 |------|---------|--------|
-| `src/services/propertyApi.ts` | Added `fetchPropertyById()` | ✅ Complete |
-| `src/pages/Hotels.tsx` | Dynamic fetching, state management | ✅ Complete |
-| `src/pages/Veterinary.tsx` | Dynamic fetching, state management | ✅ Complete |
-| `src/pages/HotelDetail.tsx` | Dynamic fetching by ID | ✅ Complete |
-| `src/pages/VeterinaryDetail.tsx` | Dynamic fetching by ID | ✅ Complete |
-| `backend/services/property.service.ts` | No changes needed | ✅ Compatible |
+| `src/services/propertyApi.ts` | Updated `fetchPropertyById()` to use GET endpoint | ✅ Complete |
+| `src/pages/Hotels.tsx` | Dynamic fetching, filters, empty state | ✅ Complete |
+| `src/pages/Veterinary.tsx` | Dynamic fetching, filters sidebar, empty state | ✅ Complete |
+| `src/pages/HotelDetail.tsx` | Fetch by ID, service selection, booking integration | ✅ Complete |
+| `src/pages/VeterinaryDetail.tsx` | Fetch by ID, service selection, booking integration | ✅ Complete |
+| `backend/services/property.service.ts` | Added `getPropertyById()` function | ✅ Complete |
+| `backend/controllers/propertyController.ts` | Added `getById` controller | ✅ Complete |
+| `backend/routes/searchRoute.ts` | Added GET `/:id` route | ✅ Complete |
 
 ---
 

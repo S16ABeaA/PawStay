@@ -20,20 +20,24 @@ const Hotels = () => {
   const loadHotels = async () => {
     setLoading(true);
     try {
+      // Pass explicit filters to the API
       const data = await fetchProperties({
         propertyType: "hotel",
-        location: location || undefined,
-        minPrice: priceRange[0] > 0 ? priceRange[0] : undefined,
+        serviceCategory: "Boarding", // Only look at hotel/boarding prices
+        location: location.trim() || undefined,
+        minPrice: priceRange[0],
         maxPrice: priceRange[1],
       });
-      setHotels(data);
+      setHotels(data || []);
     } catch (err) {
-      console.error(err);
+      console.error("Filter Error:", err);
+      setHotels([]);
     } finally {
       setLoading(false);
     }
   };
 
+  // Run on initial mount
   useEffect(() => {
     loadHotels();
   }, []);
@@ -64,14 +68,26 @@ const Hotels = () => {
             <aside className={`lg:w-72 shrink-0 ${showFilters ? 'block' : 'hidden lg:block'}`}>
               <div className="bg-card rounded-2xl p-6 shadow-soft sticky top-24 border">
                 <h3 className="font-semibold text-lg mb-6">Filters</h3>
+                
+                {/* Location Input */}
                 <div className="mb-6">
                   <label className="text-sm font-medium text-foreground mb-2 block">Location</label>
-                  <Input value={location} onChange={(e) => setLocation(e.target.value)} placeholder="City..." />
+                  <Input 
+                    value={location} 
+                    onChange={(e) => setLocation(e.target.value)} 
+                    placeholder="e.g. Makati" 
+                    onKeyDown={(e) => e.key === 'Enter' && loadHotels()}
+                  />
                 </div>
+                
+                {/* Price Slider */}
                 <div className="mb-6">
-                  <label className="text-sm font-medium text-foreground mb-4 block">Max Price: ₱{priceRange[1]}</label>
+                  <label className="text-sm font-medium text-foreground mb-4 block">
+                    Price: ₱{priceRange[0]} - ₱{priceRange[1]}
+                  </label>
                   <Slider value={priceRange} onValueChange={setPriceRange} max={10000} step={100} />
                 </div>
+                
                 <Button variant="hero" className="w-full" onClick={loadHotels}>Apply Filters</Button>
               </div>
             </aside>
@@ -79,6 +95,8 @@ const Hotels = () => {
             <div className="flex-1">
               {loading ? (
                 <div className="flex justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
+              ) : hotels.length === 0 ? (
+                <div className="text-center py-20 text-muted-foreground">No hotels found. Try adjusting your filters.</div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
                   {hotels.map((h) => (

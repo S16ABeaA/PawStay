@@ -5,23 +5,40 @@ import VeterinaryCard from "@/components/VeterinaryCard";
 import { fetchProperties } from "@/services/propertyApi";
 import { Loader2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Slider } from "@/components/ui/slider";
 
 const Veterinary = () => {
   const [clinics, setClinics] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [priceRange, setPriceRange] = useState([0, 5000]);
+  const [location, setLocation] = useState("");
+  const [showFilters, setShowFilters] = useState(false);
 
+  const loadClinics = async () => {
+    setLoading(true);
+    try {
+      // Pass explicit filters to the API
+      const data = await fetchProperties({
+        propertyType: "veterinary",
+        serviceCategory: "Veterinary", // Only look at veterinary service prices
+        location: location.trim() || undefined,
+        minPrice: priceRange[0],
+        maxPrice: priceRange[1],
+      });
+      setClinics(data || []);
+    } catch (err) {
+      console.error("Filter Error:", err);
+      setClinics([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Run on initial mount
   useEffect(() => {
-    const loadVets = async () => {
-      try {
-        const data = await fetchProperties({ propertyType: "veterinary" });
-        setClinics(data);
-      } catch (err) {
-        console.error(err);
-      } finally {
-        setLoading(false);
-      }
-    };
-    loadVets();
+    loadClinics();
   }, []);
 
   return (
@@ -45,25 +62,68 @@ const Veterinary = () => {
         </div>
       </section>
 
-      <main className="container py-12">
-        <h1 className="text-4xl font-bold mb-8">Veterinary Clinics</h1>
-        {loading ? (
-          <div className="flex justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {clinics.map((c) => (
-              <VeterinaryCard key={c.id} clinic={{
-                ...c,
-                image: c.cover_image || "https://images.unsplash.com/photo-1628009368231-7bb7cfcb0def?w=800",
-                location: c.city,
-                price: c.cheapest_service_price,
-                services: ["Consultation", "Vaccination"],
-                rating: c.rating || 0,
-                reviews: c.review_count || 0
-              }} />
-            ))}
+      <main className="py-8">
+        <div className="container">
+          <div className="flex flex-col lg:flex-row gap-8">
+            {/* Filters Sidebar */}
+            <aside className={`lg:w-72 shrink-0 ${showFilters ? 'block' : 'hidden lg:block'}`}>
+              <div className="bg-card rounded-2xl p-6 shadow-soft sticky top-24 border">
+                <h3 className="font-semibold text-lg mb-6">Filters</h3>
+                
+                {/* Location Input */}
+                <div className="mb-6">
+                  <label className="text-sm font-medium text-foreground mb-2 block">Location</label>
+                  <Input 
+                    value={location} 
+                    onChange={(e) => setLocation(e.target.value)} 
+                    placeholder="e.g. Makati" 
+                    onKeyDown={(e) => e.key === 'Enter' && loadClinics()}
+                  />
+                </div>
+                
+                {/* Price Slider */}
+                <div className="mb-6">
+                  <label className="text-sm font-medium text-foreground mb-4 block">
+                    Price: ₱{priceRange[0]} - ₱{priceRange[1]}
+                  </label>
+                  <Slider value={priceRange} onValueChange={setPriceRange} max={10000} step={100} />
+                </div>
+                
+                <Button variant="hero" className="w-full" onClick={loadClinics}>Apply Filters</Button>
+              </div>
+            </aside>
+
+            {/* Results */}
+            <div className="flex-1">
+              <div className="flex items-center justify-between mb-6 lg:hidden">
+                <h2 className="text-2xl font-bold">Veterinary Clinics</h2>
+                <Button variant="outline" onClick={() => setShowFilters(!showFilters)}>
+                  {showFilters ? 'Hide Filters' : 'Show Filters'}
+                </Button>
+              </div>
+              
+              {loading ? (
+                <div className="flex justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
+              ) : clinics.length === 0 ? (
+                <div className="text-center py-20 text-muted-foreground">No clinics found. Try adjusting your filters.</div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                  {clinics.map((c) => (
+                    <VeterinaryCard key={c.id} clinic={{
+                      ...c,
+                      image: c.cover_image || "https://images.unsplash.com/photo-1628009368231-7bb7cfcb0def?w=800",
+                      location: c.city,
+                      price: c.cheapest_service_price,
+                      services: ["Consultation", "Vaccination"],
+                      rating: c.rating || 0,
+                      reviews: c.review_count || 0
+                    }} />
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
-        )}
+        </div>
       </main>
       <Footer />
     </div>

@@ -69,15 +69,17 @@ export async function getProperties(filters: HotelFilters = {}) {
   // When lat/lng are provided, skip text-based location filter
   // (geo filter is applied post-query below)
   if (filters.location && filters.lat == null) {
-    const loc = filters.location;
-    const orParts: string[] = [];
-    if (has("city"))     orParts.push(`city.ilike.%${loc}%`);
-    if (has("location")) orParts.push(`location.ilike.%${loc}%`);
-    if (has("address"))  orParts.push(`address.ilike.%${loc}%`);
-    if (has("name"))     orParts.push(`name.ilike.%${loc}%`);
+    const loc = filters.location.trim();
+    if (loc) {
+      const orParts: string[] = [];
+      if (has("city"))     orParts.push(`city.ilike.%${loc}%`);
+      if (has("location")) orParts.push(`location.ilike.%${loc}%`);
+      if (has("address"))  orParts.push(`address.ilike.%${loc}%`);
+      if (has("name"))     orParts.push(`name.ilike.%${loc}%`);
 
-    if (orParts.length) {
-      query = query.or(orParts.join(","));
+      if (orParts.length) {
+        query = query.or(orParts.join(","));
+      }
     }
   }
 
@@ -333,42 +335,39 @@ export async function getProperties(filters: HotelFilters = {}) {
     }
   }
 
-  // ── Service category filter (per-service, not per-property) ──
-  if (filters.serviceCategory) {
-    const cat = filters.serviceCategory;
-    let svcQuery = supabaseAdmin
-      .from("property_services")
-      .select("property_id, price")
-      .eq("category", cat)
-      .eq("is_active", true)
-      .eq("is_deleted", false);
-
-    // Scope price range to this category
-    if (filters.minPrice !== undefined) svcQuery = svcQuery.gte("price", filters.minPrice);
-    if (filters.maxPrice !== undefined) svcQuery = svcQuery.lte("price", filters.maxPrice);
-
-    const { data: svcRows, error: svcErr } = await svcQuery;
-    if (svcErr) { console.error("[getProperties] serviceCategory lookup", svcErr); throw svcErr; }
-
-    const matchedIds = [...new Set((svcRows ?? []).map((r) => String(r.property_id)))];
-    if (matchedIds.length === 0) return [];
-    query = query.in("id", matchedIds);
-  } else if (filters.minPrice !== undefined || filters.maxPrice !== undefined) {
-    // Price filter across all services when no category is specified
+  // ── COMBINED SERVICE FILTER (Category + Price) ──
+  // This logic finds all properties that have at least one service 
+  // matching the category AND the price range.
+  if (filters.serviceCategory || filters.minPrice !== undefined || filters.maxPrice !== undefined) {
     let svcQuery = supabaseAdmin
       .from("property_services")
       .select("property_id")
       .eq("is_active", true)
       .eq("is_deleted", false);
 
-    if (filters.minPrice !== undefined) svcQuery = svcQuery.gte("price", filters.minPrice);
-    if (filters.maxPrice !== undefined) svcQuery = svcQuery.lte("price", filters.maxPrice);
+    if (filters.serviceCategory) {
+      svcQuery = svcQuery.eq("category", filters.serviceCategory);
+    }
+    if (filters.minPrice !== undefined) {
+      svcQuery = svcQuery.gte("price", filters.minPrice);
+    }
+    if (filters.maxPrice !== undefined) {
+      svcQuery = svcQuery.lte("price", filters.maxPrice);
+    }
 
     const { data: svcRows, error: svcErr } = await svcQuery;
-    if (svcErr) { console.error("[getProperties] price filter lookup", svcErr); throw svcErr; }
+    if (svcErr) {
+      console.error("[getProperties] service filter lookup", svcErr);
+      throw svcErr;
+    }
 
+    // Get unique property IDs that matched the service criteria
     const matchedIds = [...new Set((svcRows ?? []).map((r) => String(r.property_id)))];
+    
+    // If no services matched the price/category, return empty immediately
     if (matchedIds.length === 0) return [];
+
+    // Filter properties to only those that have matching services
     query = query.in("id", matchedIds);
   }
 
@@ -442,39 +441,8 @@ export async function getProperties(filters: HotelFilters = {}) {
   }));
 }
 
-export async function getRandomProperties(limit: number = 6) {
-  // Fetch all approved, non-deleted property IDs
-  let idQuery = supabaseAdmin
-    .from("properties")
-    .select("id");
-
-  // Check columns dynamically (same pattern as getProperties)
-  const { data: sample } = await supabaseAdmin
-    .from("properties")
-    .select("*")
-    .limit(1);
-
-  const columns = sample?.[0] ? Object.keys(sample[0]) : [];
-  const has = (col: string) => columns.includes(col);
-
-  if (has("status")) idQuery = idQuery.eq("status", "approved");
-  if (has("is_deleted")) idQuery = idQuery.eq("is_deleted", false);
-
-  const { data: allIds, error: idError } = await idQuery;
-
-  if (idError) {
-    console.error("[getRandomProperties]", idError);
-    throw idError;
-  }
-
-  if (!allIds || allIds.length === 0) return [];
-
-  // Shuffle and pick `limit` random IDs
-  const shuffled = allIds.sort(() => Math.random() - 0.5);
-  const selected = shuffled.slice(0, Math.min(limit, shuffled.length));
-  const selectedIds = selected.map((row) => row.id);
-
-  // Fetch full property data for selected IDs
+// ── Get Single Property by ID ──
+export async function getPropertyById(id: string) {
   const { data, error } = await supabaseAdmin
     .from("properties")
     .select(`
@@ -482,44 +450,34 @@ export async function getRandomProperties(limit: number = 6) {
       property_amenities(
         amenity_id,
         amenities(amenity)
+      ),
+      property_services(
+        id,
+        name,
+        category,
+        price,
+        description,
+        is_active
       )
     `)
-    .in("id", selectedIds);
+    .eq("id", id)
+    .single();
 
   if (error) {
-    console.error("[getRandomProperties]", error);
+    console.error("[getPropertyById]", error);
     throw error;
   }
 
-  const rows = data || [];
-  if (rows.length === 0) return [];
+  if (!data) return null;
 
-  // Attach cheapest service price
-  const propertyIds = rows.map((p: any) => p.id);
+  // Get cheapest service price
+  const activeServices = data.property_services?.filter((s: any) => s.is_active) || [];
+  const cheapestPrice = activeServices.length > 0
+    ? Math.min(...activeServices.map((s: any) => Number(s.price || 0)))
+    : null;
 
-  const { data: serviceRows, error: serviceError } = await supabaseAdmin
-    .from("property_services")
-    .select("property_id, price")
-    .in("property_id", propertyIds)
-    .eq("is_active", true)
-    .eq("is_deleted", false)
-    .order("price", { ascending: true });
-
-  if (serviceError) {
-    console.error("[getRandomProperties] service price lookup", serviceError);
-    throw serviceError;
-  }
-
-  const cheapestByProperty = new Map<string, number>();
-  for (const row of serviceRows ?? []) {
-    const pid = String(row.property_id);
-    if (!cheapestByProperty.has(pid)) {
-      cheapestByProperty.set(pid, Number(row.price ?? 0));
-    }
-  }
-
-  return rows.map((p: any) => ({
-    ...p,
-    cheapest_service_price: cheapestByProperty.get(String(p.id)) ?? null,
-  }));
+  return {
+    ...data,
+    cheapest_service_price: cheapestPrice,
+  };
 }
