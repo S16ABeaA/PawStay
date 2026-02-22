@@ -29,3 +29,16 @@ export async function fetchProperties(filters: PropertyFilters) {
   const data = await res.json();
   return data.properties;
 }
+
+export async function fetchPropertyById(id: string) {
+  const res = await fetch("/api/properties/search", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ keyword: id }),
+  });
+
+  if (!res.ok) throw new Error("Failed to fetch property details");
+
+  const data = await res.json();
+  return data.properties[0];
+}
