@@ -25,18 +25,11 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Search, Download, Eye, CheckCircle, XCircle } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
+import { authHelper } from "@/helpers/authHelper";
 
-const initialBookings = [
-  { id: "BK001", pet: "Max", owner: "John Smith", email: "john@email.com", service: "Boarding", checkIn: "2026-01-30", checkOut: "2026-02-02", status: "confirmed", amount: "$180" },
-  { id: "BK002", pet: "Bella", owner: "Sarah Johnson", email: "sarah@email.com", service: "Grooming", checkIn: "2026-01-30", checkOut: "-", status: "pending", amount: "$65" },
-  { id: "BK003", pet: "Charlie", owner: "Mike Brown", email: "mike@email.com", service: "Boarding", checkIn: "2026-01-31", checkOut: "2026-02-05", status: "confirmed", amount: "$300" },
-  { id: "BK004", pet: "Luna", owner: "Emily Davis", email: "emily@email.com", service: "Daycare", checkIn: "2026-01-31", checkOut: "-", status: "pending", amount: "$45" },
-  { id: "BK005", pet: "Cooper", owner: "Alex Wilson", email: "alex@email.com", service: "Boarding", checkIn: "2026-02-01", checkOut: "2026-02-03", status: "confirmed", amount: "$120" },
-  { id: "BK006", pet: "Bailey", owner: "Lisa Chen", email: "lisa@email.com", service: "Grooming", checkIn: "2026-02-01", checkOut: "-", status: "cancelled", amount: "$85" },
-  { id: "BK007", pet: "Rocky", owner: "Tom Harris", email: "tom@email.com", service: "Boarding", checkIn: "2026-02-02", checkOut: "2026-02-07", status: "confirmed", amount: "$375" },
-];
+const initialBookings: any[] = [];
 
 const AdminBookings = () => {
   const [bookings, setBookings] = useState(initialBookings);
@@ -46,15 +39,28 @@ const AdminBookings = () => {
   const [statusFilter, setStatusFilter] = useState("all");
   const [serviceFilter, setServiceFilter] = useState("all");
   const { toast } = useToast();
+  const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5001';
 
-  const handleConfirm = (id: string) => {
-    setBookings(bookings.map(b => b.id === id ? { ...b, status: "confirmed" } : b));
-    toast({ title: "Booking Confirmed", description: `Booking ${id} has been confirmed.` });
+  const handleConfirm = async (id: string) => {
+    try {
+      await authHelper.post(`${API_BASE_URL}/api/bookings/${id}/status`, { status: 'confirmed' });
+      setBookings((prev) => prev.map(b => b.id === id ? { ...b, status: 'confirmed' } : b));
+      toast({ title: 'Booking Confirmed', description: `Booking ${id} has been confirmed.` });
+    } catch (err: any) {
+      console.error('Confirm failed', err);
+      toast({ title: 'Error', description: err?.message || 'Failed to confirm booking', variant: 'destructive' });
+    }
   };
 
-  const handleCancel = (id: string) => {
-    setBookings(bookings.map(b => b.id === id ? { ...b, status: "cancelled" } : b));
-    toast({ title: "Booking Cancelled", description: `Booking ${id} has been cancelled.`, variant: "destructive" });
+  const handleCancel = async (id: string) => {
+    try {
+      await authHelper.post(`${API_BASE_URL}/api/bookings/${id}/status`, { status: 'cancelled' });
+      setBookings((prev) => prev.map(b => b.id === id ? { ...b, status: 'cancelled' } : b));
+      toast({ title: 'Booking Cancelled', description: `Booking ${id} has been cancelled.`, variant: 'destructive' });
+    } catch (err: any) {
+      console.error('Cancel failed', err);
+      toast({ title: 'Error', description: err?.message || 'Failed to cancel booking', variant: 'destructive' });
+    }
   };
 
   const handleView = (booking: typeof initialBookings[0]) => {
@@ -74,6 +80,30 @@ const AdminBookings = () => {
     const matchesService = serviceFilter === "all" || b.service.toLowerCase() === serviceFilter;
     return matchesSearch && matchesStatus && matchesService;
   });
+
+  useEffect(() => {
+    const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5001';
+    const fetchBookings = async () => {
+      try {
+        const data = await authHelper.get(`${API_BASE_URL}/api/bookings/mine/list`);
+        setBookings((data.bookings || []).map((b: any) => ({
+          id: b.id,
+          pet: b.pet_name,
+          owner: b.owner_name,
+          email: '',
+          service: b.service_type,
+          checkIn: b.checkin,
+          checkOut: b.checkout || '-',
+          status: b.status,
+          amount: b.total_price ? `$${Number(b.total_price).toFixed(2)}` : '-',
+        })));
+      } catch (err) {
+        console.error('Failed to load bookings', err);
+      }
+    };
+
+    fetchBookings();
+  }, []);
 
   return (
     <AdminLayout title="Bookings" subtitle="Manage all your reservations and appointments">

@@ -5,23 +5,84 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Link, useNavigate } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { authHelper } from "@/helpers/authHelper";
 
-const recentBookings = [
-  { id: 1, pet: "Max", owner: "John Smith", service: "Boarding", date: "Jan 30", status: "confirmed" },
-  { id: 2, pet: "Bella", owner: "Sarah Johnson", service: "Grooming", date: "Jan 30", status: "pending" },
-  { id: 3, pet: "Charlie", owner: "Mike Brown", service: "Boarding", date: "Jan 31", status: "confirmed" },
-  { id: 4, pet: "Luna", owner: "Emily Davis", service: "Daycare", date: "Jan 31", status: "pending" },
-  { id: 5, pet: "Cooper", owner: "Alex Wilson", service: "Boarding", date: "Feb 1", status: "confirmed" },
-];
+const recentBookings = [];
 
-const upcomingCheckIns = [
-  { pet: "Max", owner: "John Smith", time: "10:00 AM", room: "Suite A" },
-  { pet: "Charlie", owner: "Mike Brown", time: "2:00 PM", room: "Standard 3" },
-  { pet: "Cooper", owner: "Alex Wilson", time: "4:30 PM", room: "Suite B" },
-];
+const upcomingCheckIns: any[] = [];
 
 const AdminDashboard = () => {
   const navigate = useNavigate();
+  const [properties, setProperties] = useState<any[]>([]);
+  const [loadingProps, setLoadingProps] = useState(false);
+  const [stats, setStats] = useState({ totalBookings: 0, revenue: 0, avgRating: 0, occupancy: 0 });
+  const [loadingStats, setLoadingStats] = useState(false);
+  const [todayCheckIns, setTodayCheckIns] = useState<any[]>([]);
+  const [loadingCheckIns, setLoadingCheckIns] = useState(false);
+  const [recentBookings, setRecentBookings] = useState<any[]>([]);
+  const [loadingRecent, setLoadingRecent] = useState(false);
+
+  useEffect(() => {
+    const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5001";
+    const fetchMyProperties = async () => {
+      try {
+        setLoadingProps(true);
+        const data = await authHelper.get(`${API_BASE_URL}/api/properties/mine`);
+        setProperties(data.properties || []);
+      } catch (err) {
+        console.error("Failed to load properties", err);
+      } finally {
+        setLoadingProps(false);
+      }
+    };
+
+    const fetchStats = async () => {
+      try {
+        setLoadingStats(true);
+        const data = await authHelper.get(`${API_BASE_URL}/api/properties/mine/stats`);
+        setStats({
+          totalBookings: data.totalBookings || 0,
+          revenue: data.revenue || 0,
+          avgRating: data.avgRating || 0,
+          occupancy: data.occupancy || 0,
+        });
+      } catch (err) {
+        console.error('Failed to load dashboard stats', err);
+      } finally {
+        setLoadingStats(false);
+      }
+    };
+
+    fetchMyProperties();
+    fetchStats();
+    const fetchCheckIns = async () => {
+      try {
+        setLoadingCheckIns(true);
+        const data = await authHelper.get(`${API_BASE_URL}/api/bookings/mine/today`);
+        setTodayCheckIns(data.checkIns || []);
+      } catch (err) {
+        console.error('Failed to load today check-ins', err);
+      } finally {
+        setLoadingCheckIns(false);
+      }
+    };
+
+    fetchCheckIns();
+    const fetchRecent = async () => {
+      try {
+        setLoadingRecent(true);
+        const data = await authHelper.get(`${API_BASE_URL}/api/bookings/mine/recent`);
+        setRecentBookings(data.bookings || []);
+      } catch (err) {
+        console.error('Failed to load recent bookings', err);
+      } finally {
+        setLoadingRecent(false);
+      }
+    };
+
+    fetchRecent();
+  }, []);
 
   return (
     <AdminLayout title="Dashboard" subtitle="Welcome back! Here's your business overview.">
@@ -30,8 +91,8 @@ const AdminDashboard = () => {
         <div onClick={() => navigate('/admin/bookings')} className="cursor-pointer">
           <StatsCard
             title="Total Bookings"
-            value="156"
-            change="+12% from last month"
+            value={loadingStats ? '...' : String(stats.totalBookings)}
+            change=""
             changeType="positive"
             icon={Calendar}
             iconColor="text-primary"
@@ -40,8 +101,8 @@ const AdminDashboard = () => {
         <div onClick={() => navigate('/admin/settings')} className="cursor-pointer">
           <StatsCard
             title="Revenue"
-            value="$12,450"
-            change="+8% from last month"
+            value={loadingStats ? '...' : `$${Number(stats.revenue || 0).toFixed(2)}`}
+            change=""
             changeType="positive"
             icon={DollarSign}
             iconColor="text-success"
@@ -50,8 +111,8 @@ const AdminDashboard = () => {
         <div onClick={() => navigate('/admin/reviews')} className="cursor-pointer">
           <StatsCard
             title="Avg. Rating"
-            value="4.8"
-            change="Based on 89 reviews"
+            value={loadingStats ? '...' : String(stats.avgRating)}
+            change={loadingStats ? '' : `Based on ratings`}
             changeType="neutral"
             icon={Star}
             iconColor="text-rating"
@@ -60,8 +121,8 @@ const AdminDashboard = () => {
         <div onClick={() => navigate('/admin/services')} className="cursor-pointer">
           <StatsCard
             title="Occupancy"
-            value="78%"
-            change="+5% from last week"
+            value={loadingStats ? '...' : `${stats.occupancy}%`}
+            change=""
             changeType="positive"
             icon={TrendingUp}
             iconColor="text-accent"
@@ -80,34 +141,36 @@ const AdminDashboard = () => {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {recentBookings.map((booking) => (
-                <div
-                  key={booking.id}
-                  className="flex items-center justify-between p-3 rounded-lg bg-secondary/50 cursor-pointer hover:bg-secondary/70 transition-colors"
-                  onClick={() => navigate('/admin/bookings')}
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-                      <span className="text-sm font-semibold text-primary">
-                        {booking.pet[0]}
-                      </span>
-                    </div>
-                    <div>
-                      <p className="font-medium text-foreground">{booking.pet}</p>
-                      <p className="text-xs text-muted-foreground">{booking.owner}</p>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-sm text-foreground">{booking.service}</p>
-                    <p className="text-xs text-muted-foreground">{booking.date}</p>
-                  </div>
-                  <Badge
-                    variant={booking.status === "confirmed" ? "default" : "secondary"}
+              {loadingRecent ? (
+                <div className="text-sm text-muted-foreground">Loading recent bookings...</div>
+              ) : recentBookings && recentBookings.length > 0 ? (
+                recentBookings.map((booking) => (
+                  <div
+                    key={booking.id}
+                    className="flex items-center justify-between p-3 rounded-lg bg-secondary/50 cursor-pointer hover:bg-secondary/70 transition-colors"
+                    onClick={() => navigate('/admin/bookings')}
                   >
-                    {booking.status}
-                  </Badge>
-                </div>
-              ))}
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+                        <span className="text-sm font-semibold text-primary">{booking.pet?.[0] ?? 'P'}</span>
+                      </div>
+                      <div>
+                        <p className="font-medium text-foreground">{booking.pet}</p>
+                        <p className="text-xs text-muted-foreground">{booking.owner}</p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm text-foreground">{booking.service}</p>
+                      <p className="text-xs text-muted-foreground">{booking.date}</p>
+                    </div>
+                    <Badge variant={booking.status === 'confirmed' ? 'default' : 'secondary'}>
+                      {booking.status}
+                    </Badge>
+                  </div>
+                ))
+              ) : (
+                <div className="text-sm text-muted-foreground">No recent bookings.</div>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -122,21 +185,28 @@ const AdminDashboard = () => {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {upcomingCheckIns.map((checkIn, i) => (
-                <div key={i} className="flex items-center gap-3 p-3 rounded-lg border border-border">
-                  <div className="w-10 h-10 rounded-full bg-accent/10 flex items-center justify-center">
-                    <Users className="h-5 w-5 text-accent" />
+              {loadingCheckIns ? (
+                <div className="text-sm text-muted-foreground">Loading check-ins...</div>
+              ) : todayCheckIns && todayCheckIns.length > 0 ? (
+                todayCheckIns.map((checkIn) => (
+                  <div key={checkIn.id} className="flex items-center gap-3 p-3 rounded-lg border border-border">
+                    <div className="w-10 h-10 rounded-full bg-accent/10 flex items-center justify-center">
+                      <Users className="h-5 w-5 text-accent" />
+                    </div>
+                    <div className="flex-1">
+                      <p className="font-medium text-foreground">{checkIn.pet}</p>
+                      <p className="text-xs text-muted-foreground">{checkIn.owner}</p>
+                      <p className="text-xs text-muted-foreground">{checkIn.service}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm font-medium text-foreground">{checkIn.time}</p>
+                      <p className="text-xs text-muted-foreground">{checkIn.room}</p>
+                    </div>
                   </div>
-                  <div className="flex-1">
-                    <p className="font-medium text-foreground">{checkIn.pet}</p>
-                    <p className="text-xs text-muted-foreground">{checkIn.owner}</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-sm font-medium text-foreground">{checkIn.time}</p>
-                    <p className="text-xs text-muted-foreground">{checkIn.room}</p>
-                  </div>
-                </div>
-              ))}
+                ))
+              ) : (
+                <div className="text-sm text-muted-foreground">No check-ins for today.</div>
+              )}
             </div>
             <Link to="/admin/bookings">
               <Button variant="outline" className="w-full mt-4">
