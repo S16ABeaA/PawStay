@@ -1,4 +1,4 @@
- import { useState } from "react";
+ import { useState, useEffect } from "react";
  import { Link } from "react-router-dom";
  import Header from "@/components/Header";
  import Footer from "@/components/Footer";
@@ -23,12 +23,13 @@
    Cake,
    Weight
  } from "lucide-react";
+ import { petApi } from "@/services/petApi";
  
  interface ServiceHistory {
    id: string;
    type: "grooming" | "checkup";
    serviceName: string;
-   date: Date;
+   date: string | Date;
    notes?: string;
  }
  
@@ -37,12 +38,24 @@
    name: string;
    species: string;
    breed: string;
-   age: number;
+   birthday: string; // ISO date string (YYYY-MM-DD)
    weight: number;
-   photo: string;
-   notes?: string;
-   serviceHistory: ServiceHistory[];
+   photo_url: string | null;
+   notes?: string | null;
+   serviceHistory?: ServiceHistory[];
  }
+
+ // Calculate age in years from birthday
+ const calculateAge = (birthday: string): number => {
+   const birthDate = new Date(birthday);
+   const today = new Date();
+   let age = today.getFullYear() - birthDate.getFullYear();
+   const monthDiff = today.getMonth() - birthDate.getMonth();
+   if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+     age--;
+   }
+   return age;
+ };
  
  const MyPets = () => {
    const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
@@ -52,10 +65,11 @@
      name: "",
      species: "",
      breed: "",
-     age: "",
+     birthday: "",
      weight: "",
      notes: "",
    });
+   const [loading, setLoading] = useState(true);
 
    const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>, isEdit: boolean = false) => {
      const file = e.target.files?.[0];
@@ -64,7 +78,7 @@
        reader.onloadend = () => {
          const base64 = reader.result as string;
          if (isEdit && editingPet) {
-           setEditingPet({ ...editingPet, photo: base64 });
+           setEditingPet({ ...editingPet, photo_url: base64 });
          } else {
            setNewPetPhoto(base64);
          }
@@ -73,79 +87,102 @@
      }
    };
  
-   // Sample pets data - in real app this would come from database
-   const [pets, setPets] = useState<Pet[]>([
-     {
-       id: "1",
-       name: "Buddy",
-       species: "Dog",
-       breed: "Golden Retriever",
-       age: 3,
-       weight: 30,
-       photo: "",
-       notes: "Friendly and loves to play fetch. Allergic to chicken.",
-       serviceHistory: [
-         { id: "1", type: "grooming", serviceName: "Full Grooming Package", date: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000), notes: "Coat trimmed, nails clipped" },
-         { id: "2", type: "checkup", serviceName: "Annual Vaccination", date: new Date(Date.now() - 15 * 24 * 60 * 60 * 1000), notes: "All vaccines up to date" },
-         { id: "3", type: "grooming", serviceName: "Bath & Brush", date: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) },
-       ]
-     },
-     {
-       id: "2",
-       name: "Whiskers",
-       species: "Cat",
-       breed: "Persian",
-       age: 5,
-       weight: 4.5,
-       photo: "",
-       notes: "Indoor cat, very calm. Prefers quiet environments.",
-       serviceHistory: [
-         { id: "4", type: "checkup", serviceName: "Dental Cleaning", date: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000), notes: "Teeth cleaned, no issues found" },
-         { id: "5", type: "grooming", serviceName: "Fur Detangling", date: new Date(Date.now() - 45 * 24 * 60 * 60 * 1000) },
-       ]
-     },
-   ]);
+   // Pets state — loaded from backend
+   const [pets, setPets] = useState<Pet[]>([]);
+
+   // Fetch pets from backend on mount
+   useEffect(() => {
+     const fetchPets = async () => {
+       try {
+         setLoading(true);
+         const data = await petApi.list();
+         // Map DB rows to local shape (add empty serviceHistory)
+         const mapped = (data.pets ?? []).map((p: any) => ({
+           ...p,
+           serviceHistory: p.serviceHistory ?? [],
+         }));
+         setPets(mapped);
+       } catch (err) {
+         console.error("Failed to load pets:", err);
+       } finally {
+         setLoading(false);
+       }
+     };
+     fetchPets();
+   }, []);
  
-   const getDaysAgo = (date: Date) => {
-     const diffTime = Math.abs(new Date().getTime() - date.getTime());
+   const getDaysAgo = (date: string | Date) => {
+     const d = typeof date === "string" ? new Date(date) : date;
+     const diffTime = Math.abs(new Date().getTime() - d.getTime());
      const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
      if (diffDays === 0) return "Today";
      if (diffDays === 1) return "Yesterday";
      return `${diffDays} days ago`;
    };
  
-   const handleAddPet = () => {
-     // Add new pet to list
-     const pet: Pet = {
-       id: Date.now().toString(),
-       name: newPet.name,
-       species: newPet.species.charAt(0).toUpperCase() + newPet.species.slice(1),
-       breed: newPet.breed,
-       age: parseInt(newPet.age) || 0,
-       weight: parseFloat(newPet.weight) || 0,
-       photo: newPetPhoto,
-       notes: newPet.notes,
-       serviceHistory: [],
-     };
-     setPets([...pets, pet]);
-     setIsAddDialogOpen(false);
-     setNewPet({ name: "", species: "", breed: "", age: "", weight: "", notes: "" });
-     setNewPetPhoto("");
+   const handleAddPet = async () => {
+     // Validate required fields
+     if (!newPet.name.trim() || !newPet.species || !newPet.breed.trim() || !newPet.birthday || !newPet.weight) {
+       alert("Please fill in all required fields (Name, Species, Breed, Birthday, and Weight)");
+       return;
+     }
+
+     try {
+       const data = await petApi.create({
+         name: newPet.name,
+         species: newPet.species.charAt(0).toUpperCase() + newPet.species.slice(1),
+         breed: newPet.breed,
+         birthday: newPet.birthday,
+         weight: parseFloat(newPet.weight) || 0,
+         photo_url: newPetPhoto || null,
+         notes: newPet.notes || null,
+       });
+
+       const created: Pet = { ...data.pet, serviceHistory: [] };
+       setPets([created, ...pets]);
+       setIsAddDialogOpen(false);
+       setNewPet({ name: "", species: "", breed: "", birthday: "", weight: "", notes: "" });
+       setNewPetPhoto("");
+     } catch (err) {
+       console.error("Failed to add pet:", err);
+       alert("Failed to add pet. Please try again.");
+     }
    };
  
    const handleEditPet = (pet: Pet) => {
      setEditingPet(pet);
    };
  
-   const handleSaveEdit = () => {
+   const handleSaveEdit = async () => {
      if (!editingPet) return;
-     setPets(pets.map(p => p.id === editingPet.id ? editingPet : p));
-     setEditingPet(null);
+     try {
+       const data = await petApi.update(editingPet.id, {
+         name: editingPet.name,
+         species: editingPet.species,
+         breed: editingPet.breed,
+         birthday: editingPet.birthday,
+         weight: editingPet.weight,
+         photo_url: editingPet.photo_url,
+         notes: editingPet.notes,
+       });
+       const updated: Pet = { ...data.pet, serviceHistory: editingPet.serviceHistory ?? [] };
+       setPets(pets.map(p => p.id === updated.id ? updated : p));
+       setEditingPet(null);
+     } catch (err) {
+       console.error("Failed to update pet:", err);
+       alert("Failed to save changes. Please try again.");
+     }
    };
  
-   const handleDeletePet = (petId: string) => {
-     setPets(pets.filter(p => p.id !== petId));
-     setEditingPet(null);
+   const handleDeletePet = async (petId: string) => {
+     try {
+       await petApi.delete(petId);
+       setPets(pets.filter(p => p.id !== petId));
+       setEditingPet(null);
+     } catch (err) {
+       console.error("Failed to delete pet:", err);
+       alert("Failed to delete pet. Please try again.");
+     }
    };
  
    return (
@@ -204,17 +241,18 @@
                      </div>
                    </div>
                    <div className="space-y-2">
-                     <Label htmlFor="petName">Pet Name</Label>
+                     <Label htmlFor="petName">Pet Name <span className="text-red-500">*</span></Label>
                      <Input
                        id="petName"
                        placeholder="e.g., Buddy"
                        value={newPet.name}
                        onChange={(e) => setNewPet({ ...newPet, name: e.target.value })}
+                       required
                      />
                    </div>
                    <div className="grid grid-cols-2 gap-4">
                      <div className="space-y-2">
-                       <Label htmlFor="species">Species</Label>
+                       <Label htmlFor="species">Species <span className="text-red-500">*</span></Label>
                        <Select value={newPet.species} onValueChange={(v) => setNewPet({ ...newPet, species: v })}>
                          <SelectTrigger>
                            <SelectValue placeholder="Select" />
@@ -229,36 +267,36 @@
                        </Select>
                      </div>
                      <div className="space-y-2">
-                       <Label htmlFor="breed">Breed</Label>
+                       <Label htmlFor="breed">Breed <span className="text-red-500">*</span></Label>
                        <Input
                          id="breed"
                          placeholder="e.g., Golden Retriever"
                          value={newPet.breed}
                          onChange={(e) => setNewPet({ ...newPet, breed: e.target.value })}
+                         required
                        />
                      </div>
                    </div>
-                   <div className="grid grid-cols-2 gap-4">
-                     <div className="space-y-2">
-                       <Label htmlFor="age">Age (years)</Label>
-                       <Input
-                         id="age"
-                         type="number"
-                         placeholder="e.g., 3"
-                         value={newPet.age}
-                         onChange={(e) => setNewPet({ ...newPet, age: e.target.value })}
-                       />
-                     </div>
-                     <div className="space-y-2">
-                       <Label htmlFor="weight">Weight (kg)</Label>
-                       <Input
-                         id="weight"
-                         type="number"
-                         placeholder="e.g., 15"
-                         value={newPet.weight}
-                         onChange={(e) => setNewPet({ ...newPet, weight: e.target.value })}
-                       />
-                     </div>
+                   <div className="space-y-2">
+                     <Label htmlFor="birthday">Birthday <span className="text-red-500">*</span></Label>
+                     <Input
+                       id="birthday"
+                       type="date"
+                       value={newPet.birthday}
+                       onChange={(e) => setNewPet({ ...newPet, birthday: e.target.value })}
+                       required
+                     />
+                   </div>
+                   <div className="space-y-2">
+                     <Label htmlFor="weight">Weight (kg) <span className="text-red-500">*</span></Label>
+                     <Input
+                       id="weight"
+                       type="number"
+                       placeholder="e.g., 15"
+                       value={newPet.weight}
+                       onChange={(e) => setNewPet({ ...newPet, weight: e.target.value })}
+                       required
+                     />
                    </div>
                    <div className="space-y-2">
                      <Label htmlFor="notes">Notes (optional)</Label>
@@ -295,7 +333,7 @@
                    <div className="flex justify-center">
                      <div className="relative">
                        <Avatar className="h-24 w-24 border-4 border-background shadow-elevated">
-                         <AvatarImage src={editingPet.photo} className="object-cover" />
+                         <AvatarImage src={editingPet.photo_url || undefined} className="object-cover" />
                          <AvatarFallback className="bg-gradient-hero text-2xl text-white">
                            {editingPet.name[0]}
                          </AvatarFallback>
@@ -312,16 +350,17 @@
                      </div>
                    </div>
                    <div className="space-y-2">
-                     <Label htmlFor="editPetName">Pet Name</Label>
+                     <Label htmlFor="editPetName">Pet Name <span className="text-red-500">*</span></Label>
                      <Input
                        id="editPetName"
                        value={editingPet.name}
                        onChange={(e) => setEditingPet({ ...editingPet, name: e.target.value })}
+                       required
                      />
                    </div>
                    <div className="grid grid-cols-2 gap-4">
                      <div className="space-y-2">
-                       <Label htmlFor="editSpecies">Species</Label>
+                       <Label htmlFor="editSpecies">Species <span className="text-red-500">*</span></Label>
                        <Select 
                          value={editingPet.species.toLowerCase()} 
                          onValueChange={(v) => setEditingPet({ ...editingPet, species: v.charAt(0).toUpperCase() + v.slice(1) })}
@@ -339,33 +378,34 @@
                        </Select>
                      </div>
                      <div className="space-y-2">
-                       <Label htmlFor="editBreed">Breed</Label>
+                       <Label htmlFor="editBreed">Breed <span className="text-red-500">*</span></Label>
                        <Input
                          id="editBreed"
                          value={editingPet.breed}
                          onChange={(e) => setEditingPet({ ...editingPet, breed: e.target.value })}
+                         required
                        />
                      </div>
                    </div>
-                   <div className="grid grid-cols-2 gap-4">
-                     <div className="space-y-2">
-                       <Label htmlFor="editAge">Age (years)</Label>
-                       <Input
-                         id="editAge"
-                         type="number"
-                         value={editingPet.age}
-                         onChange={(e) => setEditingPet({ ...editingPet, age: parseInt(e.target.value) || 0 })}
-                       />
-                     </div>
-                     <div className="space-y-2">
-                       <Label htmlFor="editWeight">Weight (kg)</Label>
-                       <Input
-                         id="editWeight"
-                         type="number"
-                         value={editingPet.weight}
-                         onChange={(e) => setEditingPet({ ...editingPet, weight: parseFloat(e.target.value) || 0 })}
-                       />
-                     </div>
+                   <div className="space-y-2">
+                     <Label htmlFor="editBirthday">Birthday <span className="text-red-500">*</span></Label>
+                     <Input
+                       id="editBirthday"
+                       type="date"
+                       value={editingPet.birthday}
+                       onChange={(e) => setEditingPet({ ...editingPet, birthday: e.target.value })}
+                       required
+                     />
+                   </div>
+                   <div className="space-y-2">
+                     <Label htmlFor="editWeight">Weight (kg) <span className="text-red-500">*</span></Label>
+                     <Input
+                       id="editWeight"
+                       type="number"
+                       value={editingPet.weight}
+                       onChange={(e) => setEditingPet({ ...editingPet, weight: parseFloat(e.target.value) || 0 })}
+                       required
+                     />
                    </div>
                    <div className="space-y-2">
                      <Label htmlFor="editNotes">Notes (optional)</Label>
@@ -399,7 +439,15 @@
            </div>
  
            {/* Pets List */}
-           {pets.length === 0 ? (
+           {loading ? (
+             <Card>
+               <CardContent className="py-12">
+                 <div className="flex flex-col items-center justify-center text-center">
+                   <p className="text-muted-foreground">Loading your pets...</p>
+                 </div>
+               </CardContent>
+             </Card>
+           ) : pets.length === 0 ? (
              <Card>
                <CardContent className="py-12">
                  <div className="flex flex-col items-center justify-center text-center">
@@ -424,7 +472,7 @@
                    <CardHeader className="pb-4">
                      <div className="flex items-start gap-4">
                        <Avatar className="h-20 w-20 border-4 border-background shadow-elevated">
-                         <AvatarImage src={pet.photo} />
+                         <AvatarImage src={pet.photo_url || undefined} />
                          <AvatarFallback className="bg-gradient-hero text-2xl text-white">
                            {pet.name[0]}
                          </AvatarFallback>
@@ -444,8 +492,12 @@
                          </div>
                          <div className="flex flex-wrap gap-4 mt-3 text-sm text-muted-foreground">
                            <div className="flex items-center gap-1">
+                             <Calendar className="h-4 w-4" />
+                             <span>DOB: {new Date(pet.birthday).toLocaleDateString()}</span>
+                           </div>
+                           <div className="flex items-center gap-1">
                              <Cake className="h-4 w-4" />
-                             <span>{pet.age} {pet.age === 1 ? "year" : "years"} old</span>
+                             <span>{calculateAge(pet.birthday)} {calculateAge(pet.birthday) === 1 ? "year" : "years"} old</span>
                            </div>
                            <div className="flex items-center gap-1">
                              <Weight className="h-4 w-4" />
@@ -465,13 +517,13 @@
                        <Calendar className="h-4 w-4 text-primary" />
                        Recent Services
                      </h4>
-                     {pet.serviceHistory.length === 0 ? (
+                     {(!pet.serviceHistory || pet.serviceHistory.length === 0) ? (
                        <p className="text-sm text-muted-foreground py-4 text-center">
                          No service history yet
                        </p>
                      ) : (
                        <div className="space-y-3">
-                         {pet.serviceHistory.map((service) => (
+                         {(pet.serviceHistory ?? []).map((service) => (
                            <div
                              key={service.id}
                              className="flex items-center gap-3 p-3 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors"

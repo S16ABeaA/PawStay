@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
@@ -22,48 +22,85 @@ import {
   Heart,
   Calendar,
   PawPrint,
-   ChevronRight,
-   Scissors,
-   Stethoscope
+  ChevronRight
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+
+import { authApi } from "../services/authApi";
+import { petApi } from "@/services/petApi";
+
+type ProfilePet = {
+  id: string;
+  name: string;
+  species: string;
+  breed: string;
+  photo_url?: string | null;
+};
 
 const Profile = () => {
   const { toast } = useToast();
   const navigate = useNavigate();
   
   // Simulated user data - in real app, this would come from auth context
-  const [user, setUser] = useState({
-    firstName: "John",
-    lastName: "Doe",
-    email: "john.doe@example.com",
-    phone: "+1 234 567 8900",
-    address: "123 Pet Street, San Francisco, CA",
-    avatar: "",
-    isAdmin: true, // Simulated admin role
-  });
+  // const [user, setUser] = useState({
+  //   firstName: "John",
+  //   lastName: "Doe",
+  //   email: "john.doe@example.com",
+  //   phone: "+1 234 567 8900",
+  //   address: "123 Pet Street, San Francisco, CA",
+  //   avatar: "",
+  //   isAdmin: true, // Simulated admin role
+  // });
+
+  const [user, setUser] = useState<any>(null);
+  const [pets, setPets] = useState<ProfilePet[]>([]);
+
+  useEffect(() => {
+    const fetchProfile = async () => {
+      try {
+        const profile = await authApi.getProfile();
+        console.log("[FRONTEND] Profile response:", profile);
+
+        if (!profile?.user) {
+          navigate("/signin");
+        }
+
+        setUser({
+          firstName: profile.user.first_name,
+          lastName: profile.user.last_name,
+          email: profile.user.email,
+          phone: profile.user.phone || "",
+          address: profile.user.address || "",
+          avatar: profile.user.avatar_url || "",
+          isAdmin: profile.user.role === "admin",
+          isSuperAdmin: profile.user.role === "super_admin",
+        });
+
+        // Fetch this user's pets for the profile overview
+        try {
+          const petRes = await petApi.list();
+          const mapped: ProfilePet[] = (petRes.pets ?? []).map((p: any) => ({
+            id: p.id,
+            name: p.name,
+            species: p.species,
+            breed: p.breed,
+            photo_url: p.photo_url,
+          }));
+          setPets(mapped);
+        } catch (petErr) {
+          console.error("Failed to load pets for profile:", petErr);
+        }
+      } catch (err) {
+        console.error("Failed to fetch profile:", err);
+        toast({ title: "Error", description: "Failed to load profile. Please try again." });
+        navigate("/signin");
+      }
+    };
+
+    fetchProfile();
+  }, []);
 
   const [isEditing, setIsEditing] = useState(false);
-
-   // Sample pets data - in real app this would be shared state/context
-   const pets = [
-     {
-       id: "1",
-       name: "Buddy",
-       species: "Dog",
-       breed: "Golden Retriever",
-       photo: "",
-       lastService: { type: "grooming", daysAgo: 5 }
-     },
-     {
-       id: "2", 
-       name: "Whiskers",
-       species: "Cat",
-       breed: "Persian",
-       photo: "",
-       lastService: { type: "checkup", daysAgo: 10 }
-     },
-   ];
 
   const handleSave = () => {
     setIsEditing(false);
@@ -73,18 +110,35 @@ const Profile = () => {
     });
   };
 
-  const handleLogout = () => {
-    toast({
-      title: "Signed Out",
-      description: "You have been signed out successfully.",
-    });
-    navigate("/");
+  const handleLogout =  async() => {
+    try{
+      await authApi.signOut();
+      localStorage.removeItem("pawstay.authenticated");
+      toast({
+        title: "Signed Out",
+        description: "You have been signed out successfully.",
+      });
+      setUser(null);
+      navigate("/signin");
+    }catch(err){
+      toast({ 
+        title: "Error", 
+        description: err.message || "Failed to sign out. Please try again." 
+      });
+      return;
+    }
   };
 
   const handleSwitchToAdmin = () => {
     navigate("/admin");
   };
-
+  if(!user){
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <p>Loading profile...</p>
+      </div>
+    );
+  }
   return (
     <div className="min-h-screen bg-background">
       <Header />
@@ -243,7 +297,7 @@ const Profile = () => {
                        {pets.map((pet) => (
                          <div key={pet.id} className="flex items-center gap-3 p-3 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors">
                            <Avatar className="h-12 w-12 border-2 border-background">
-                             <AvatarImage src={pet.photo} className="object-cover" />
+                               <AvatarImage src={pet.photo_url || undefined} className="object-cover" />
                              <AvatarFallback className="bg-gradient-hero text-white text-sm">
                                {pet.name[0]}
                              </AvatarFallback>
@@ -251,15 +305,7 @@ const Profile = () => {
                            <div className="flex-1 min-w-0">
                              <p className="text-sm font-medium truncate">{pet.name}</p>
                              <p className="text-xs text-muted-foreground">{pet.breed}</p>
-                           </div>
-                           <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                             {pet.lastService.type === "grooming" ? (
-                               <Scissors className="h-3 w-3" />
-                             ) : (
-                               <Stethoscope className="h-3 w-3" />
-                             )}
-                             <span>{pet.lastService.daysAgo}d ago</span>
-                           </div>
+                             </div>
                          </div>
                        ))}
                        <Link to="/my-pets">
@@ -312,7 +358,7 @@ const Profile = () => {
                       My Favorites
                     </Button>
                   </Link>
-                  <Link to="/booking">
+                  <Link to="/my-bookings">
                     <Button variant="ghost" className="w-full justify-start">
                       <Calendar className="h-4 w-4 mr-3 text-muted-foreground" />
                       My Bookings

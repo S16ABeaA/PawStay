@@ -3,18 +3,16 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Calendar } from "@/components/ui/calendar";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { 
   Star, Heart, MapPin, Wifi, Car, Coffee, Shield, 
-  ArrowLeft, Share2, Calendar as CalendarIcon, Check,
+  ArrowLeft, Share2, Check,
   Phone, Mail, Clock
 } from "lucide-react";
 import { useState } from "react";
-import { format } from "date-fns";
 
 const hotelData = {
   id: 1,
+  propertyId: "a1000000-0000-0000-0000-000000000001",
   name: "Pawsome Paradise Resort",
   images: [
     "https://images.unsplash.com/photo-1587300003388-59208cc962cb?w=800&auto=format&fit=crop",
@@ -53,12 +51,8 @@ const HotelDetail = () => {
   const { id } = useParams();
   const [isLiked, setIsLiked] = useState(false);
   const [selectedRoom, setSelectedRoom] = useState(hotelData.roomTypes[0]);
-  const [checkIn, setCheckIn] = useState<Date>();
-  const [checkOut, setCheckOut] = useState<Date>();
 
-  const nights = checkIn && checkOut 
-    ? Math.ceil((checkOut.getTime() - checkIn.getTime()) / (1000 * 60 * 60 * 24))
-    : 1;
+  const serviceFee = Math.round(selectedRoom.price * 0.10 * 100) / 100;
 
   return (
     <div className="min-h-screen bg-background">
@@ -196,60 +190,23 @@ const HotelDetail = () => {
                   <span className="text-muted-foreground">/ night</span>
                 </div>
 
-                {/* Date Selection */}
-                <div className="grid grid-cols-2 gap-3 mb-4">
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button variant="outline" className="justify-start gap-2 h-auto py-3">
-                        <CalendarIcon className="h-4 w-4" />
-                        <div className="text-left">
-                          <p className="text-xs text-muted-foreground">Check-in</p>
-                          <p className="text-sm font-medium">
-                            {checkIn ? format(checkIn, "MMM dd") : "Select"}
-                          </p>
-                        </div>
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0">
-                      <Calendar mode="single" selected={checkIn} onSelect={setCheckIn} />
-                    </PopoverContent>
-                  </Popover>
-
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button variant="outline" className="justify-start gap-2 h-auto py-3">
-                        <CalendarIcon className="h-4 w-4" />
-                        <div className="text-left">
-                          <p className="text-xs text-muted-foreground">Check-out</p>
-                          <p className="text-sm font-medium">
-                            {checkOut ? format(checkOut, "MMM dd") : "Select"}
-                          </p>
-                        </div>
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0">
-                      <Calendar mode="single" selected={checkOut} onSelect={setCheckOut} />
-                    </PopoverContent>
-                  </Popover>
-                </div>
-
                 {/* Price Breakdown */}
                 <div className="border-t border-border pt-4 mb-4 space-y-2">
                   <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">${selectedRoom.price} x {nights} night(s)</span>
-                    <span>${selectedRoom.price * nights}</span>
+                    <span className="text-muted-foreground">{selectedRoom.name}</span>
+                    <span>${selectedRoom.price}</span>
                   </div>
                   <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Service fee</span>
-                    <span>$10</span>
+                    <span className="text-muted-foreground">Service fee (10%)</span>
+                    <span>${serviceFee}</span>
                   </div>
                   <div className="flex justify-between font-semibold pt-2 border-t border-border">
                     <span>Total</span>
-                    <span>${selectedRoom.price * nights + 10}</span>
+                    <span>${selectedRoom.price + serviceFee}</span>
                   </div>
                 </div>
 
-                <Link to="/booking">
+                <Link to="/booking" state={{ shop: { type: "hotel", name: hotelData.name, location: hotelData.location, image: hotelData.images[0], price: selectedRoom.price, serviceName: selectedRoom.name, propertyId: hotelData.propertyId, qrCodeGCash: (hotelData as any).qrCodeGCash, qrCodePayMaya: (hotelData as any).qrCodePayMaya, acceptedPaymentMethods: (hotelData as any).acceptedPaymentMethods } }}>
                   <Button variant="hero" size="lg" className="w-full mb-4">
                     Reserve Now
                   </Button>

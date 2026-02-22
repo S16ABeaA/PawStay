@@ -311,6 +311,38 @@ function useCounter(target: number, duration: number = 2) {
   return { count, ref };
 }
 
+type StatItem = AboutContent["stats"][number];
+
+const StatsCard = ({ stat, index }: { stat: StatItem; index: number }) => {
+  const { count, ref } = useCounter(stat.value, 2.5);
+
+  return (
+    <motion.div
+      ref={ref}
+      variants={slideUpBounce}
+      whileHover={{
+        y: -12,
+        scale: 1.05,
+        rotateY: 5,
+        transition: { duration: 0.3 },
+      }}
+      className="rounded-3xl bg-gradient-card p-8 text-center shadow-card transition-all duration-300 hover:shadow-elevated border border-border/50"
+    >
+      <motion.div
+        className="text-4xl md:text-5xl font-bold bg-gradient-hero bg-clip-text text-transparent mb-2"
+        initial={{ scale: 0.5 }}
+        whileInView={{ scale: 1 }}
+        viewport={{ once: true }}
+        transition={{ duration: 0.6, delay: index * 0.1 + 0.4, ease: bounceEasing }}
+      >
+        {count}
+        {stat.suffix}
+      </motion.div>
+      <p className="text-muted-foreground font-medium">{stat.label}</p>
+    </motion.div>
+  );
+};
+
 const About = () => {
   const [content, setContent] = useState<AboutContent>(defaultContent);
   const heroRef = useRef<HTMLElement>(null);
@@ -600,35 +632,9 @@ const About = () => {
               viewport={{ once: true, margin: "-100px" }}
               variants={staggerContainer}
             >
-              {content.stats.map((stat, i) => {
-                const { count, ref } = useCounter(stat.value, 2.5);
-                return (
-                  <motion.div
-                    key={stat.label}
-                    ref={ref}
-                    variants={slideUpBounce}
-                    whileHover={{
-                      y: -12,
-                      scale: 1.05,
-                      rotateY: 5,
-                      transition: { duration: 0.3 },
-                    }}
-                    className="rounded-3xl bg-gradient-card p-8 text-center shadow-card transition-all duration-300 hover:shadow-elevated border border-border/50"
-                  >
-                    <motion.div
-                      className="text-4xl md:text-5xl font-bold bg-gradient-hero bg-clip-text text-transparent mb-2"
-                      initial={{ scale: 0.5 }}
-                      whileInView={{ scale: 1 }}
-                      viewport={{ once: true }}
-                      transition={{ duration: 0.6, delay: i * 0.1 + 0.4, ease: bounceEasing }}
-                    >
-                      {count}
-                      {stat.suffix}
-                    </motion.div>
-                    <p className="text-muted-foreground font-medium">{stat.label}</p>
-                  </motion.div>
-                );
-              })}
+              {content.stats.map((stat, i) => (
+                <StatsCard key={stat.label} stat={stat} index={i} />
+              ))}
             </motion.div>
           </div>
         </section>

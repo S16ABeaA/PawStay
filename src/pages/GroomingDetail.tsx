@@ -3,15 +3,12 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Calendar } from "@/components/ui/calendar";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { 
   Star, Heart, MapPin, Scissors, Bath, Sparkles,
-  ArrowLeft, Share2, Calendar as CalendarIcon, Check,
+  ArrowLeft, Share2, Check,
   Phone, Mail, Clock, Award, Users
 } from "lucide-react";
 import { useState } from "react";
-import { format } from "date-fns";
 
 const groomingData: Record<number, {
   id: number;
@@ -30,6 +27,7 @@ const groomingData: Record<number, {
 }> = {
   1: {
     id: 1,
+    propertyId: "a1000000-0000-0000-0000-000000000002",
     name: "Pawsome Grooming Spa",
     images: [
       "https://images.unsplash.com/photo-1516734212186-a967f81ad0d7?w=800&auto=format&fit=crop",
@@ -110,7 +108,8 @@ const GroomingDetail = () => {
   const [isLiked, setIsLiked] = useState(false);
   const data = groomingData[Number(id)] || defaultData;
   const [selectedService, setSelectedService] = useState(data.services[1]);
-  const [appointmentDate, setAppointmentDate] = useState<Date>();
+
+  const serviceFee = Math.round(selectedService.price * 0.10 * 100) / 100;
 
   return (
     <div className="min-h-screen bg-background">
@@ -250,39 +249,23 @@ const GroomingDetail = () => {
                   <span className="text-muted-foreground">• {selectedService.duration}</span>
                 </div>
 
-                {/* Date Selection */}
-                <div className="mb-4">
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button variant="outline" className="w-full justify-start gap-2 h-auto py-3">
-                        <CalendarIcon className="h-4 w-4" />
-                        <div className="text-left">
-                          <p className="text-xs text-muted-foreground">Select Date</p>
-                          <p className="text-sm font-medium">
-                            {appointmentDate ? format(appointmentDate, "EEEE, MMM dd") : "Choose a date"}
-                          </p>
-                        </div>
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0">
-                      <Calendar mode="single" selected={appointmentDate} onSelect={setAppointmentDate} />
-                    </PopoverContent>
-                  </Popover>
-                </div>
-
                 {/* Price Summary */}
                 <div className="border-t border-border pt-4 mb-4 space-y-2">
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">{selectedService.name}</span>
                     <span>${selectedService.price}</span>
                   </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Service fee (10%)</span>
+                    <span>${serviceFee}</span>
+                  </div>
                   <div className="flex justify-between font-semibold pt-2 border-t border-border">
                     <span>Total</span>
-                    <span>${selectedService.price}</span>
+                    <span>${selectedService.price + serviceFee}</span>
                   </div>
                 </div>
 
-                <Link to="/booking">
+                <Link to="/booking" state={{ shop: { type: "grooming", name: data.name, location: data.location, image: data.images[0], price: selectedService.price, serviceName: selectedService.name, propertyId: (data as any).propertyId?.toString(), qrCodeGCash: (data as any).qrCodeGCash, qrCodePayMaya: (data as any).qrCodePayMaya, acceptedPaymentMethods: (data as any).acceptedPaymentMethods } }}>
                   <Button variant="hero" size="lg" className="w-full mb-4">
                     Book Appointment
                   </Button>
