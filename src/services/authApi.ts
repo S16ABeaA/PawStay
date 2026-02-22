@@ -1,12 +1,12 @@
 import { authHelper } from "../helpers/authHelper";
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5001";
+const API_BASE_URL = import.meta.env.VITE_BACKEND_URL || "http://localhost:5001";
 
 export const authApi = {
   signUp: async (data: any) => authHelper.post(`${API_BASE_URL}/api/auth/signUp`, data),
   resendConfirmation: async (data: any) => authHelper.post(`${API_BASE_URL}/api/auth/resendConfirmation`, data),
   signIn: async (data: any) => authHelper.post(`${API_BASE_URL}/api/auth/signIn`, data),
-  signInWithGoogle: async () => authHelper.post(`${API_BASE_URL}/api/auth/signIn`),
+  signInWithGoogle: async () => authHelper.get(`${API_BASE_URL}/api/auth/signInWithGoogle`),
   signOut: async () => authHelper.post(`${API_BASE_URL}/api/auth/signOut`),
   getProfile: async () => authHelper.get(`${API_BASE_URL}/api/auth/profile`),
 };
