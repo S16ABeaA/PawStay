@@ -258,4 +258,164 @@ export const propertyController = {
       res.status(500).json({ message: err.message || 'Failed to compute dashboard stats' });
     }
   },
+
+  // --- Property services management ---
+  getServices: async (req: Request, res: Response) => {
+    try {
+      const propertyId = req.params.id;
+      if (!propertyId) return res.status(400).json({ message: 'property id required' });
+
+      const userId = (req as any).user?.id;
+
+      let query = supabaseAdmin
+        .from('property_services')
+        .select('*')
+        .eq('property_id', propertyId)
+        .eq('is_deleted', false);
+
+      // If requester is not owner, only return active services
+      if (!userId) {
+        query = query.eq('is_active', true);
+      } else {
+        // check ownership
+        const { data: propRows } = await supabaseAdmin.from('properties').select('owner_id').eq('id', propertyId).single();
+        const ownerId = propRows?.owner_id;
+        if (!ownerId || String(ownerId) !== String(userId)) {
+          query = query.eq('is_active', true);
+        }
+      }
+
+      const { data, error } = await query.order('category', { ascending: true }).order('price', { ascending: true });
+      if (error) throw error;
+      res.status(200).json({ services: data || [] });
+    } catch (err: any) {
+      console.error('[getServices]', err);
+      res.status(500).json({ message: err.message || 'Failed to fetch services' });
+    }
+  },
+
+  createService: async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).user?.id;
+      const propertyId = req.params.id;
+      if (!userId) return res.status(401).json({ message: 'Unauthorized' });
+      if (!propertyId) return res.status(400).json({ message: 'property id required' });
+
+      // verify owner
+      const { data: propRow, error: propErr } = await supabaseAdmin.from('properties').select('owner_id').eq('id', propertyId).single();
+      if (propErr) throw propErr;
+      if (!propRow || String(propRow.owner_id) !== String(userId)) return res.status(403).json({ message: 'Forbidden' });
+
+      const { name, description, price, category, capacity, is_active } = req.body;
+
+      // Check if a soft-deleted service with the same name and category exists
+      const { data: existingService, error: existingErr } = await supabaseAdmin
+        .from('property_services')
+        .select('id')
+        .eq('property_id', propertyId)
+        .eq('name', name)
+        .eq('category', category)
+        .eq('is_deleted', true)
+        .single();
+
+      if (existingErr && existingErr.code !== 'PGRST116') {
+        // PGRST116 = no rows, which is fine
+        throw existingErr;
+      }
+
+      // If a soft-deleted service exists, restore it instead of creating a new one
+      if (existingService) {
+        const { data, error } = await supabaseAdmin
+          .from('property_services')
+          .update({
+            description: description || null,
+            price: price ?? null,
+            capacity: capacity ?? null,
+            is_active: true,
+            is_deleted: false,
+          })
+          .eq('id', existingService.id)
+          .select()
+          .single();
+
+        if (error) throw error;
+        return res.status(200).json({ service: data });
+      }
+
+      // Otherwise, create a new service
+      const payload: any = {
+        property_id: propertyId,
+        name: name || null,
+        description: description || null,
+        price: price ?? null,
+        category: category || null,
+        capacity: capacity ?? null,
+        is_active: is_active ?? true,
+        is_deleted: false,
+      };
+
+      const { data, error } = await supabaseAdmin.from('property_services').insert(payload).select().single();
+      if (error) throw error;
+      res.status(201).json({ service: data });
+    } catch (err: any) {
+      console.error('[createService]', err);
+      res.status(500).json({ message: err.message || 'Failed to create service' });
+    }
+  },
+
+  updateService: async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).user?.id;
+      if (!userId) return res.status(401).json({ message: 'Unauthorized' });
+
+      const serviceId = req.params.serviceId;
+      if (!serviceId) return res.status(400).json({ message: 'service id required' });
+
+      // fetch service to get property_id
+      const { data: svcRow, error: svcErr } = await supabaseAdmin.from('property_services').select('property_id').eq('id', serviceId).single();
+      if (svcErr) throw svcErr;
+      if (!svcRow) return res.status(404).json({ message: 'service not found' });
+
+      const propertyId = svcRow.property_id;
+      const { data: propRow, error: propErr } = await supabaseAdmin.from('properties').select('owner_id').eq('id', propertyId).single();
+      if (propErr) throw propErr;
+      if (!propRow || String(propRow.owner_id) !== String(userId)) return res.status(403).json({ message: 'Forbidden' });
+
+      const updates = { ...req.body };
+      const { data, error } = await supabaseAdmin.from('property_services').update(updates).eq('id', serviceId).select().single();
+      if (error) throw error;
+      res.status(200).json({ service: data });
+    } catch (err: any) {
+      console.error('[updateService]', err);
+      res.status(500).json({ message: err.message || 'Failed to update service' });
+    }
+  },
+
+  deleteService: async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).user?.id;
+      if (!userId) return res.status(401).json({ message: 'Unauthorized' });
+
+      const serviceId = req.params.serviceId;
+      if (!serviceId) return res.status(400).json({ message: 'service id required' });
+
+      // fetch service to get property_id
+      const { data: svcRow, error: svcErr } = await supabaseAdmin.from('property_services').select('property_id').eq('id', serviceId).single();
+      if (svcErr) throw svcErr;
+      if (!svcRow) return res.status(404).json({ message: 'service not found' });
+
+      const propertyId = svcRow.property_id;
+      const { data: propRow, error: propErr } = await supabaseAdmin.from('properties').select('owner_id').eq('id', propertyId).single();
+      if (propErr) throw propErr;
+      if (!propRow || String(propRow.owner_id) !== String(userId)) return res.status(403).json({ message: 'Forbidden' });
+
+      // soft delete
+      const { data, error } = await supabaseAdmin.from('property_services').update({ is_deleted: true, is_active: false }).eq('id', serviceId).select().single();
+      if (error) throw error;
+      res.status(200).json({ service: data });
+    } catch (err: any) {
+      console.error('[deleteService]', err);
+      res.status(500).json({ message: err.message || 'Failed to delete service' });
+    }
+  },
 };
