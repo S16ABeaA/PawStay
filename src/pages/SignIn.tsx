@@ -60,14 +60,15 @@ const SignIn = () => {
         toast({ title: "Error", description: "Signup failed." });
         return;
       }
-
+      
+      navigate("/check-email", { state: { email } });
+      
       toast({
         title: "Account Created!", //Sign-up Successful
         description: "Please check your email to confirm your account.",
       });
       
-      await authApi.resendConfirmation({email});
-      navigate("/check-email", { state: { email } });
+      // await authApi.resendConfirmation({email});
       
       // reset form
       // setFirstName("");
@@ -362,7 +363,7 @@ const SignIn = () => {
                         Remember me
                       </Label>
                     </div> */}
-                    <a href="#" className="text-sm text-primary hover:underline">
+                    <a href="/forgot-password" className="text-sm text-primary hover:underline">
                       Forgot password?
                     </a>
                   </div>
