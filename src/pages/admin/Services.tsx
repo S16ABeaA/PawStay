@@ -31,8 +31,10 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Plus, Edit, Trash2, Bed, Scissors, Stethoscope} from "lucide-react";
-import { useState } from "react";
+import { Plus, Edit, Trash2, Bed, Scissors, Stethoscope, Loader2 } from "lucide-react";
+import { useState, useEffect } from "react";
+import { servicesApi, DBService } from "@/services/servicesApi";
+import { authHelper } from "@/helpers/authHelper";
 
 const iconMap = {
   Bed: Bed,
@@ -47,33 +49,16 @@ const categoryIconMap: Record<string, keyof typeof iconMap> = {
   Veterinary: "Stethoscope",
 };
 
-type Service = {
-  id: number;
-  name: string;
-  description: string;
-  price: number;
-  icon: keyof typeof iconMap;
-  category: string;
-  active: boolean;
-};
-
-const initialServices: Service[] = [
-  { id: 1, name: "Standard Boarding", description: "Comfortable private room with daily walks", price: 45, icon: "Bed", category: "Boarding", active: true },
-  { id: 2, name: "Luxury Suite", description: "Premium suite with webcam access and extra playtime", price: 75, icon: "Bed", category: "Boarding", active: true },
-  { id: 3, name: "Daycare", description: "Full day of supervised play and socialization", price: 35, icon: "Bed", category: "Boarding", active: true },
-  { id: 4, name: "Basic Grooming", description: "Bath, brush, and nail trim", price: 45, icon: "Scissors", category: "Grooming", active: true },
-  { id: 5, name: "Full Grooming", description: "Complete grooming with haircut and styling", price: 85, icon: "Scissors", category: "Grooming", active: true },
-  { id: 6, name: "Spa Package", description: "Premium treatment with massage and aromatherapy", price: 120, icon: "Scissors", category: "Grooming", active: false },
-  { id: 7, name: "Health Check", description: "Basic health examination", price: 50, icon: "Stethoscope", category: "Veterinary", active: true },
-];
-
 const AdminServices = () => {
-  const [services, setServices] = useState<Service[]>(initialServices);
+  const [services, setServices] = useState<DBService[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [propertyId, setPropertyId] = useState<string | null>(null);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-  const [selectedService, setSelectedService] = useState<Service | null>(null);
+  const [selectedService, setSelectedService] = useState<DBService | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
   // Form state
   const [formData, setFormData] = useState({
@@ -82,6 +67,42 @@ const AdminServices = () => {
     price: "",
     category: "",
   });
+
+  // Fetch property ID and services on mount
+  useEffect(() => {
+    const fetchProperty = async () => {
+      try {
+        setLoading(true);
+        const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5001";
+        const data = await authHelper.get(`${API_BASE_URL}/api/properties/mine`);
+        const properties = data.properties || [];
+
+        if (properties.length > 0) {
+          const firstProperty = properties[0];
+          setPropertyId(firstProperty.id);
+          await fetchServices(firstProperty.id);
+        }
+      } catch (err) {
+        console.error("Failed to fetch property", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchProperty();
+  }, []);
+
+  const fetchServices = async (propId: string) => {
+    try {
+      setLoading(true);
+      const data = await servicesApi.getServices(propId);
+      setServices(data);
+    } catch (err) {
+      console.error("Failed to fetch services", err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const resetForm = () => {
     setFormData({
@@ -92,28 +113,43 @@ const AdminServices = () => {
     });
   };
 
-  const toggleService = (id: number) => {
-    setServices(services.map(s => 
-      s.id === id ? { ...s, active: !s.active } : s
-    ));
+  const toggleService = async (serviceId: string, currentStatus: boolean) => {
+    if (!propertyId) return;
+    try {
+      await servicesApi.toggleService(propertyId, serviceId, !currentStatus);
+      setServices(
+        services.map((s) =>
+          s.id === serviceId ? { ...s, is_active: !currentStatus } : s
+        )
+      );
+    } catch (err) {
+      console.error("Failed to toggle service", err);
+    }
   };
 
-  const handleAddService = () => {
-    const newService: Service = {
-      id: Math.max(...services.map(s => s.id)) + 1,
-      name: formData.name,
-      description: formData.description,
-      price: parseFloat(formData.price),
-      icon: categoryIconMap[formData.category],
-      category: formData.category,
-      active: true,
-    };
-    setServices([...services, newService]);
-    setIsAddDialogOpen(false);
-    resetForm();
+  const handleAddService = async () => {
+    if (!propertyId) return;
+    try {
+      setSubmitting(true);
+      const newService = await servicesApi.createService(propertyId, {
+        name: formData.name,
+        description: formData.description,
+        price: parseFloat(formData.price),
+        category: formData.category,
+        property_id: propertyId,
+        is_active: true,
+      });
+      setServices([...services, newService]);
+      setIsAddDialogOpen(false);
+      resetForm();
+    } catch (err) {
+      console.error("Failed to add service", err);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
-  const handleEditClick = (service: Service) => {
+  const handleEditClick = (service: DBService) => {
     setSelectedService(service);
     setFormData({
       name: service.name,
@@ -124,284 +160,371 @@ const AdminServices = () => {
     setIsEditDialogOpen(true);
   };
 
-  const handleEditService = () => {
-    if (!selectedService) return;
-    setServices(services.map(s => 
-      s.id === selectedService.id 
-        ? {
-            ...s,
-            name: formData.name,
-            description: formData.description,
-            price: parseFloat(formData.price),
-            category: formData.category,
-            icon: categoryIconMap[formData.category],
-          }
-        : s
-    ));
-    setIsEditDialogOpen(false);
-    setSelectedService(null);
-    resetForm();
+  const handleEditService = async () => {
+    if (!selectedService || !propertyId) return;
+    try {
+      setSubmitting(true);
+      const updated = await servicesApi.updateService(propertyId, selectedService.id, {
+        name: formData.name,
+        description: formData.description,
+        price: parseFloat(formData.price),
+        category: formData.category,
+      });
+      setServices(services.map((s) => (s.id === selectedService.id ? updated : s)));
+      setIsEditDialogOpen(false);
+      setSelectedService(null);
+      resetForm();
+    } catch (err) {
+      console.error("Failed to update service", err);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
-  const handleDeleteClick = (service: Service) => {
+  const handleDeleteClick = (service: DBService) => {
     setSelectedService(service);
     setIsDeleteDialogOpen(true);
   };
 
-  const handleDeleteService = () => {
-    if (!selectedService) return;
-    setServices(services.filter(s => s.id !== selectedService.id));
-    setIsDeleteDialogOpen(false);
-    setSelectedService(null);
+  const handleDeleteService = async () => {
+    if (!selectedService || !propertyId) return;
+    try {
+      setSubmitting(true);
+      await servicesApi.deleteService(propertyId, selectedService.id);
+      setServices(services.filter((s) => s.id !== selectedService.id));
+      setIsDeleteDialogOpen(false);
+      setSelectedService(null);
+    } catch (err) {
+      console.error("Failed to delete service", err);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
-  const filteredServices = services.filter(service =>
-    service.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    service.category.toLowerCase().includes(searchQuery.toLowerCase())
+  const filteredServices = services.filter(
+    (service) =>
+      service.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      service.category.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  if (loading) {
+    return (
+      <AdminLayout title="Services" subtitle="Manage your service offerings and pricing">
+        <div className="flex items-center justify-center h-96">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      </AdminLayout>
+    );
+  }
 
   return (
     <AdminLayout title="Services" subtitle="Manage your service offerings and pricing">
-       <div>
-      {/* Header Actions */}
-      <div className="flex flex-col md:flex-row gap-4 mb-6">
-        <Input
-          placeholder="Search services..."
-          className="md:max-w-xs"
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-        />
-        <Button
-          variant="default"
-          className="gap-2 ml-auto"
-          onClick={() => {
-            resetForm();
-            setIsAddDialogOpen(true);
-          }}
-        >
-          <Plus className="h-4 w-4" />
-          Add Service
-        </Button>
-      </div>
+      <div>
+        {/* Header Actions */}
+        <div className="flex flex-col md:flex-row gap-4 mb-6">
+          <Input
+            placeholder="Search services..."
+            className="md:max-w-xs"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
+          <Button
+            variant="default"
+            className="gap-2 ml-auto"
+            onClick={() => {
+              resetForm();
+              setIsAddDialogOpen(true);
+            }}
+          >
+            <Plus className="h-4 w-4" />
+            Add Service
+          </Button>
+        </div>
 
-      {/* Services Grid */}
-      <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {filteredServices.map((service) => {
-          const IconComponent = iconMap[service.icon];
-          return (
-            <Card key={service.id} className={service.active ? "" : "opacity-60"}>
-              <CardContent className="p-5">
-                <div className="flex items-start justify-between mb-4">
-                  <div className="p-3 rounded-lg bg-primary/10">
-                    <IconComponent className="h-5 w-5 text-primary" />
+        {/* Services Grid */}
+        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {filteredServices.map((service) => {
+            const IconComponent = iconMap[categoryIconMap[service.category]] || Bed;
+            return (
+              <Card
+                key={service.id}
+                className={service.is_active ? "" : "opacity-60"}
+              >
+                <CardContent className="p-5">
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="p-3 rounded-lg bg-primary/10">
+                      <IconComponent className="h-5 w-5 text-primary" />
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Switch
+                        checked={service.is_active}
+                        onCheckedChange={() =>
+                          toggleService(service.id, service.is_active)
+                        }
+                      />
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Switch
-                      checked={service.active}
-                      onCheckedChange={() => toggleService(service.id)}
-                    />
-                  </div>
-                </div>
 
-                <div className="mb-4">
-                  <div className="flex items-center gap-2 mb-1">
-                    <h3 className="font-semibold text-foreground">{service.name}</h3>
-                    <Badge variant="outline" className="text-xs">{service.category}</Badge>
+                  <div className="mb-4">
+                    <div className="flex items-center gap-2 mb-1">
+                      <h3 className="font-semibold text-foreground">
+                        {service.name}
+                      </h3>
+                      <Badge variant="outline" className="text-xs">
+                        {service.category}
+                      </Badge>
+                    </div>
+                    <p className="text-sm text-muted-foreground">
+                      {service.description}
+                    </p>
                   </div>
-                  <p className="text-sm text-muted-foreground">{service.description}</p>
-                </div>
 
-                <div className="flex items-center justify-between">
-                  <p className="text-xl font-bold text-foreground">
-                    ${service.price}
-                    <span className="text-sm font-normal text-muted-foreground">/night</span>
-                  </p>
-                  <div className="flex gap-1">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8"
-                      onClick={() => handleEditClick(service)}
-                    >
-                      <Edit className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 text-destructive"
-                      onClick={() => handleDeleteClick(service)}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
+                  <div className="flex items-center justify-between">
+                    <p className="text-xl font-bold text-foreground">
+                      ${service.price}
+                      <span className="text-sm font-normal text-muted-foreground">
+                        /night
+                      </span>
+                    </p>
+                    <div className="flex gap-1">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8"
+                        onClick={() => handleEditClick(service)}
+                      >
+                        <Edit className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-destructive"
+                        onClick={() => handleDeleteClick(service)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </div>
-                </div>
-              </CardContent>
-            </Card>
-          );
-        })}
-      </div>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
 
-      {/* Add Service Dialog */}
-      <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-        <DialogContent className="sm:max-w-[500px]">
-          <DialogHeader>
-            <DialogTitle>Add New Service</DialogTitle>
-            <DialogDescription>
-              Create a new service offering for your pet care business.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="grid gap-2">
-              <Label htmlFor="add-name">Service Name</Label>
-              <Input
-                id="add-name"
-                placeholder="e.g., Premium Boarding"
-                value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="add-description">Description</Label>
-              <Textarea
-                id="add-description"
-                placeholder="Describe what this service includes..."
-                value={formData.description}
-                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
+        {filteredServices.length === 0 && !loading && (
+          <div className="text-center py-12">
+            <p className="text-muted-foreground">No services found</p>
+          </div>
+        )}
+
+        {/* Add Service Dialog */}
+        <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+          <DialogContent className="sm:max-w-[500px]">
+            <DialogHeader>
+              <DialogTitle>Add New Service</DialogTitle>
+              <DialogDescription>
+                Create a new service offering for your pet care business.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
               <div className="grid gap-2">
-                <Label htmlFor="add-price">Price ($)</Label>
+                <Label htmlFor="add-name">Service Name</Label>
                 <Input
-                  id="add-price"
-                  type="number"
-                  placeholder="45"
-                  value={formData.price}
-                  onChange={(e) => setFormData({ ...formData, price: e.target.value })}
+                  id="add-name"
+                  placeholder="e.g., Premium Boarding"
+                  value={formData.name}
+                  onChange={(e) =>
+                    setFormData({ ...formData, name: e.target.value })
+                  }
                 />
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="add-category">Category</Label>
-                <Select
-                  value={formData.category}
-                  onValueChange={(value) => setFormData({ ...formData, category: value })}
-                >
-                  <SelectTrigger id="add-category">
-                    <SelectValue placeholder="Select category" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Boarding">Boarding</SelectItem>
-                    <SelectItem value="Grooming">Grooming</SelectItem>
-                    <SelectItem value="Veterinary">Veterinary</SelectItem>
-                  </SelectContent>
-                </Select>
+                <Label htmlFor="add-description">Description</Label>
+                <Textarea
+                  id="add-description"
+                  placeholder="Describe what this service includes..."
+                  value={formData.description}
+                  onChange={(e) =>
+                    setFormData({ ...formData, description: e.target.value })
+                  }
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="grid gap-2">
+                  <Label htmlFor="add-price">Price ($)</Label>
+                  <Input
+                    id="add-price"
+                    type="number"
+                    placeholder="45"
+                    value={formData.price}
+                    onChange={(e) =>
+                      setFormData({ ...formData, price: e.target.value })
+                    }
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="add-category">Category</Label>
+                  <Select
+                    value={formData.category}
+                    onValueChange={(value) =>
+                      setFormData({ ...formData, category: value })
+                    }
+                  >
+                    <SelectTrigger id="add-category">
+                      <SelectValue placeholder="Select category" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Boarding">Boarding</SelectItem>
+                      <SelectItem value="Grooming">Grooming</SelectItem>
+                      <SelectItem value="Veterinary">Veterinary</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
             </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button
-              onClick={handleAddService}
-              disabled={!formData.name || !formData.description || !formData.price || !formData.category}
-            >
-              Add Service
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setIsAddDialogOpen(false)}
+                disabled={submitting}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleAddService}
+                disabled={
+                  !formData.name ||
+                  !formData.description ||
+                  !formData.price ||
+                  !formData.category ||
+                  submitting
+                }
+              >
+                {submitting && (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                )}
+                Add Service
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
-      {/* Edit Service Dialog */}
-      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-        <DialogContent className="sm:max-w-[500px]">
-          <DialogHeader>
-            <DialogTitle>Edit Service</DialogTitle>
-            <DialogDescription>
-              Update the service details below.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="grid gap-2">
-              <Label htmlFor="edit-name">Service Name</Label>
-              <Input
-                id="edit-name"
-                placeholder="e.g., Premium Boarding"
-                value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="edit-description">Description</Label>
-              <Textarea
-                id="edit-description"
-                placeholder="Describe what this service includes..."
-                value={formData.description}
-                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
+        {/* Edit Service Dialog */}
+        <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+          <DialogContent className="sm:max-w-[500px]">
+            <DialogHeader>
+              <DialogTitle>Edit Service</DialogTitle>
+              <DialogDescription>Update the service details below.</DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
               <div className="grid gap-2">
-                <Label htmlFor="edit-price">Price ($)</Label>
+                <Label htmlFor="edit-name">Service Name</Label>
                 <Input
-                  id="edit-price"
-                  type="number"
-                  placeholder="45"
-                  value={formData.price}
-                  onChange={(e) => setFormData({ ...formData, price: e.target.value })}
+                  id="edit-name"
+                  placeholder="e.g., Premium Boarding"
+                  value={formData.name}
+                  onChange={(e) =>
+                    setFormData({ ...formData, name: e.target.value })
+                  }
                 />
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="edit-category">Category</Label>
-                <Select
-                  value={formData.category}
-                  onValueChange={(value) => setFormData({ ...formData, category: value })}
-                >
-                  <SelectTrigger id="edit-category">
-                    <SelectValue placeholder="Select category" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Boarding">Boarding</SelectItem>
-                    <SelectItem value="Grooming">Grooming</SelectItem>
-                    <SelectItem value="Veterinary">Veterinary</SelectItem>
-                  </SelectContent>
-                </Select>
+                <Label htmlFor="edit-description">Description</Label>
+                <Textarea
+                  id="edit-description"
+                  placeholder="Describe what this service includes..."
+                  value={formData.description}
+                  onChange={(e) =>
+                    setFormData({ ...formData, description: e.target.value })
+                  }
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="grid gap-2">
+                  <Label htmlFor="edit-price">Price ($)</Label>
+                  <Input
+                    id="edit-price"
+                    type="number"
+                    placeholder="45"
+                    value={formData.price}
+                    onChange={(e) =>
+                      setFormData({ ...formData, price: e.target.value })
+                    }
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="edit-category">Category</Label>
+                  <Select
+                    value={formData.category}
+                    onValueChange={(value) =>
+                      setFormData({ ...formData, category: value })
+                    }
+                  >
+                    <SelectTrigger id="edit-category">
+                      <SelectValue placeholder="Select category" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Boarding">Boarding</SelectItem>
+                      <SelectItem value="Grooming">Grooming</SelectItem>
+                      <SelectItem value="Veterinary">Veterinary</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
             </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button
-              onClick={handleEditService}
-              disabled={!formData.name || !formData.description || !formData.price || !formData.category}
-            >
-              Save Changes
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setIsEditDialogOpen(false)}
+                disabled={submitting}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleEditService}
+                disabled={
+                  !formData.name ||
+                  !formData.description ||
+                  !formData.price ||
+                  !formData.category ||
+                  submitting
+                }
+              >
+                {submitting && (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                )}
+                Save Changes
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
-      {/* Delete Confirmation Dialog */}
-      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will permanently delete the service "{selectedService?.name}".
-              This action cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDeleteService} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-              Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-    </div>
+        {/* Delete Confirmation Dialog */}
+        <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This will permanently delete the service "{selectedService?.name}".
+                This action cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={submitting}>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleDeleteService}
+                disabled={submitting}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              >
+                {submitting && (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                )}
+                Delete
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </div>
     </AdminLayout>
   );
 };
