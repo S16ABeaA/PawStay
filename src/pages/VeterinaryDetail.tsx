@@ -24,6 +24,7 @@ const VeterinaryDetail = () => {
     typeof window !== "undefined" &&
     localStorage.getItem("pawstay.authenticated") === "true";
 
+  // ── Fetch property data ──
   useEffect(() => {
     let mounted = true;
     const load = async () => {
@@ -32,9 +33,13 @@ const VeterinaryDetail = () => {
         const data = await fetchPropertyById(id || "");
         if (mounted && data) {
           setProperty(data);
-          // Set first service as selected
-          if (data.services && data.services.length > 0) {
-            setSelectedService(data.services[0]);
+          // Filter services by "Veterinary" category and pick the first one
+          const vetServices = (data.property_services || [])
+            .filter((s: any) => s.is_active && s.category === "Veterinary");
+          if (vetServices.length > 0) {
+            setSelectedService(vetServices[0]);
+          } else {
+            setSelectedService({ name: "Consultation", price: data.cheapest_service_price || 0, description: "General checkup" });
           }
         }
       } catch (err) {
@@ -47,12 +52,13 @@ const VeterinaryDetail = () => {
     return () => { mounted = false; };
   }, [id]);
 
+  // ── Check favorites ──
   useEffect(() => {
     let mounted = true;
-    if (!isAuthenticated || !property?.id) return;
+    if (!isAuthenticated || !id) return;
     const load = async () => {
       try {
-        const fav = await favoritesApi.checkFavorite(property.id);
+        const fav = await favoritesApi.checkFavorite(id);
         if (mounted) setIsLiked(Boolean(fav));
       } catch (err) {
         console.error("checkFavorite failed", err);
@@ -60,13 +66,34 @@ const VeterinaryDetail = () => {
     };
     load();
     return () => { mounted = false; };
-  }, [property?.id, isAuthenticated]);
+  }, [id, isAuthenticated]);
 
+  const handleLikeClick = async () => {
+    if (!isAuthenticated) {
+      navigate(`/signin?redirect=${encodeURIComponent(`/veterinary/${id}`)}`);
+      return;
+    }
+    if (!id) return;
+    const previous = isLiked;
+    setIsLiked(!previous);
+    try {
+      if (previous) {
+        await favoritesApi.removeFavorite(id);
+      } else {
+        await favoritesApi.addFavorite(id);
+      }
+    } catch (err) {
+      console.error("favorite toggle failed", err);
+      setIsLiked(previous);
+    }
+  };
+
+  // ── Loading state ──
   if (loading) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className="min-h-screen bg-background">
         <Header />
-        <div className="flex flex-col items-center gap-4">
+        <div className="flex flex-col items-center justify-center py-32 gap-4">
           <Loader2 className="h-12 w-12 animate-spin text-primary" />
           <p className="text-muted-foreground">Loading clinic details...</p>
         </div>
@@ -75,13 +102,17 @@ const VeterinaryDetail = () => {
     );
   }
 
+  // ── Not found ──
   if (!property) {
     return (
       <div className="min-h-screen bg-background">
         <Header />
         <main className="py-8">
-          <div className="container">
-            <p className="text-muted-foreground">Clinic not found</p>
+          <div className="container text-center py-20">
+            <p className="text-muted-foreground text-lg">Clinic not found</p>
+            <Link to="/veterinary" className="text-primary hover:underline mt-4 inline-block">
+              ← Back to Veterinary
+            </Link>
           </div>
         </main>
         <Footer />
@@ -89,23 +120,21 @@ const VeterinaryDetail = () => {
     );
   }
 
-  // Use actual property_services if available, otherwise fallback
-  const services = property.property_services?.filter((s: any) => s.is_active)?.length > 0
-    ? property.property_services.filter((s: any) => s.is_active).map((s: any) => ({
-        id: s.id,
-        name: s.name,
-        price: s.price || 75,
-        duration: s.duration_minutes ? `${s.duration_minutes} min` : "30 min",
-        description: s.description || `Professional ${s.name.toLowerCase()} service`
-      }))
-    : [
-        { id: "default-1", name: "Consultation", price: 75, duration: "30 min", description: "Comprehensive health checkup" },
-        { id: "default-2", name: "Vaccination", price: 120, duration: "20 min", description: "Core vaccines for pets" }
-      ];
-
-  const selected = selectedService || services[0];
-  const serviceFee = Math.round(selected.price * 0.10 * 100) / 100;
+  // ── Derived data ──
   const coverImage = property.cover_image || "https://images.unsplash.com/photo-1628009368231-7bb7cfcb0def?w=800&auto=format&fit=crop";
+  const images = property.images?.length > 0
+    ? property.images
+    : [coverImage, coverImage, coverImage, coverImage];
+
+  // Filter services by "Veterinary" category only
+  const vetServices = (property.property_services || [])
+    .filter((s: any) => s.is_active && s.category === "Veterinary");
+
+  // Amenities from DB
+  const amenities = (property.property_amenities || []).map((a: any) => a.amenities?.amenity).filter(Boolean);
+
+  const selected = selectedService || vetServices[0] || { name: "Consultation", price: 0 };
+  const serviceFee = Math.round(selected.price * 0.10 * 100) / 100;
 
   return (
     <div className="min-h-screen bg-background">
@@ -122,15 +151,15 @@ const VeterinaryDetail = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
             <div className="aspect-[4/3] rounded-2xl overflow-hidden">
               <img
-                src={coverImage}
+                src={images[0]}
                 alt={property.name}
                 className="w-full h-full object-cover"
               />
             </div>
             <div className="grid grid-cols-2 gap-4">
-              {[1, 2, 3, 4].map((i) => (
+              {images.slice(1, 5).map((img: string, i: number) => (
                 <div key={i} className="aspect-[4/3] rounded-xl overflow-hidden">
-                  <img src={coverImage} alt="" className="w-full h-full object-cover" />
+                  <img src={img} alt="" className="w-full h-full object-cover" />
                 </div>
               ))}
             </div>
@@ -146,41 +175,20 @@ const VeterinaryDetail = () => {
                     <Badge className="bg-success/10 text-success border-success/20">Veterinary Clinic</Badge>
                     <div className="flex items-center gap-1 px-2 py-1 rounded-md bg-rating/10">
                       <Star className="h-4 w-4 fill-rating text-rating" />
-                      <span className="text-sm font-bold">{property.rating || 4.8}</span>
+                      <span className="text-sm font-bold">{property.rating || 0}</span>
                     </div>
-                    <span className="text-sm text-muted-foreground">(0 reviews)</span>
+                    <span className="text-sm text-muted-foreground">({property.review_count || 0} reviews)</span>
                   </div>
                   <h1 className="font-display text-3xl md:text-4xl font-bold text-foreground mb-2">
                     {property.name}
                   </h1>
                   <div className="flex items-center gap-1 text-muted-foreground">
                     <MapPin className="h-4 w-4" />
-                    <span>{property.city || "Los Angeles, CA"}</span>
+                    <span>{property.address || property.city || "Location not specified"}</span>
                   </div>
                 </div>
                 <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={async () => {
-                      if (!isAuthenticated) {
-                        navigate(`/veterinary/${id}?redirect=${encodeURIComponent(`/veterinary/${id}`)}`);
-                        return;
-                      }
-                      const previous = isLiked;
-                      setIsLiked(!previous);
-                      try {
-                        if (previous) {
-                          await favoritesApi.removeFavorite(property.id);
-                        } else {
-                          await favoritesApi.addFavorite(property.id);
-                        }
-                      } catch (err) {
-                        console.error("favorite toggle failed", err);
-                        setIsLiked(previous);
-                      }
-                    }}
-                  >
+                  <Button variant="outline" size="icon" onClick={handleLikeClick}>
                     <Heart className={`h-5 w-5 ${isLiked ? "fill-primary text-primary" : ""}`} />
                   </Button>
                   <Button variant="outline" size="icon">
@@ -198,48 +206,65 @@ const VeterinaryDetail = () => {
               </div>
 
               {/* Amenities */}
-              <div className="mb-8">
-                <h2 className="font-semibold text-xl mb-4">Services Offered</h2>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  {services.map((service: any, i: number) => (
-                    <div key={i} className="flex items-center gap-3 p-4 rounded-xl bg-secondary/50">
-                      <Stethoscope className="h-5 w-5 text-success" />
-                      <span className="text-sm font-medium">{service.name}</span>
-                    </div>
-                  ))}
+              {amenities.length > 0 && (
+                <div className="mb-8">
+                  <h2 className="font-semibold text-xl mb-4">Clinic Amenities</h2>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    {amenities.map((name: string, i: number) => (
+                      <div key={i} className="flex items-center gap-3 p-4 rounded-xl bg-secondary/50">
+                        <Check className="h-5 w-5 text-success" />
+                        <span className="text-sm font-medium">{name}</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              </div>
+              )}
 
-              {/* Services */}
+              {/* Services Overview */}
+              {vetServices.length > 0 && (
+                <div className="mb-8">
+                  <h2 className="font-semibold text-xl mb-4">Services Offered</h2>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    {vetServices.map((service: any, i: number) => (
+                      <div key={i} className="flex items-center gap-3 p-4 rounded-xl bg-secondary/50">
+                        <Stethoscope className="h-5 w-5 text-success" />
+                        <span className="text-sm font-medium">{service.name}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Available Services — filtered by Veterinary category */}
               <div className="mb-8">
                 <h2 className="font-semibold text-xl mb-4">Available Services</h2>
-                <div className="space-y-3">
-                  {services.map((service: any) => (
-                    <div
-                      key={service.id || service.name}
-                      onClick={() => setSelectedService(service)}
-                      className={`p-4 rounded-xl border-2 cursor-pointer transition-all ${
-                        selected.id === service.id || selected.name === service.name
-                          ? "border-primary bg-primary/5"
-                          : "border-border hover:border-primary/50"
-                      }`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <h3 className="font-semibold text-foreground">{service.name}</h3>
-                          <p className="text-sm text-muted-foreground">{service.description}</p>
-                          <div className="flex items-center gap-1 mt-1 text-xs text-muted-foreground">
-                            <Clock className="h-3 w-3" />
-                            <span>{service.duration}</span>
+                {vetServices.length > 0 ? (
+                  <div className="space-y-3">
+                    {vetServices.map((service: any) => (
+                      <div
+                        key={service.id}
+                        onClick={() => setSelectedService(service)}
+                        className={`p-4 rounded-xl border-2 cursor-pointer transition-all ${
+                          selected.id === service.id
+                            ? "border-primary bg-primary/5"
+                            : "border-border hover:border-primary/50"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <h3 className="font-semibold text-foreground">{service.name}</h3>
+                            <p className="text-sm text-muted-foreground">{service.description || `Professional ${service.name.toLowerCase()} service`}</p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-xl font-bold text-foreground">₱{service.price}</p>
                           </div>
                         </div>
-                        <div className="text-right">
-                          <p className="text-xl font-bold text-foreground">₱{service.price}</p>
-                        </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-muted-foreground">No veterinary services available for this clinic.</p>
+                )}
               </div>
             </div>
 
@@ -252,7 +277,6 @@ const VeterinaryDetail = () => {
                 </div>
                 <div className="flex items-baseline gap-2 mb-6">
                   <span className="text-3xl font-bold text-foreground">₱{selected.price}</span>
-                  <span className="text-muted-foreground">• {selected.duration}</span>
                 </div>
 
                 {/* Price Summary */}
@@ -271,7 +295,21 @@ const VeterinaryDetail = () => {
                   </div>
                 </div>
 
-                <Link to="/booking" state={{ shop: { type: "veterinary", name: property.name, location: property.city, image: coverImage, price: selected.price, serviceName: selected.name, serviceId: selected.id, propertyId: property.id } }}>
+                <Link
+                  to="/booking"
+                  state={{
+                    shop: {
+                      type: "veterinary",
+                      name: property.name,
+                      location: property.city || property.address,
+                      image: coverImage,
+                      price: selected.price,
+                      serviceName: selected.name,
+                      serviceId: selected.id,
+                      propertyId: property.id,
+                    },
+                  }}
+                >
                   <Button variant="hero" size="lg" className="w-full mb-4">
                     Book Appointment
                   </Button>
@@ -283,17 +321,21 @@ const VeterinaryDetail = () => {
 
                 {/* Contact */}
                 <div className="border-t border-border pt-4 space-y-3">
-                  <div className="flex items-center gap-3 text-sm text-muted-foreground">
-                    <Phone className="h-4 w-4" />
-                    <span>{property.phone || "+1 (555) 911-PETS"}</span>
-                  </div>
-                  <div className="flex items-center gap-3 text-sm text-muted-foreground">
-                    <Mail className="h-4 w-4" />
-                    <span>{property.email || "care@clinic.com"}</span>
-                  </div>
+                  {property.phone && (
+                    <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                      <Phone className="h-4 w-4" />
+                      <span>{property.phone}</span>
+                    </div>
+                  )}
+                  {property.website && (
+                    <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                      <Mail className="h-4 w-4" />
+                      <span>{property.website}</span>
+                    </div>
+                  )}
                   <div className="flex items-center gap-3 text-sm text-muted-foreground">
                     <Clock className="h-4 w-4" />
-                    <span>{property.hours || "Mon-Fri: 8AM - 8PM"}</span>
+                    <span>Mon-Fri: 8AM - 8PM</span>
                   </div>
                 </div>
               </div>

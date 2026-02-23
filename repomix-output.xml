@@ -1454,20 +1454,6 @@ router.delete("/:id", deletePet);
 export default router;
 </file>
 
-<file path="backend/routes/searchRoute.ts">
-import { Router } from "express";
-import { propertyController } from "../controllers/propertyController";
-
-const router = Router();
-
-router.get("/search", propertyController.searchProperties);
-router.post("/search", propertyController.searchProperties);
-router.post("/randomproperty", propertyController.randomProperties);
-router.get("/:id", propertyController.getById);
-
-export default router;
-</file>
-
 <file path="backend/scripts/free-port.js">
 const { execSync } = require('node:child_process');
 
@@ -10330,446 +10316,6 @@ export default tseslint.config(
 );
 </file>
 
-<file path="IMPLEMENTATION_GUIDE.md">
-# Frontend-Backend Integration - Implementation Complete ✅
-
-## Summary
-
-Successfully connected the PawStay frontend (Hotels, Veterinary sections) with the existing backend API. The system now dynamically fetches real property data from Supabase instead of using hardcoded values.
-
----
-
-## What Was Changed
-
-### 1. Backend API Changes
-
-**File:** `backend/services/property.service.ts`
-
-Added `getPropertyById()` function to fetch individual properties with all related data:
-```typescript
-export async function getPropertyById(id: string) {
-  const { data, error } = await supabaseAdmin
-    .from("properties")
-    .select(`
-      *,
-      property_amenities(amenity_id, amenities(amenity)),
-      property_services(id, name, category, price, duration_minutes, description, is_active)
-    `)
-    .eq("id", id)
-    .single();
-  // ... returns property with cheapest_service_price
-}
-```
-
-**File:** `backend/controllers/propertyController.ts`
-
-Added `getById` controller method:
-```typescript
-getById: async (req: Request, res: Response) => {
-  const id = req.params.id as string;
-  const property = await getPropertyById(id);
-  res.status(200).json({ property });
-}
-```
-
-**File:** `backend/routes/searchRoute.ts`
-
-Added new route for fetching by ID:
-```typescript
-router.get("/:id", propertyController.getById);
-```
-
-### 2. Frontend API Service
-**File:** `src/services/propertyApi.ts`
-
-Updated `fetchPropertyById()` to use the new dedicated endpoint:
-```typescript
-export async function fetchPropertyById(id: string) {
-  const res = await fetch(`/api/properties/${id}`, {
-    method: "GET",
-    headers: { "Content-Type": "application/json" },
-  });
-  if (!res.ok) throw new Error("Failed to fetch property details");
-  const data = await res.json();
-  return data.property;
-}
-```
-
-### 3. Hotels Pages
-**Files:** `src/pages/Hotels.tsx`, `src/pages/HotelDetail.tsx`
-
-**Hotels.tsx:**
-- Replaced hardcoded hotels with dynamic fetching
-- Added state management for loading and data
-- Filters: `propertyType: "hotel"`, location, minPrice, maxPrice
-- Price range slider + location input triggers re-fetching
-- Loading states and empty state handling
-
-**HotelDetail.tsx:**
-- Uses `fetchPropertyById()` with new GET `/api/properties/:id` endpoint
-- Displays actual property_services from database (selectable)
-- Shows amenities from property_amenities
-- Booking button passes selected service ID and price
-- Favorite functionality preserved
-
-### 4. Veterinary Pages
-**Files:** `src/pages/Veterinary.tsx`, `src/pages/VeterinaryDetail.tsx`
-
-**Veterinary.tsx:**
-- Replaced hardcoded clinics with dynamic fetching
-- Added filters sidebar (location, price range)
-- Filters: `propertyType: "veterinary"`, location, minPrice, maxPrice
-- Loading states and empty state handling
-
-**VeterinaryDetail.tsx:**
-- Uses `fetchPropertyById()` with new GET `/api/properties/:id` endpoint
-- Displays actual property_services from database (selectable)
-- Service selection updates price and booking data
-- Booking button passes selected service ID and price
-- Favorite functionality preserved
-
----
-
-## How It Works
-
-### Data Flow Architecture
-
-```
-Frontend Pages
-    ↓
-fetchProperties() / fetchPropertyById()
-    ↓
-Backend: GET /api/properties/search (POST)
-    ↓
-Backend Service: property.service.ts
-    ↓
-Supabase: properties table + joins
-    ↓
-Response with:
-  - Property details
-  - Amenities (via property_amenities join)
-  - Cheapest service price (via property_services join)
-  - Review count, rating, etc.
-    ↓
-Frontend: Map data to component format
-    ↓
-Render UI with real data
-```
-
-### State Management Flow
-
-**Listing Pages (Hotels.tsx, Veterinary.tsx):**
-```
-Component Mount
-    ↓
-useEffect() with priceRange dependency
-    ↓
-setIsLoading(true)
-    ↓
-fetchProperties(filters)
-    ↓
-Map results
-    ↓
-setState(mapped data)
-    ↓
-setIsLoading(false)
-    ↓
-Render list with real data
-```
-
-**Detail Pages (HotelDetail.tsx, VeterinaryDetail.tsx):**
-```
-Component Mount (with id from URL)
-    ↓
-useEffect() with id dependency
-    ↓
-setIsLoading(true)
-    ↓
-fetchPropertyById(id)
-    ↓
-Map result
-    ↓
-setState(mapped data)
-    ↓
-setIsLoading(false)
-    ↓
-Render detail with real data
-```
-
----
-
-## Data Mapping Details
-
-### Hotels Mapping
-```typescript
-const mapped = data.map((p: any) => ({
-  id: p.id,                                    // UUID from database
-  name: p.name,                                // Property name
-  image: p.cover_image || fallback,            // Cover image URL
-  location: p.city || p.address,               // City or address
-  rating: p.rating || 0,                       // Rating from reviews
-  reviews: p.review_count || 0,                // Number of reviews
-  price: p.cheapest_service_price || 0,        // Cheapest boarding price
-  amenities: p.property_amenities?.map(a => a.amenities?.amenity) || [],
-  featured: p.featured,                        // Featured flag
-  availability: "Available"
-}));
-```
-
-### Veterinary Mapping
-```typescript
-const mapped = data.map((p: any) => ({
-  id: p.id,                                    // UUID from database
-  name: p.name,                                // Clinic name
-  image: p.cover_image || fallback,            // Cover image URL
-  location: p.city || p.address,               // City or address
-  rating: p.rating || 0,                       // Rating from reviews
-  reviews: p.review_count || 0,                // Number of reviews
-  price: p.cheapest_service_price || 0,        // Cheapest service price
-  services: ["Consultation", "Vaccination"],   // Default services
-  availability: "Open Now",
-  emergency: p.facilities_amenities?.includes("Emergency Room") || false
-}));
-```
-
----
-
-## Filter Implementation
-
-### Current Filters Connected
-✅ **Price Range** - Working
-  - Triggers on slider change
-  - `minPrice` and `maxPrice` passed to API
-  - Results update in real-time
-
-✅ **Property Type** - Working
-  - Hotels: `propertyType: "hotel"`
-  - Veterinary: `propertyType: "veterinary"`
-
-✅ **Service Category** - Working
-  - Hotels: `serviceCategory: "Boarding"`
-  - Veterinary: `serviceCategory: "Veterinary"`
-
-### Available Filters (Not Yet Connected)
-❌ Location Filter - UI exists, needs state integration
-❌ Rating Filter - UI exists, needs state integration
-❌ Amenities Filter - UI exists, needs state integration
-❌ Emergency Services Filter (Vet) - UI exists, needs state integration
-
-**To Enable Additional Filters:** Add state for each filter and update the `fetchProperties()` call with new filter values.
-
----
-
-## Backend Compatibility
-
-The backend (`backend/services/property.service.ts`) already supports:
-
-✅ **Property Type Filtering**
-```typescript
-if (filters.propertyType) {
-  const colSample = sample?.[0]?.property_type;
-  if (Array.isArray(colSample)) {
-    query = query.contains("property_type", [filters.propertyType]);
-  } else {
-    query = query.eq("property_type", filters.propertyType);
-  }
-}
-```
-
-✅ **Service Category Filtering**
-```typescript
-if (filters.serviceCategory) {
-  // Filters property_services by category
-}
-```
-
-✅ **Price Range Filtering**
-```typescript
-if (filters.minPrice !== undefined) svcQuery = svcQuery.gte("price", filters.minPrice);
-if (filters.maxPrice !== undefined) svcQuery = svcQuery.lte("price", filters.maxPrice);
-```
-
-✅ **Amenities Joining**
-```typescript
-select(`
-  *,
-  property_amenities(
-    amenity_id,
-    amenities(amenity)
-  )
-`)
-```
-
-✅ **Cheapest Service Price Calculation**
-```typescript
-const cheapestByProperty = new Map<string, number>();
-for (const row of serviceRows ?? []) {
-  const pid = String(row.property_id);
-  if (!cheapestByProperty.has(pid)) {
-    cheapestByProperty.set(pid, Number(row.price ?? 0));
-  }
-}
-```
-
----
-
-## Testing Guide
-
-### Manual Testing Steps
-
-1. **Hotels Listing Page**
-   - Navigate to `/hotels`
-   - Verify: Hotels load from backend (not hardcoded)
-   - Move price slider left/right
-   - Verify: Results update in real-time
-   - Click on any hotel card
-   - Verify: Detail page loads with correct hotel data
-
-2. **Hotel Detail Page**
-   - Should show actual hotel name, images, amenities
-   - Heart icon should add/remove from favorites
-   - Room selection should work
-   - Booking button should navigate with correct data
-
-3. **Veterinary Listing Page**
-   - Navigate to `/veterinary`
-   - Verify: Clinics load from backend (not hardcoded)
-   - Move price slider left/right
-   - Verify: Results update in real-time
-   - Click on any clinic card
-   - Verify: Detail page loads with correct clinic data
-
-4. **Veterinary Detail Page**
-   - Should show actual clinic name, images, amenities
-   - Heart icon should add/remove from favorites
-   - Service selection should work
-   - Booking button should navigate with correct data
-
-5. **Favorites Integration**
-   - Add/remove favorites on detail pages
-   - Navigate to Favorites page
-   - Verify: Added properties appear in list
-
-6. **Adding New Properties**
-   - Create new hotel via ListProperty page
-   - Set property_type to "hotel" and service to "Boarding"
-   - Navigate to Hotels page
-   - Verify: New hotel appears in listing
-   - Click on it to verify detail page works
-
----
-
-## Error Handling
-
-### Current Error Handling
-- Try-catch blocks on all API calls
-- Errors logged to console
-- Loading states prevent duplicate requests
-- Empty state shown if no results
-
-### Suggested Improvements
-1. Add toast notifications for errors
-2. Retry logic for failed requests
-3. Loading skeletons instead of "Loading..." text
-4. Graceful degradation (show fallback data)
-
----
-
-## Performance Considerations
-
-### Current Implementation
-- Fetches only when filters change
-- Maps data on each render
-- No caching
-
-### Optimization Opportunities
-1. **Memoization** - Use `useMemo()` for mapped data
-2. **Caching** - Cache results per filter combination
-3. **Pagination** - Implement for large result sets
-4. **Lazy Loading** - Load more on scroll
-5. **Image Optimization** - Use proper image sizes
-
-Example optimization:
-```typescript
-const mapped = useMemo(() => {
-  return data.map(p => ({ /* mapping */ }));
-}, [data]);
-```
-
----
-
-## Files Modified Summary
-
-| File | Changes | Status |
-|------|---------|--------|
-| `src/services/propertyApi.ts` | Updated `fetchPropertyById()` to use GET endpoint | ✅ Complete |
-| `src/pages/Hotels.tsx` | Dynamic fetching, filters, empty state | ✅ Complete |
-| `src/pages/Veterinary.tsx` | Dynamic fetching, filters sidebar, empty state | ✅ Complete |
-| `src/pages/HotelDetail.tsx` | Fetch by ID, service selection, booking integration | ✅ Complete |
-| `src/pages/VeterinaryDetail.tsx` | Fetch by ID, service selection, booking integration | ✅ Complete |
-| `backend/services/property.service.ts` | Added `getPropertyById()` function | ✅ Complete |
-| `backend/controllers/propertyController.ts` | Added `getById` controller | ✅ Complete |
-| `backend/routes/searchRoute.ts` | Added GET `/:id` route | ✅ Complete |
-
----
-
-## Next Steps
-
-### Priority 1: Verify Production
-1. Run frontend: `npm run dev`
-2. Test all flows mentioned in "Testing Guide"
-3. Check browser console for errors
-
-### Priority 2: Connect Remaining Filters
-1. Add state for location, rating, amenities
-2. Update `fetchProperties()` calls
-3. Test filter combinations
-
-### Priority 3: Enhance Detail Pages
-1. Fetch actual services from backend
-2. Fetch team information if available
-3. Fetch facility details
-
-### Priority 4: Performance Improvements
-1. Add data memoization
-2. Implement caching
-3. Add pagination
-4. Optimize images
-
-### Priority 5: User Experience
-1. Add loading skeletons
-2. Add error toast notifications
-3. Add empty state illustrations
-4. Add success notifications
-
----
-
-## Questions & Support
-
-If you encounter issues:
-
-1. **Check console** for error messages
-2. **Verify backend** is running and API endpoint works
-3. **Check URL patterns** - ensure IDs match what's in database
-4. **Verify Supabase connection** - check supabaseAdmin/supabaseClient config
-5. **Check CORS settings** - ensure backend allows frontend requests
-
----
-
-## Conclusion
-
-✅ **Integration Complete and Ready for Testing**
-
-The frontend now successfully connects to the backend API for:
-- Dynamic hotel and veterinary clinic listings
-- Real-time filtering by price range
-- Dynamic detail pages fetching actual property data
-- Preserved favorite functionality
-- Error handling and loading states
-
-All files compile without errors and are ready for production testing.
-</file>
-
 <file path="index.html">
 <!doctype html>
 <html lang="en">
@@ -11495,100 +11041,6 @@ CREATE TABLE public.vet_fees (
 }
 </file>
 
-<file path="backend/controllers/propertyController.ts">
-import { Request, Response } from "express";
-import { getProperties, getPropertyById, HotelFilters } from "../services/property.service";
-
-export const propertyController = {
-  searchProperties: async (req: Request, res: Response) => {
-    try {
-      const source = req.method === "GET" ? req.query : req.body;
-
-      const asString = (val: unknown): string | undefined => {
-        if (val === undefined || val === null) return undefined;
-        const str = String(val).trim();
-        return str ? str : undefined;
-      };
-
-      const asNumber = (val: unknown): number | undefined => {
-        if (val === undefined || val === null || val === "") return undefined;
-        const num = Number(val);
-        return Number.isFinite(num) ? num : undefined;
-      };
-
-      const normalizeAmenities = (val: unknown): string[] | undefined => {
-        if (!val) return undefined;
-        if (Array.isArray(val)) {
-          const items = val.map((v) => String(v).trim()).filter(Boolean);
-          return items.length ? items : undefined;
-        }
-        const str = String(val).trim();
-        if (!str) return undefined;
-        const items = str.split(",").map((v) => v.trim()).filter(Boolean);
-        return items.length ? items : undefined;
-      };
-
-      const filters: HotelFilters = {
-        location: asString(source.location),
-        checkin: asString(source.checkin || source.checkIn),
-        checkout: asString(source.checkout || source.checkOut),
-        timeSlot: asString(source.timeSlot || source.time_slot),
-        petType: asString(source.petType || source.pet)?.toLowerCase(),
-        dogSize: asString(source.dogSize || source.dogsize)?.toLowerCase(),
-        propertyType: asString(source.propertyType || source.type)?.toLowerCase(),
-        serviceCategory: asString(source.serviceCategory),
-        minPrice: asNumber(source.minPrice),
-        maxPrice: asNumber(source.maxPrice),
-        rating: asNumber(source.rating),
-        amenities: normalizeAmenities(source.amenities),
-        keyword: asString(source.keyword),
-        lat: asNumber(source.lat),
-        lng: asNumber(source.lng),
-        radiusKm: asNumber(source.radiusKm),
-      };
-
-      // Call service
-      const properties = await getProperties(filters);
-      //console.log("[searchProperties] Retrieved properties:", properties);
-      // Return JSON response
-      res.status(200).json({ properties });
-    } catch (err: any) {
-      //console.error("[searchProperties]", err);
-      res.status(500).json({ message: err.message || "Failed to fetch properties" });
-    }
-  },
-
-  randomProperties: async (req: Request, res: Response) => {
-    try {
-      const limit = Number(req.body?.limit) || 6;
-      // Use getProperties with no filters to get all, then shuffle and slice
-      const allProperties = await getProperties({});
-      const shuffled = allProperties.sort(() => Math.random() - 0.5);
-      const properties = shuffled.slice(0, limit);
-      res.status(200).json({ properties });
-    } catch (err: any) {
-      res.status(500).json({ message: err.message || "Failed to fetch random properties" });
-    }
-  },
-
-  getById: async (req: Request, res: Response) => {
-    try {
-      const id = req.params.id as string;
-      if (!id) {
-        return res.status(400).json({ message: "Property ID is required" });
-      }
-      const property = await getPropertyById(id);
-      if (!property) {
-        return res.status(404).json({ message: "Property not found" });
-      }
-      res.status(200).json({ property });
-    } catch (err: any) {
-      res.status(500).json({ message: err.message || "Failed to fetch property" });
-    }
-  },
-};
-</file>
-
 <file path="backend/middleware/authMiddleware.ts">
 import { Request, Response, NextFunction } from "express";
 import { supabaseClient } from "../config/supabaseClient";
@@ -11990,492 +11442,18 @@ export const bookingModel = {
 };
 </file>
 
-<file path="backend/services/property.service.ts">
-import { supabaseAdmin } from "../config/supabaseAdmin";
-import { supabaseClient } from "../config/supabaseClient";
+<file path="backend/routes/searchRoute.ts">
+import { Router } from "express";
+import { propertyController } from "../controllers/propertyController";
 
+const router = Router();
 
-export type HotelFilters = {
-  location?: string;
-  checkin?: string;
-  checkout?: string;
-  timeSlot?: string;          // for same-day services like grooming/vet
-  petType?: string;
-  dogSize?: string;
-  propertyType?: string;
-  serviceCategory?: string;  // per-service filter: Boarding, Grooming, Veterinary, etc.
-  minPrice?: number;
-  maxPrice?: number;
-  rating?: number;
-  amenities?: string[];
-  keyword?: string;
-  lat?: number;              // user latitude
-  lng?: number;              // user longitude
-  radiusKm?: number;         // search radius in km (default 10)
-};
+router.get("/search", propertyController.searchProperties);
+router.post("/search", propertyController.searchProperties);
+router.post("/randomproperty", propertyController.randomProperties);
+router.get("/:id", propertyController.getById);
 
-// ── Haversine distance (km) ──
-function haversineDistance(
-  lat1: number, lon1: number,
-  lat2: number, lon2: number
-): number {
-  const R = 6371;
-  const toRad = (deg: number) => (deg * Math.PI) / 180;
-  const dLat = toRad(lat2 - lat1);
-  const dLon = toRad(lon2 - lon1);
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return R * c;
-}
-
-export async function getProperties(filters: HotelFilters = {}) {
-  // Diagnostics: count + sample row
-  // const { count: totalCount } = await supabase
-  //   .from("properties")
-  //   .select("id", { count: "exact", head: true });
-
-  const { data: sample } = await supabaseAdmin
-    .from("properties")
-    .select("*")
-    .limit(1);
-
-  const columns = sample?.[0] ? Object.keys(sample[0]) : [];  
-  const has = (col: string) => columns.includes(col);
-
-  //console.log("[getProperties] Total count:", totalCount ?? "unknown");
-  //console.log("[getProperties] Available columns:", columns);
-  //console.log("[getProperties] Filters:", filters);
-
-  let query = supabaseAdmin
-    .from("properties")
-    .select(`
-      *,
-      property_amenities(
-        amenity_id,
-        amenities(amenity)
-      )
-    `);
-
-  // ── Location ──
-  // When lat/lng are provided, skip text-based location filter
-  // (geo filter is applied post-query below)
-  if (filters.location && filters.lat == null) {
-    const loc = filters.location;
-    const orParts: string[] = [];
-    if (has("city"))     orParts.push(`city.ilike.%${loc}%`);
-    if (has("location")) orParts.push(`location.ilike.%${loc}%`);
-    if (has("address"))  orParts.push(`address.ilike.%${loc}%`);
-    if (has("name"))     orParts.push(`name.ilike.%${loc}%`);
-
-    if (orParts.length) {
-      query = query.or(orParts.join(","));
-    }
-  }
-
-  // ── Keyword (name / description search) ──
-  if (filters.keyword) {
-    const kw = filters.keyword;
-    const kwParts: string[] = [];
-    if (has("name"))        kwParts.push(`name.ilike.%${kw}%`);
-    if (has("description")) kwParts.push(`description.ilike.%${kw}%`);
-    if (kwParts.length) {
-      query = query.or(kwParts.join(","));
-    }
-  }
-
-  // ── Property type ──
-  if (filters.propertyType) {
-    if (has("property_type")) {
-      // Try array contains first (text[]), fall back to eq (text)
-      const colSample = sample?.[0]?.property_type;
-      if (Array.isArray(colSample)) {
-        query = query.contains("property_type", [filters.propertyType]);
-      } else {
-        query = query.eq("property_type", filters.propertyType);
-      }
-    }
-  }
-
-  // ── Pet type ──
-  if (filters.petType) {
-    if (filters.petType === "others") {
-      query = query.not("exotic_pet_types", "is", null);
-    }
-
-    else if (has("pet_types_accepted")) {
-      const formatted =
-        filters.petType.charAt(0).toUpperCase() +
-        filters.petType.slice(1).toLowerCase();
-      query = query.contains("pet_types_accepted", [formatted]);
-    }
-  }
-
-// -- Dog Size --
-  if (filters.dogSize) {
-  const formatted =
-    filters.dogSize.charAt(0).toUpperCase() +
-    filters.dogSize.slice(1).toLowerCase();
-
-    if (has("dog_sizes")) {
-      query = query.contains("dog_sizes", [formatted]);
-    }
-  }
-
-  // -- Availability filter --
-  //
-  // BOARDING (hotel): checkin + checkout present
-  //   property_services.capacity = per-room-type capacity
-  //   Check overlapping bookings per night; busiest night must be < capacity
-  //   Property available if >= 1 boarding service has room on every night
-  //
-  // GROOMING / VET (appointment): only checkin present (no checkout)
-  //   properties.capacity = total concurrent slots (staff/chairs)
-  //   Count active bookings on that date (optionally scoped by timeSlot)
-  //   Property available if total bookings < property.capacity
-  //
-  if (filters.checkin) {
-    const checkin = filters.checkin;
-    const checkout = filters.checkout;          // undefined for appointments
-    const serviceCategory = filters.serviceCategory;
-
-    const isBoarding = !!checkout;              // has checkout = overnight
-
-    if (isBoarding) {
-      // === BOARDING: per-service capacity ===
-
-      // 1. Get boarding services with their capacity
-      let svcQuery = supabaseAdmin
-        .from("property_services")
-        .select("id, property_id, capacity, category")
-        .eq("is_active", true)
-        .eq("is_deleted", false);
-
-      if (serviceCategory) {
-        svcQuery = svcQuery.eq("category", serviceCategory);
-      } else {
-        svcQuery = svcQuery.eq("category", "Boarding");
-      }
-
-      const { data: services, error: svcErr } = await svcQuery;
-      if (svcErr) throw svcErr;
-      if (!services?.length) return [];
-
-      const serviceIds = services.map(s => s.id);
-
-      // 2. Fetch ALL overlapping active bookings for those services
-      const { data: bookings, error: bookErr } = await supabaseAdmin
-        .from("bookings")
-        .select("service_id, checkin, checkout")
-        .in("service_id", serviceIds)
-        .eq("is_deleted", false)
-        .in("status", ["pending", "confirmed", "checked_in"])
-        .lt("checkin", checkout)       // booking starts before our checkout
-        .gt("checkout", checkin);      // booking ends after our checkin
-
-      if (bookErr) throw bookErr;
-
-      // 3. Build every night in the requested range
-      const nights: string[] = [];
-      {
-        const cur = new Date(checkin);
-        const end = new Date(checkout);
-        while (cur < end) {
-          nights.push(cur.toISOString().slice(0, 10));
-          cur.setDate(cur.getDate() + 1);
-        }
-      }
-
-      // 4. For each service, find the busiest night and check capacity
-      const availablePropertyIds = new Set<string>();
-
-      for (const svc of services) {
-        const capacity = svc.capacity ?? 1;
-        const svcBookings = (bookings ?? []).filter(
-          (b: any) => b.service_id === svc.id
-        );
-
-        let full = false;
-        for (const night of nights) {
-          const nightStart = night;
-          const nextDay = new Date(night);
-          nextDay.setDate(nextDay.getDate() + 1);
-          const nightEnd = nextDay.toISOString().slice(0, 10);
-
-          // A booking occupies this night when:
-          //   booking.checkin < nightEnd AND booking.checkout > nightStart
-          const count = svcBookings.filter(
-            (b: any) => b.checkin < nightEnd && b.checkout > nightStart
-          ).length;
-
-          if (count >= capacity) { full = true; break; }
-        }
-
-        if (!full) {
-          availablePropertyIds.add(String(svc.property_id));
-        }
-      }
-
-      if (availablePropertyIds.size === 0) return [];
-      query = query.in("id", [...availablePropertyIds]);
-
-    } else {
-      // === GROOMING / VET: property-level capacity ===
-
-      // 1. Count active appointment bookings per property on the date
-      let bookingQuery = supabaseAdmin
-        .from("bookings")
-        .select("property_id")
-        .eq("checkin", checkin)
-        .eq("is_deleted", false)
-        .in("status", ["pending", "confirmed", "checked_in"]);
-
-      // Appointments have no checkout
-      bookingQuery = bookingQuery.is("checkout", null);
-
-      // Optionally narrow by time slot
-      if (filters.timeSlot) {
-        bookingQuery = bookingQuery.eq("time_slot", filters.timeSlot);
-      }
-
-      const { data: dayBookings, error: dayErr } = await bookingQuery;
-      if (dayErr) throw dayErr;
-
-      // 2. Tally bookings per property
-      const countByProp: Record<string, number> = {};
-      for (const b of dayBookings ?? []) {
-        const pid = String(b.property_id);
-        countByProp[pid] = (countByProp[pid] || 0) + 1;
-      }
-
-      // 3. Fetch candidate properties with their capacity column
-      const { data: allProps, error: propErr } = await supabaseAdmin
-        .from("properties")
-        .select("id, capacity")
-        .eq("status", "approved")
-        .eq("is_deleted", false);
-
-      if (propErr) throw propErr;
-
-      const availablePropertyIds = (allProps ?? [])
-        .filter((p: any) => {
-          const cap = p.capacity ?? 1;           // default 1 if unset
-          const booked = countByProp[String(p.id)] || 0;
-          return booked < cap;
-        })
-        .map((p: any) => String(p.id));
-
-      if (availablePropertyIds.length === 0) return [];
-      query = query.in("id", availablePropertyIds);
-    }
-  }
-
-
-  // ── Rating ──
-  if (filters.rating !== undefined && filters.rating > 0) {
-    if (has("rating")) {
-      query = query.gte("rating", filters.rating);
-    }
-  }
-
-  // ── Amenities (admin-managed) ──
-  if (filters.amenities?.length) {
-    const cleaned = filters.amenities.map((a) => a.trim()).filter(Boolean);
-
-    const uuidRegex = /^[0-9a-f-]{36}$/i;
-    const idCandidates = cleaned.filter((a) => uuidRegex.test(a));
-    const nameCandidates = cleaned.filter((a) => !uuidRegex.test(a));
-
-    let amenityIds = [...idCandidates];
-
-    if (nameCandidates.length) {
-      const { data: amenityRows } = await supabaseAdmin
-        .from("amenities")
-        .select("id, amenity")
-        .in("amenity", nameCandidates);
-
-      const resolved = amenityRows?.map((a) => a.id) ?? [];
-      amenityIds = Array.from(new Set([...amenityIds, ...resolved]));
-    }
-
-    if (amenityIds.length) {
-      let intersection: Set<string> | null = null;
-
-      for (const amenityId of amenityIds) {
-        const { data: rows } = await supabaseAdmin
-          .from("property_amenities")
-          .select("property_id")
-          .eq("amenity_id", amenityId);
-
-        const ids = new Set((rows ?? []).map((r) => String(r.property_id)));
-        if (intersection === null) {
-          intersection = ids;
-        } else {
-          const current: Set<string> = intersection as Set<string>;
-          intersection = new Set<string>(
-            [...current].filter((id: string) => ids.has(id))
-          );
-        }
-      }
-
-      const finalIds = intersection ? Array.from(intersection) : [];
-      if (finalIds.length === 0) return [];
-
-      query = query.in("id", finalIds);
-    }
-  }
-
-  // ── Service category filter (per-service, not per-property) ──
-  if (filters.serviceCategory) {
-    const cat = filters.serviceCategory;
-    let svcQuery = supabaseAdmin
-      .from("property_services")
-      .select("property_id, price")
-      .eq("category", cat)
-      .eq("is_active", true)
-      .eq("is_deleted", false);
-
-    // Scope price range to this category
-    if (filters.minPrice !== undefined) svcQuery = svcQuery.gte("price", filters.minPrice);
-    if (filters.maxPrice !== undefined) svcQuery = svcQuery.lte("price", filters.maxPrice);
-
-    const { data: svcRows, error: svcErr } = await svcQuery;
-    if (svcErr) { console.error("[getProperties] serviceCategory lookup", svcErr); throw svcErr; }
-
-    const matchedIds = [...new Set((svcRows ?? []).map((r) => String(r.property_id)))];
-    if (matchedIds.length === 0) return [];
-    query = query.in("id", matchedIds);
-  } else if (filters.minPrice !== undefined || filters.maxPrice !== undefined) {
-    // Price filter across all services when no category is specified
-    let svcQuery = supabaseAdmin
-      .from("property_services")
-      .select("property_id")
-      .eq("is_active", true)
-      .eq("is_deleted", false);
-
-    if (filters.minPrice !== undefined) svcQuery = svcQuery.gte("price", filters.minPrice);
-    if (filters.maxPrice !== undefined) svcQuery = svcQuery.lte("price", filters.maxPrice);
-
-    const { data: svcRows, error: svcErr } = await svcQuery;
-    if (svcErr) { console.error("[getProperties] price filter lookup", svcErr); throw svcErr; }
-
-    const matchedIds = [...new Set((svcRows ?? []).map((r) => String(r.property_id)))];
-    if (matchedIds.length === 0) return [];
-    query = query.in("id", matchedIds);
-  }
-
-  //── Status / soft delete (only if columns exist) ──
-  if (has("status"))     query = query.eq("status", "approved");
-  if (has("is_deleted")) query = query.eq("is_deleted", false);
-
-  // ── Execute ──
-  const { data, error } = await query;
-
-  if (error) {
-    console.error("[getProperties]", error);
-    throw error;
-  }
-
-  let rows = data || [];
-  if (rows.length === 0) return [];
-
-  // ── Geo radius filter (post-query) ──
-  if (filters.lat != null && filters.lng != null) {
-    const radius = filters.radiusKm ?? 10;
-    rows = rows.filter((p: any) => {
-      if (p.latitude == null || p.longitude == null) return false;
-      const dist = haversineDistance(
-        filters.lat!,
-        filters.lng!,
-        Number(p.latitude),
-        Number(p.longitude)
-      );
-      return dist <= radius;
-    });
-
-    if (rows.length === 0) return [];
-  }
-
-  // ── Cheapest service price per property (scoped by category when filtered) ──
-  const propertyIds = rows.map((p: any) => p.id);
-
-  let priceQuery = supabaseAdmin
-    .from("property_services")
-    .select("property_id, price")
-    .in("property_id", propertyIds)
-    .eq("is_active", true)
-    .eq("is_deleted", false);
-
-  // Scope cheapest price to the selected service category
-  if (filters.serviceCategory) {
-    priceQuery = priceQuery.eq("category", filters.serviceCategory);
-  }
-
-  priceQuery = priceQuery.order("price", { ascending: true });
-
-  const { data: serviceRows, error: serviceError } = await priceQuery;
-
-  if (serviceError) {
-    console.error("[getProperties] service price lookup", serviceError);
-    throw serviceError;
-  }
-
-  const cheapestByProperty = new Map<string, number>();
-  for (const row of serviceRows ?? []) {
-    const pid = String(row.property_id);
-    if (!cheapestByProperty.has(pid)) {
-      cheapestByProperty.set(pid, Number(row.price ?? 0));
-    }
-  }
-
-  return rows.map((p: any) => ({
-    ...p,
-    cheapest_service_price: cheapestByProperty.get(String(p.id)) ?? null,
-  }));
-}
-
-// ── Get Single Property by ID ──
-export async function getPropertyById(id: string) {
-  const { data, error } = await supabaseAdmin
-    .from("properties")
-    .select(`
-      *,
-      property_amenities(
-        amenity_id,
-        amenities(amenity)
-      ),
-      property_services(
-        id,
-        name,
-        category,
-        price,
-        duration_minutes,
-        description,
-        is_active
-      )
-    `)
-    .eq("id", id)
-    .single();
-
-  if (error) {
-    console.error("[getPropertyById]", error);
-    throw error;
-  }
-
-  if (!data) return null;
-
-  // Get cheapest service price
-  const activeServices = data.property_services?.filter((s: any) => s.is_active) || [];
-  const cheapestPrice = activeServices.length > 0
-    ? Math.min(...activeServices.map((s: any) => Number(s.price || 0)))
-    : null;
-
-  return {
-    ...data,
-    cheapest_service_price: cheapestPrice,
-  };
-}
+export default router;
 </file>
 
 <file path="backend/tsconfig.json">
@@ -16399,6 +15377,446 @@ dist-ssr
 Thumbs.db
 </file>
 
+<file path="IMPLEMENTATION_GUIDE.md">
+# Frontend-Backend Integration - Implementation Complete ✅
+
+## Summary
+
+Successfully connected the PawStay frontend (Hotels, Veterinary sections) with the existing backend API. The system now dynamically fetches real property data from Supabase instead of using hardcoded values.
+
+---
+
+## What Was Changed
+
+### 1. Backend API Changes
+
+**File:** `backend/services/property.service.ts`
+
+Added `getPropertyById()` function to fetch individual properties with all related data:
+```typescript
+export async function getPropertyById(id: string) {
+  const { data, error } = await supabaseAdmin
+    .from("properties")
+    .select(`
+      *,
+      property_amenities(amenity_id, amenities(amenity)),
+      property_services(id, name, category, price, duration_minutes, description, is_active)
+    `)
+    .eq("id", id)
+    .single();
+  // ... returns property with cheapest_service_price
+}
+```
+
+**File:** `backend/controllers/propertyController.ts`
+
+Added `getById` controller method:
+```typescript
+getById: async (req: Request, res: Response) => {
+  const id = req.params.id as string;
+  const property = await getPropertyById(id);
+  res.status(200).json({ property });
+}
+```
+
+**File:** `backend/routes/searchRoute.ts`
+
+Added new route for fetching by ID:
+```typescript
+router.get("/:id", propertyController.getById);
+```
+
+### 2. Frontend API Service
+**File:** `src/services/propertyApi.ts`
+
+Updated `fetchPropertyById()` to use the new dedicated endpoint:
+```typescript
+export async function fetchPropertyById(id: string) {
+  const res = await fetch(`/api/properties/${id}`, {
+    method: "GET",
+    headers: { "Content-Type": "application/json" },
+  });
+  if (!res.ok) throw new Error("Failed to fetch property details");
+  const data = await res.json();
+  return data.property;
+}
+```
+
+### 3. Hotels Pages
+**Files:** `src/pages/Hotels.tsx`, `src/pages/HotelDetail.tsx`
+
+**Hotels.tsx:**
+- Replaced hardcoded hotels with dynamic fetching
+- Added state management for loading and data
+- Filters: `propertyType: "hotel"`, location, minPrice, maxPrice
+- Price range slider + location input triggers re-fetching
+- Loading states and empty state handling
+
+**HotelDetail.tsx:**
+- Uses `fetchPropertyById()` with new GET `/api/properties/:id` endpoint
+- Displays actual property_services from database (selectable)
+- Shows amenities from property_amenities
+- Booking button passes selected service ID and price
+- Favorite functionality preserved
+
+### 4. Veterinary Pages
+**Files:** `src/pages/Veterinary.tsx`, `src/pages/VeterinaryDetail.tsx`
+
+**Veterinary.tsx:**
+- Replaced hardcoded clinics with dynamic fetching
+- Added filters sidebar (location, price range)
+- Filters: `propertyType: "veterinary"`, location, minPrice, maxPrice
+- Loading states and empty state handling
+
+**VeterinaryDetail.tsx:**
+- Uses `fetchPropertyById()` with new GET `/api/properties/:id` endpoint
+- Displays actual property_services from database (selectable)
+- Service selection updates price and booking data
+- Booking button passes selected service ID and price
+- Favorite functionality preserved
+
+---
+
+## How It Works
+
+### Data Flow Architecture
+
+```
+Frontend Pages
+    ↓
+fetchProperties() / fetchPropertyById()
+    ↓
+Backend: GET /api/properties/search (POST)
+    ↓
+Backend Service: property.service.ts
+    ↓
+Supabase: properties table + joins
+    ↓
+Response with:
+  - Property details
+  - Amenities (via property_amenities join)
+  - Cheapest service price (via property_services join)
+  - Review count, rating, etc.
+    ↓
+Frontend: Map data to component format
+    ↓
+Render UI with real data
+```
+
+### State Management Flow
+
+**Listing Pages (Hotels.tsx, Veterinary.tsx):**
+```
+Component Mount
+    ↓
+useEffect() with priceRange dependency
+    ↓
+setIsLoading(true)
+    ↓
+fetchProperties(filters)
+    ↓
+Map results
+    ↓
+setState(mapped data)
+    ↓
+setIsLoading(false)
+    ↓
+Render list with real data
+```
+
+**Detail Pages (HotelDetail.tsx, VeterinaryDetail.tsx):**
+```
+Component Mount (with id from URL)
+    ↓
+useEffect() with id dependency
+    ↓
+setIsLoading(true)
+    ↓
+fetchPropertyById(id)
+    ↓
+Map result
+    ↓
+setState(mapped data)
+    ↓
+setIsLoading(false)
+    ↓
+Render detail with real data
+```
+
+---
+
+## Data Mapping Details
+
+### Hotels Mapping
+```typescript
+const mapped = data.map((p: any) => ({
+  id: p.id,                                    // UUID from database
+  name: p.name,                                // Property name
+  image: p.cover_image || fallback,            // Cover image URL
+  location: p.city || p.address,               // City or address
+  rating: p.rating || 0,                       // Rating from reviews
+  reviews: p.review_count || 0,                // Number of reviews
+  price: p.cheapest_service_price || 0,        // Cheapest boarding price
+  amenities: p.property_amenities?.map(a => a.amenities?.amenity) || [],
+  featured: p.featured,                        // Featured flag
+  availability: "Available"
+}));
+```
+
+### Veterinary Mapping
+```typescript
+const mapped = data.map((p: any) => ({
+  id: p.id,                                    // UUID from database
+  name: p.name,                                // Clinic name
+  image: p.cover_image || fallback,            // Cover image URL
+  location: p.city || p.address,               // City or address
+  rating: p.rating || 0,                       // Rating from reviews
+  reviews: p.review_count || 0,                // Number of reviews
+  price: p.cheapest_service_price || 0,        // Cheapest service price
+  services: ["Consultation", "Vaccination"],   // Default services
+  availability: "Open Now",
+  emergency: p.facilities_amenities?.includes("Emergency Room") || false
+}));
+```
+
+---
+
+## Filter Implementation
+
+### Current Filters Connected
+✅ **Price Range** - Working
+  - Triggers on slider change
+  - `minPrice` and `maxPrice` passed to API
+  - Results update in real-time
+
+✅ **Property Type** - Working
+  - Hotels: `propertyType: "hotel"`
+  - Veterinary: `propertyType: "veterinary"`
+
+✅ **Service Category** - Working
+  - Hotels: `serviceCategory: "Boarding"`
+  - Veterinary: `serviceCategory: "Veterinary"`
+
+### Available Filters (Not Yet Connected)
+❌ Location Filter - UI exists, needs state integration
+❌ Rating Filter - UI exists, needs state integration
+❌ Amenities Filter - UI exists, needs state integration
+❌ Emergency Services Filter (Vet) - UI exists, needs state integration
+
+**To Enable Additional Filters:** Add state for each filter and update the `fetchProperties()` call with new filter values.
+
+---
+
+## Backend Compatibility
+
+The backend (`backend/services/property.service.ts`) already supports:
+
+✅ **Property Type Filtering**
+```typescript
+if (filters.propertyType) {
+  const colSample = sample?.[0]?.property_type;
+  if (Array.isArray(colSample)) {
+    query = query.contains("property_type", [filters.propertyType]);
+  } else {
+    query = query.eq("property_type", filters.propertyType);
+  }
+}
+```
+
+✅ **Service Category Filtering**
+```typescript
+if (filters.serviceCategory) {
+  // Filters property_services by category
+}
+```
+
+✅ **Price Range Filtering**
+```typescript
+if (filters.minPrice !== undefined) svcQuery = svcQuery.gte("price", filters.minPrice);
+if (filters.maxPrice !== undefined) svcQuery = svcQuery.lte("price", filters.maxPrice);
+```
+
+✅ **Amenities Joining**
+```typescript
+select(`
+  *,
+  property_amenities(
+    amenity_id,
+    amenities(amenity)
+  )
+`)
+```
+
+✅ **Cheapest Service Price Calculation**
+```typescript
+const cheapestByProperty = new Map<string, number>();
+for (const row of serviceRows ?? []) {
+  const pid = String(row.property_id);
+  if (!cheapestByProperty.has(pid)) {
+    cheapestByProperty.set(pid, Number(row.price ?? 0));
+  }
+}
+```
+
+---
+
+## Testing Guide
+
+### Manual Testing Steps
+
+1. **Hotels Listing Page**
+   - Navigate to `/hotels`
+   - Verify: Hotels load from backend (not hardcoded)
+   - Move price slider left/right
+   - Verify: Results update in real-time
+   - Click on any hotel card
+   - Verify: Detail page loads with correct hotel data
+
+2. **Hotel Detail Page**
+   - Should show actual hotel name, images, amenities
+   - Heart icon should add/remove from favorites
+   - Room selection should work
+   - Booking button should navigate with correct data
+
+3. **Veterinary Listing Page**
+   - Navigate to `/veterinary`
+   - Verify: Clinics load from backend (not hardcoded)
+   - Move price slider left/right
+   - Verify: Results update in real-time
+   - Click on any clinic card
+   - Verify: Detail page loads with correct clinic data
+
+4. **Veterinary Detail Page**
+   - Should show actual clinic name, images, amenities
+   - Heart icon should add/remove from favorites
+   - Service selection should work
+   - Booking button should navigate with correct data
+
+5. **Favorites Integration**
+   - Add/remove favorites on detail pages
+   - Navigate to Favorites page
+   - Verify: Added properties appear in list
+
+6. **Adding New Properties**
+   - Create new hotel via ListProperty page
+   - Set property_type to "hotel" and service to "Boarding"
+   - Navigate to Hotels page
+   - Verify: New hotel appears in listing
+   - Click on it to verify detail page works
+
+---
+
+## Error Handling
+
+### Current Error Handling
+- Try-catch blocks on all API calls
+- Errors logged to console
+- Loading states prevent duplicate requests
+- Empty state shown if no results
+
+### Suggested Improvements
+1. Add toast notifications for errors
+2. Retry logic for failed requests
+3. Loading skeletons instead of "Loading..." text
+4. Graceful degradation (show fallback data)
+
+---
+
+## Performance Considerations
+
+### Current Implementation
+- Fetches only when filters change
+- Maps data on each render
+- No caching
+
+### Optimization Opportunities
+1. **Memoization** - Use `useMemo()` for mapped data
+2. **Caching** - Cache results per filter combination
+3. **Pagination** - Implement for large result sets
+4. **Lazy Loading** - Load more on scroll
+5. **Image Optimization** - Use proper image sizes
+
+Example optimization:
+```typescript
+const mapped = useMemo(() => {
+  return data.map(p => ({ /* mapping */ }));
+}, [data]);
+```
+
+---
+
+## Files Modified Summary
+
+| File | Changes | Status |
+|------|---------|--------|
+| `src/services/propertyApi.ts` | Updated `fetchPropertyById()` to use GET endpoint | ✅ Complete |
+| `src/pages/Hotels.tsx` | Dynamic fetching, filters, empty state | ✅ Complete |
+| `src/pages/Veterinary.tsx` | Dynamic fetching, filters sidebar, empty state | ✅ Complete |
+| `src/pages/HotelDetail.tsx` | Fetch by ID, service selection, booking integration | ✅ Complete |
+| `src/pages/VeterinaryDetail.tsx` | Fetch by ID, service selection, booking integration | ✅ Complete |
+| `backend/services/property.service.ts` | Added `getPropertyById()` function | ✅ Complete |
+| `backend/controllers/propertyController.ts` | Added `getById` controller | ✅ Complete |
+| `backend/routes/searchRoute.ts` | Added GET `/:id` route | ✅ Complete |
+
+---
+
+## Next Steps
+
+### Priority 1: Verify Production
+1. Run frontend: `npm run dev`
+2. Test all flows mentioned in "Testing Guide"
+3. Check browser console for errors
+
+### Priority 2: Connect Remaining Filters
+1. Add state for location, rating, amenities
+2. Update `fetchProperties()` calls
+3. Test filter combinations
+
+### Priority 3: Enhance Detail Pages
+1. Fetch actual services from backend
+2. Fetch team information if available
+3. Fetch facility details
+
+### Priority 4: Performance Improvements
+1. Add data memoization
+2. Implement caching
+3. Add pagination
+4. Optimize images
+
+### Priority 5: User Experience
+1. Add loading skeletons
+2. Add error toast notifications
+3. Add empty state illustrations
+4. Add success notifications
+
+---
+
+## Questions & Support
+
+If you encounter issues:
+
+1. **Check console** for error messages
+2. **Verify backend** is running and API endpoint works
+3. **Check URL patterns** - ensure IDs match what's in database
+4. **Verify Supabase connection** - check supabaseAdmin/supabaseClient config
+5. **Check CORS settings** - ensure backend allows frontend requests
+
+---
+
+## Conclusion
+
+✅ **Integration Complete and Ready for Testing**
+
+The frontend now successfully connects to the backend API for:
+- Dynamic hotel and veterinary clinic listings
+- Real-time filtering by price range
+- Dynamic detail pages fetching actual property data
+- Preserved favorite functionality
+- Error handling and loading states
+
+All files compile without errors and are ready for production testing.
+</file>
+
 <file path="tailwind.config.ts">
 import type { Config } from "tailwindcss";
 import tailwindcssAnimate from "tailwindcss-animate";
@@ -16514,6 +15932,590 @@ export default {
   },
   plugins: [tailwindcssAnimate],
 } satisfies Config;
+</file>
+
+<file path="backend/controllers/propertyController.ts">
+import { Request, Response } from "express";
+import { getProperties, getPropertyById, HotelFilters } from "../services/property.service";
+
+export const propertyController = {
+  searchProperties: async (req: Request, res: Response) => {
+    try {
+      const source = req.method === "GET" ? req.query : req.body;
+
+      const asString = (val: unknown): string | undefined => {
+        if (val === undefined || val === null) return undefined;
+        const str = String(val).trim();
+        return str ? str : undefined;
+      };
+
+      const asNumber = (val: unknown): number | undefined => {
+        if (val === undefined || val === null || val === "") return undefined;
+        const num = Number(val);
+        return Number.isFinite(num) ? num : undefined;
+      };
+
+      const normalizeAmenities = (val: unknown): string[] | undefined => {
+        if (!val) return undefined;
+        if (Array.isArray(val)) {
+          const items = val.map((v) => String(v).trim()).filter(Boolean);
+          return items.length ? items : undefined;
+        }
+        const str = String(val).trim();
+        if (!str) return undefined;
+        const items = str.split(",").map((v) => v.trim()).filter(Boolean);
+        return items.length ? items : undefined;
+      };
+
+      const filters: HotelFilters = {
+        location: asString(source.location),
+        checkin: asString(source.checkin || source.checkIn),
+        checkout: asString(source.checkout || source.checkOut),
+        timeSlot: asString(source.timeSlot || source.time_slot),
+        petType: asString(source.petType || source.pet)?.toLowerCase(),
+        dogSize: asString(source.dogSize || source.dogsize)?.toLowerCase(),
+        propertyType: asString(source.propertyType || source.type)?.toLowerCase(),
+        serviceCategory: asString(source.serviceCategory),
+        minPrice: asNumber(source.minPrice),
+        maxPrice: asNumber(source.maxPrice),
+        rating: asNumber(source.rating),
+        amenities: normalizeAmenities(source.amenities),
+        keyword: asString(source.keyword),
+        lat: asNumber(source.lat),
+        lng: asNumber(source.lng),
+        radiusKm: asNumber(source.radiusKm),
+      };
+
+      // Call service
+      const properties = await getProperties(filters);
+      //console.log("[searchProperties] Retrieved properties:", properties);
+      // Return JSON response
+      res.status(200).json({ properties });
+    } catch (err: any) {
+      //console.error("[searchProperties]", err);
+      res.status(500).json({ message: err.message || "Failed to fetch properties" });
+    }
+  },
+
+  randomProperties: async (req: Request, res: Response) => {
+    try {
+      const limit = Number(req.body?.limit) || 6;
+      // Use getProperties with no filters to get all, then shuffle and slice
+      const allProperties = await getProperties({});
+      const shuffled = allProperties.sort(() => Math.random() - 0.5);
+      const properties = shuffled.slice(0, limit);
+      res.status(200).json({ properties });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message || "Failed to fetch random properties" });
+    }
+  },
+
+  getById: async (req: Request, res: Response) => {
+    try {
+      const id = req.params.id as string;
+      
+      // Basic UUID validation regex
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!id || !uuidRegex.test(id)) {
+        return res.status(400).json({ message: "Invalid Property ID format" });
+      }
+      
+      const property = await getPropertyById(id);
+      if (!property) {
+        return res.status(404).json({ message: "Property not found" });
+      }
+      res.status(200).json({ property });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message || "Failed to fetch property" });
+    }
+  },
+};
+</file>
+
+<file path="backend/services/property.service.ts">
+import { supabaseAdmin } from "../config/supabaseAdmin";
+import { supabaseClient } from "../config/supabaseClient";
+
+
+export type HotelFilters = {
+  location?: string;
+  checkin?: string;
+  checkout?: string;
+  timeSlot?: string;          // for same-day services like grooming/vet
+  petType?: string;
+  dogSize?: string;
+  propertyType?: string;
+  serviceCategory?: string;  // per-service filter: Boarding, Grooming, Veterinary, etc.
+  minPrice?: number;
+  maxPrice?: number;
+  rating?: number;
+  amenities?: string[];
+  keyword?: string;
+  lat?: number;              // user latitude
+  lng?: number;              // user longitude
+  radiusKm?: number;         // search radius in km (default 10)
+};
+
+// ── Haversine distance (km) ──
+function haversineDistance(
+  lat1: number, lon1: number,
+  lat2: number, lon2: number
+): number {
+  const R = 6371;
+  const toRad = (deg: number) => (deg * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
+export async function getProperties(filters: HotelFilters = {}) {
+  // Diagnostics: count + sample row
+  // const { count: totalCount } = await supabase
+  //   .from("properties")
+  //   .select("id", { count: "exact", head: true });
+
+  const { data: sample } = await supabaseAdmin
+    .from("properties")
+    .select("*")
+    .limit(1);
+
+  const columns = sample?.[0] ? Object.keys(sample[0]) : [];  
+  const has = (col: string) => columns.includes(col);
+
+  //console.log("[getProperties] Total count:", totalCount ?? "unknown");
+  //console.log("[getProperties] Available columns:", columns);
+  //console.log("[getProperties] Filters:", filters);
+
+  let query = supabaseAdmin
+    .from("properties")
+    .select(`
+      *,
+      property_amenities(
+        amenity_id,
+        amenities(amenity)
+      )
+    `);
+
+  // ── Location ──
+  // When lat/lng are provided, skip text-based location filter
+  // (geo filter is applied post-query below)
+  if (filters.location && filters.lat == null) {
+    const loc = filters.location.trim();
+    if (loc) {
+      const orParts: string[] = [];
+      if (has("city"))     orParts.push(`city.ilike.%${loc}%`);
+      if (has("location")) orParts.push(`location.ilike.%${loc}%`);
+      if (has("address"))  orParts.push(`address.ilike.%${loc}%`);
+      if (has("name"))     orParts.push(`name.ilike.%${loc}%`);
+
+      if (orParts.length) {
+        query = query.or(orParts.join(","));
+      }
+    }
+  }
+
+  // ── Keyword (name / description search) ──
+  if (filters.keyword) {
+    const kw = filters.keyword;
+    const kwParts: string[] = [];
+    if (has("name"))        kwParts.push(`name.ilike.%${kw}%`);
+    if (has("description")) kwParts.push(`description.ilike.%${kw}%`);
+    if (kwParts.length) {
+      query = query.or(kwParts.join(","));
+    }
+  }
+
+  // ── Property type ──
+  if (filters.propertyType) {
+    if (has("property_type")) {
+      // Try array contains first (text[]), fall back to eq (text)
+      const colSample = sample?.[0]?.property_type;
+      if (Array.isArray(colSample)) {
+        query = query.contains("property_type", [filters.propertyType]);
+      } else {
+        query = query.eq("property_type", filters.propertyType);
+      }
+    }
+  }
+
+  // ── Pet type ──
+  if (filters.petType) {
+    if (filters.petType === "others") {
+      query = query.not("exotic_pet_types", "is", null);
+    }
+
+    else if (has("pet_types_accepted")) {
+      const formatted =
+        filters.petType.charAt(0).toUpperCase() +
+        filters.petType.slice(1).toLowerCase();
+      query = query.contains("pet_types_accepted", [formatted]);
+    }
+  }
+
+// -- Dog Size --
+  if (filters.dogSize) {
+  const formatted =
+    filters.dogSize.charAt(0).toUpperCase() +
+    filters.dogSize.slice(1).toLowerCase();
+
+    if (has("dog_sizes")) {
+      query = query.contains("dog_sizes", [formatted]);
+    }
+  }
+
+  // -- Availability filter --
+  //
+  // BOARDING (hotel): checkin + checkout present
+  //   property_services.capacity = per-room-type capacity
+  //   Check overlapping bookings per night; busiest night must be < capacity
+  //   Property available if >= 1 boarding service has room on every night
+  //
+  // GROOMING / VET (appointment): only checkin present (no checkout)
+  //   properties.capacity = total concurrent slots (staff/chairs)
+  //   Count active bookings on that date (optionally scoped by timeSlot)
+  //   Property available if total bookings < property.capacity
+  //
+  if (filters.checkin) {
+    const checkin = filters.checkin;
+    const checkout = filters.checkout;          // undefined for appointments
+    const serviceCategory = filters.serviceCategory;
+
+    const isBoarding = !!checkout;              // has checkout = overnight
+
+    if (isBoarding) {
+      // === BOARDING: per-service capacity ===
+
+      // 1. Get boarding services with their capacity
+      let svcQuery = supabaseAdmin
+        .from("property_services")
+        .select("id, property_id, capacity, category")
+        .eq("is_active", true)
+        .eq("is_deleted", false);
+
+      if (serviceCategory) {
+        svcQuery = svcQuery.eq("category", serviceCategory);
+      } else {
+        svcQuery = svcQuery.eq("category", "Boarding");
+      }
+
+      const { data: services, error: svcErr } = await svcQuery;
+      if (svcErr) throw svcErr;
+      if (!services?.length) return [];
+
+      const serviceIds = services.map(s => s.id);
+
+      // 2. Fetch ALL overlapping active bookings for those services
+      const { data: bookings, error: bookErr } = await supabaseAdmin
+        .from("bookings")
+        .select("service_id, checkin, checkout")
+        .in("service_id", serviceIds)
+        .eq("is_deleted", false)
+        .in("status", ["pending", "confirmed", "checked_in"])
+        .lt("checkin", checkout)       // booking starts before our checkout
+        .gt("checkout", checkin);      // booking ends after our checkin
+
+      if (bookErr) throw bookErr;
+
+      // 3. Build every night in the requested range
+      const nights: string[] = [];
+      {
+        const cur = new Date(checkin);
+        const end = new Date(checkout);
+        while (cur < end) {
+          nights.push(cur.toISOString().slice(0, 10));
+          cur.setDate(cur.getDate() + 1);
+        }
+      }
+
+      // 4. For each service, find the busiest night and check capacity
+      const availablePropertyIds = new Set<string>();
+
+      for (const svc of services) {
+        const capacity = svc.capacity ?? 1;
+        const svcBookings = (bookings ?? []).filter(
+          (b: any) => b.service_id === svc.id
+        );
+
+        let full = false;
+        for (const night of nights) {
+          const nightStart = night;
+          const nextDay = new Date(night);
+          nextDay.setDate(nextDay.getDate() + 1);
+          const nightEnd = nextDay.toISOString().slice(0, 10);
+
+          // A booking occupies this night when:
+          //   booking.checkin < nightEnd AND booking.checkout > nightStart
+          const count = svcBookings.filter(
+            (b: any) => b.checkin < nightEnd && b.checkout > nightStart
+          ).length;
+
+          if (count >= capacity) { full = true; break; }
+        }
+
+        if (!full) {
+          availablePropertyIds.add(String(svc.property_id));
+        }
+      }
+
+      if (availablePropertyIds.size === 0) return [];
+      query = query.in("id", [...availablePropertyIds]);
+
+    } else {
+      // === GROOMING / VET: property-level capacity ===
+
+      // 1. Count active appointment bookings per property on the date
+      let bookingQuery = supabaseAdmin
+        .from("bookings")
+        .select("property_id")
+        .eq("checkin", checkin)
+        .eq("is_deleted", false)
+        .in("status", ["pending", "confirmed", "checked_in"]);
+
+      // Appointments have no checkout
+      bookingQuery = bookingQuery.is("checkout", null);
+
+      // Optionally narrow by time slot
+      if (filters.timeSlot) {
+        bookingQuery = bookingQuery.eq("time_slot", filters.timeSlot);
+      }
+
+      const { data: dayBookings, error: dayErr } = await bookingQuery;
+      if (dayErr) throw dayErr;
+
+      // 2. Tally bookings per property
+      const countByProp: Record<string, number> = {};
+      for (const b of dayBookings ?? []) {
+        const pid = String(b.property_id);
+        countByProp[pid] = (countByProp[pid] || 0) + 1;
+      }
+
+      // 3. Fetch candidate properties with their capacity column
+      const { data: allProps, error: propErr } = await supabaseAdmin
+        .from("properties")
+        .select("id, capacity")
+        .eq("status", "approved")
+        .eq("is_deleted", false);
+
+      if (propErr) throw propErr;
+
+      const availablePropertyIds = (allProps ?? [])
+        .filter((p: any) => {
+          const cap = p.capacity ?? 1;           // default 1 if unset
+          const booked = countByProp[String(p.id)] || 0;
+          return booked < cap;
+        })
+        .map((p: any) => String(p.id));
+
+      if (availablePropertyIds.length === 0) return [];
+      query = query.in("id", availablePropertyIds);
+    }
+  }
+
+
+  // ── Rating ──
+  if (filters.rating !== undefined && filters.rating > 0) {
+    if (has("rating")) {
+      query = query.gte("rating", filters.rating);
+    }
+  }
+
+  // ── Amenities (admin-managed) ──
+  if (filters.amenities?.length) {
+    const cleaned = filters.amenities.map((a) => a.trim()).filter(Boolean);
+
+    const uuidRegex = /^[0-9a-f-]{36}$/i;
+    const idCandidates = cleaned.filter((a) => uuidRegex.test(a));
+    const nameCandidates = cleaned.filter((a) => !uuidRegex.test(a));
+
+    let amenityIds = [...idCandidates];
+
+    if (nameCandidates.length) {
+      const { data: amenityRows } = await supabaseAdmin
+        .from("amenities")
+        .select("id, amenity")
+        .in("amenity", nameCandidates);
+
+      const resolved = amenityRows?.map((a) => a.id) ?? [];
+      amenityIds = Array.from(new Set([...amenityIds, ...resolved]));
+    }
+
+    if (amenityIds.length) {
+      let intersection: Set<string> | null = null;
+
+      for (const amenityId of amenityIds) {
+        const { data: rows } = await supabaseAdmin
+          .from("property_amenities")
+          .select("property_id")
+          .eq("amenity_id", amenityId);
+
+        const ids = new Set((rows ?? []).map((r) => String(r.property_id)));
+        if (intersection === null) {
+          intersection = ids;
+        } else {
+          const current: Set<string> = intersection as Set<string>;
+          intersection = new Set<string>(
+            [...current].filter((id: string) => ids.has(id))
+          );
+        }
+      }
+
+      const finalIds = intersection ? Array.from(intersection) : [];
+      if (finalIds.length === 0) return [];
+
+      query = query.in("id", finalIds);
+    }
+  }
+
+  // ── COMBINED SERVICE FILTER (Category + Price) ──
+  // This logic finds all properties that have at least one service 
+  // matching the category AND the price range.
+  if (filters.serviceCategory || filters.minPrice !== undefined || filters.maxPrice !== undefined) {
+    let svcQuery = supabaseAdmin
+      .from("property_services")
+      .select("property_id")
+      .eq("is_active", true)
+      .eq("is_deleted", false);
+
+    if (filters.serviceCategory) {
+      svcQuery = svcQuery.eq("category", filters.serviceCategory);
+    }
+    if (filters.minPrice !== undefined) {
+      svcQuery = svcQuery.gte("price", filters.minPrice);
+    }
+    if (filters.maxPrice !== undefined) {
+      svcQuery = svcQuery.lte("price", filters.maxPrice);
+    }
+
+    const { data: svcRows, error: svcErr } = await svcQuery;
+    if (svcErr) {
+      console.error("[getProperties] service filter lookup", svcErr);
+      throw svcErr;
+    }
+
+    // Get unique property IDs that matched the service criteria
+    const matchedIds = [...new Set((svcRows ?? []).map((r) => String(r.property_id)))];
+    
+    // If no services matched the price/category, return empty immediately
+    if (matchedIds.length === 0) return [];
+
+    // Filter properties to only those that have matching services
+    query = query.in("id", matchedIds);
+  }
+
+  //── Status / soft delete (only if columns exist) ──
+  if (has("status"))     query = query.eq("status", "approved");
+  if (has("is_deleted")) query = query.eq("is_deleted", false);
+
+  // ── Execute ──
+  const { data, error } = await query;
+
+  if (error) {
+    console.error("[getProperties]", error);
+    throw error;
+  }
+
+  let rows = data || [];
+  if (rows.length === 0) return [];
+
+  // ── Geo radius filter (post-query) ──
+  if (filters.lat != null && filters.lng != null) {
+    const radius = filters.radiusKm ?? 10;
+    rows = rows.filter((p: any) => {
+      if (p.latitude == null || p.longitude == null) return false;
+      const dist = haversineDistance(
+        filters.lat!,
+        filters.lng!,
+        Number(p.latitude),
+        Number(p.longitude)
+      );
+      return dist <= radius;
+    });
+
+    if (rows.length === 0) return [];
+  }
+
+  // ── Cheapest service price per property (scoped by category when filtered) ──
+  const propertyIds = rows.map((p: any) => p.id);
+
+  let priceQuery = supabaseAdmin
+    .from("property_services")
+    .select("property_id, price")
+    .in("property_id", propertyIds)
+    .eq("is_active", true)
+    .eq("is_deleted", false);
+
+  // Scope cheapest price to the selected service category
+  if (filters.serviceCategory) {
+    priceQuery = priceQuery.eq("category", filters.serviceCategory);
+  }
+
+  priceQuery = priceQuery.order("price", { ascending: true });
+
+  const { data: serviceRows, error: serviceError } = await priceQuery;
+
+  if (serviceError) {
+    console.error("[getProperties] service price lookup", serviceError);
+    throw serviceError;
+  }
+
+  const cheapestByProperty = new Map<string, number>();
+  for (const row of serviceRows ?? []) {
+    const pid = String(row.property_id);
+    if (!cheapestByProperty.has(pid)) {
+      cheapestByProperty.set(pid, Number(row.price ?? 0));
+    }
+  }
+
+  return rows.map((p: any) => ({
+    ...p,
+    cheapest_service_price: cheapestByProperty.get(String(p.id)) ?? null,
+  }));
+}
+
+// ── Get Single Property by ID ──
+export async function getPropertyById(id: string) {
+  const { data, error } = await supabaseAdmin
+    .from("properties")
+    .select(`
+      *,
+      property_amenities(
+        amenity_id,
+        amenities(amenity)
+      ),
+      property_services(
+        id,
+        name,
+        category,
+        price,
+        description,
+        is_active
+      )
+    `)
+    .eq("id", id)
+    .single();
+
+  if (error) {
+    console.error("[getPropertyById]", error);
+    throw error;
+  }
+
+  if (!data) return null;
+
+  // Get cheapest service price
+  const activeServices = data.property_services?.filter((s: any) => s.is_active) || [];
+  const cheapestPrice = activeServices.length > 0
+    ? Math.min(...activeServices.map((s: any) => Number(s.price || 0)))
+    : null;
+
+  return {
+    ...data,
+    cheapest_service_price: cheapestPrice,
+  };
+}
 </file>
 
 <file path="src/components/FeaturedHotels.tsx">
@@ -17955,114 +17957,6 @@ const CheckEmail = () => {
 export default CheckEmail;
 </file>
 
-<file path="src/pages/Hotels.tsx">
-import { useState, useEffect } from "react";
-import Header from "@/components/Header";
-import Footer from "@/components/Footer";
-import HotelCard from "@/components/HotelCard";
-import { Button } from "@/components/ui/button";
-import { SlidersHorizontal, MapPin, Star, Loader2 } from "lucide-react";
-import { Input } from "@/components/ui/input";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Slider } from "@/components/ui/slider";
-import { Badge } from "@/components/ui/badge";
-import { fetchProperties } from "@/services/propertyApi";
-
-const Hotels = () => {
-  const [hotels, setHotels] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [priceRange, setPriceRange] = useState([0, 5000]);
-  const [showFilters, setShowFilters] = useState(false);
-  const [location, setLocation] = useState("");
-
-  const loadHotels = async () => {
-    setLoading(true);
-    try {
-      const data = await fetchProperties({
-        propertyType: "hotel",
-        location: location || undefined,
-        minPrice: priceRange[0] > 0 ? priceRange[0] : undefined,
-        maxPrice: priceRange[1],
-      });
-      setHotels(data);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    loadHotels();
-  }, []);
-
-  return (
-    <div className="min-h-screen bg-background">
-      <Header />
-      <section className="py-16 md:py-24 bg-gradient-to-b from-accent/10 to-background">
-        <div className="container">
-          <div className="grid lg:grid-cols-2 gap-12 items-center">
-            <div>
-              <Badge className="bg-accent/10 text-accent border-accent/20 mb-4">Pet Hotels</Badge>
-              <h1 className="font-display text-4xl md:text-5xl lg:text-6xl font-bold text-foreground mb-4">
-                Find the Perfect Stay for Your <span className="text-gradient">Furry Friend</span>
-              </h1>
-              <p className="text-lg text-muted-foreground mb-8">Discover verified pet-friendly hotels offering comfort and safety.</p>
-            </div>
-            <div className="relative hidden lg:block">
-              <img src="https://images.unsplash.com/photo-1587300003388-59208cc962cb?w=600" className="rounded-2xl shadow-elevated" alt="Hotel" />
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <main className="py-8">
-        <div className="container">
-          <div className="flex flex-col lg:flex-row gap-8">
-            <aside className={`lg:w-72 shrink-0 ${showFilters ? 'block' : 'hidden lg:block'}`}>
-              <div className="bg-card rounded-2xl p-6 shadow-soft sticky top-24 border">
-                <h3 className="font-semibold text-lg mb-6">Filters</h3>
-                <div className="mb-6">
-                  <label className="text-sm font-medium text-foreground mb-2 block">Location</label>
-                  <Input value={location} onChange={(e) => setLocation(e.target.value)} placeholder="City..." />
-                </div>
-                <div className="mb-6">
-                  <label className="text-sm font-medium text-foreground mb-4 block">Max Price: ₱{priceRange[1]}</label>
-                  <Slider value={priceRange} onValueChange={setPriceRange} max={10000} step={100} />
-                </div>
-                <Button variant="hero" className="w-full" onClick={loadHotels}>Apply Filters</Button>
-              </div>
-            </aside>
-
-            <div className="flex-1">
-              {loading ? (
-                <div className="flex justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
-              ) : hotels.length === 0 ? (
-                <div className="text-center py-20 text-muted-foreground">No hotels found. Try adjusting your filters.</div>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                  {hotels.map((h) => (
-                    <HotelCard key={h.id} hotel={{
-                      ...h,
-                      image: h.cover_image || "https://images.unsplash.com/photo-1587300003388-59208cc962cb?w=800",
-                      location: h.city,
-                      price: h.cheapest_service_price,
-                      amenities: h.property_amenities?.map((a:any) => a.amenities.amenity) || []
-                    }} />
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      </main>
-      <Footer />
-    </div>
-  );
-};
-export default Hotels;
-</file>
-
 <file path="src/pages/MyPets.tsx">
 import { useState, useEffect } from "react";
  import { Link } from "react-router-dom";
@@ -18631,52 +18525,6 @@ import { useState, useEffect } from "react";
  };
  
  export default MyPets;
-</file>
-
-<file path="src/services/propertyApi.ts">
-type PropertyFilters = {
-  location?: string;
-  petType?: string;
-  dogSize?: string;
-  propertyType?: string;
-  serviceCategory?: string;  // per-service filter: Boarding, Grooming, Veterinary, etc.
-  checkIn?: string;
-  checkOut?: string;
-  timeSlot?: string;          // for same-day services like grooming/vet
-  minPrice?: number;
-  maxPrice?: number;
-  rating?: number;
-  amenities?: string[];
-  keyword?: string;
-  lat?: number;
-  lng?: number;
-  radiusKm?: number;
-};
-
-export async function fetchProperties(filters: PropertyFilters) {
-  const res = await fetch("/api/properties/search", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(filters),
-  });
-
-  if (!res.ok) throw new Error("Failed to fetch properties");
-
-  const data = await res.json();
-  return data.properties;
-}
-
-export async function fetchPropertyById(id: string) {
-  const res = await fetch(`/api/properties/${id}`, {
-    method: "GET",
-    headers: { "Content-Type": "application/json" },
-  });
-
-  if (!res.ok) throw new Error("Failed to fetch property details");
-
-  const data = await res.json();
-  return data.property;
-}
 </file>
 
 <file path="backend/config/supabaseAdmin.ts">
@@ -20239,349 +20087,6 @@ const Booking = () => {
 export default Booking;
 </file>
 
-<file path="src/pages/Grooming.tsx">
-import Header from "@/components/Header";
-import Footer from "@/components/Footer";
-import GroomingCard from "@/components/GroomingCard";
-import { Button } from "@/components/ui/button";
-import { SlidersHorizontal, ArrowUpDown, Grid3X3, List, MapPin, Star, ArrowRight } from "lucide-react";
-import { useState } from "react";
-import { Input } from "@/components/ui/input";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Slider } from "@/components/ui/slider";
-import { Badge } from "@/components/ui/badge";
-import { Link } from "react-router-dom";
-
-const groomingShops = [
-  {
-    id: 1,
-    name: "Pawsome Grooming Spa",
-    image: "https://images.unsplash.com/photo-1516734212186-a967f81ad0d7?w=800&auto=format&fit=crop",
-    location: "Los Angeles, CA",
-    rating: 4.9,
-    reviews: 412,
-    price: 45,
-    originalPrice: 60,
-    services: ["Full Grooming", "Bath & Dry", "Nail Trim"],
-    featured: true,
-    availability: "Open Today",
-  },
-  {
-    id: 2,
-    name: "Fluffy Tails Salon",
-    image: "https://images.unsplash.com/photo-1591946614720-90a587da4a36?w=800&auto=format&fit=crop",
-    location: "San Francisco, CA",
-    rating: 4.8,
-    reviews: 287,
-    price: 55,
-    services: ["Full Grooming", "De-shedding", "Nail Trim"],
-    featured: false,
-    availability: "Available",
-  },
-  {
-    id: 3,
-    name: "The Pampered Pup",
-    image: "https://images.unsplash.com/photo-1587300003388-59208cc962cb?w=800&auto=format&fit=crop",
-    location: "Seattle, WA",
-    rating: 4.7,
-    reviews: 156,
-    price: 40,
-    services: ["Bath & Dry", "Nail Trim"],
-    featured: true,
-    availability: "2 slots left",
-  },
-  {
-    id: 4,
-    name: "Luxury Pet Grooming",
-    image: "https://images.unsplash.com/photo-1548199973-03cce0bbc87b?w=800&auto=format&fit=crop",
-    location: "New York, NY",
-    rating: 4.9,
-    reviews: 523,
-    price: 85,
-    originalPrice: 110,
-    services: ["Full Grooming", "Bath & Dry", "De-shedding", "Nail Trim"],
-    featured: false,
-    availability: "1 slot left",
-  },
-  {
-    id: 5,
-    name: "Happy Paws Grooming",
-    image: "https://images.unsplash.com/photo-1535930891776-0c2dfb7fda1a?w=800&auto=format&fit=crop",
-    location: "Chicago, IL",
-    rating: 4.6,
-    reviews: 198,
-    price: 38,
-    services: ["Bath & Dry", "Nail Trim"],
-    featured: false,
-    availability: "Available",
-  },
-  {
-    id: 6,
-    name: "Elite Pet Spa",
-    image: "https://images.unsplash.com/photo-1587559070757-f72a388edbba?w=800&auto=format&fit=crop",
-    location: "Miami, FL",
-    rating: 4.8,
-    reviews: 334,
-    price: 75,
-    services: ["Full Grooming", "Bath & Dry", "De-shedding"],
-    featured: true,
-    availability: "Open Today",
-  },
-  {
-    id: 7,
-    name: "Whiskers & Wags",
-    image: "https://images.unsplash.com/photo-1544568100-847a948585b9?w=800&auto=format&fit=crop",
-    location: "Denver, CO",
-    rating: 4.5,
-    reviews: 87,
-    price: 35,
-    services: ["Bath & Dry", "Nail Trim"],
-    featured: false,
-    availability: "Available",
-  },
-  {
-    id: 8,
-    name: "Premier Pet Styling",
-    image: "https://images.unsplash.com/photo-1583511655857-d19b40a7a54e?w=800&auto=format&fit=crop",
-    location: "Austin, TX",
-    rating: 4.7,
-    reviews: 245,
-    price: 52,
-    services: ["Full Grooming", "Bath & Dry", "Nail Trim"],
-    featured: true,
-    availability: "3 slots left",
-  },
-];
-
-const Grooming = () => {
-  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
-  const [priceRange, setPriceRange] = useState([0, 150]);
-  const [showFilters, setShowFilters] = useState(false);
-
-  return (
-    <div className="min-h-screen bg-background">
-      <Header />
-       {/* Hero Section */}
-        <section className="py-16 md:py-24 bg-gradient-to-b from-orange-100/20 to-background">
-          <div className="container">
-            <div className="grid lg:grid-cols-2 gap-12 items-center">
-              
-              {/* Left Content */}
-              <div>
-                <Badge className="bg-orange-100 text-orange-600 border-orange-200 mb-4">
-                  Professional Pet Grooming
-                </Badge>
-                <h1 className="font-display text-4xl md:text-5xl lg:text-6xl font-bold text-foreground mb-4">
-                  Find Grooming Services for Your{" "}
-                  <span className="text-gradient bg-gradient-to-r from-orange-400 via-pink-500 to-purple-500 bg-clip-text text-transparent">
-                    Furry Friend
-                  </span>
-                </h1>
-                <p className="text-lg text-muted-foreground mb-8 max-w-xl">
-                  Connect with certified grooming salons offering top-quality services to keep your 
-                  pet looking and feeling their absolute best.
-                </p>
-
-                <div className="flex flex-wrap gap-4 mb-8">
-                  <Link to="#salons">
-                    <Button variant="hero" size="xl" className="gap-2 bg-orange-500 hover:bg-orange-600">
-                      Browse Salons
-                      <ArrowRight className="h-5 w-5" />
-                    </Button>
-                  </Link>
-                  <Button variant="outline" size="xl" className="gap-2 border-orange-500 text-orange-600 hover:bg-orange-50">
-                    View Gallery
-                  </Button>
-                </div>
-
-                {/* Stats Section */}
-                <div className="flex gap-8">
-                  <div>
-                    <p className="text-3xl font-bold text-foreground">100+</p>
-                    <p className="text-sm text-muted-foreground">Salons Available</p>
-                  </div>
-                  <div>
-                    <p className="text-3xl font-bold text-foreground">20k+</p>
-                    <p className="text-sm text-muted-foreground">Pets Groomed</p>
-                  </div>
-                  <div>
-                    <p className="text-3xl font-bold text-foreground">4.9★</p>
-                    <p className="text-sm text-muted-foreground">Average Rating</p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Right Image */}
-              <div className="relative hidden lg:block">
-                <img
-                  src="https://images.unsplash.com/photo-1516734212186-a967f81ad0d7?w=600&auto=format&fit=crop"
-                  alt="Pet grooming"
-                  className="rounded-2xl shadow-elevated"
-                />
-                {/* Floating Info Card */}
-                <div className="absolute -bottom-6 -right-6 bg-card rounded-xl p-4 shadow-elevated border border-orange-200">
-                  <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-full bg-orange-100 flex items-center justify-center">
-                      <Star className="h-6 w-6 text-orange-500" />
-                    </div>
-                    <div>
-                      <p className="font-semibold">Featured Salons</p>
-                      <p className="text-sm text-muted-foreground">Top-rated and trusted</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-            </div>
-          </div>
-        </section>
-
-
-        
-      <main className="py-8">
-        <div className="container">
-          {/* Page Header */}
-          <div className="mb-8">
-            <h1 className="font-display text-3xl md:text-4xl font-bold text-foreground mb-2">
-              Pet Grooming Services
-            </h1>
-            <p className="text-muted-foreground">
-              Find the best grooming salons for your furry friend from {groomingShops.length} available locations
-            </p>
-          </div>
-
-          <div className="flex flex-col lg:flex-row gap-8">
-            {/* Filters Sidebar */}
-            <aside className={`lg:w-72 shrink-0 ${showFilters ? 'block' : 'hidden lg:block'}`}>
-              <div className="bg-card rounded-2xl p-6 shadow-soft sticky top-24">
-                <h3 className="font-semibold text-lg mb-6">Filters</h3>
-
-                {/* Location */}
-                <div className="mb-6">
-                  <label className="text-sm font-medium text-foreground mb-2 block">Location</label>
-                  <div className="relative">
-                    <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input placeholder="Enter city or area" className="pl-10" />
-                  </div>
-                </div>
-
-                {/* Price Range */}
-                <div className="mb-6">
-                  <label className="text-sm font-medium text-foreground mb-4 block">
-                    Price Range: ${priceRange[0]} - ${priceRange[1]}
-                  </label>
-                  <Slider
-                    value={priceRange}
-                    onValueChange={setPriceRange}
-                    max={200}
-                    step={10}
-                    className="w-full"
-                  />
-                </div>
-
-                {/* Rating */}
-                <div className="mb-6">
-                  <label className="text-sm font-medium text-foreground mb-3 block">Minimum Rating</label>
-                  <div className="flex gap-2">
-                    {[3, 4, 4.5].map((rating) => (
-                      <button
-                        key={rating}
-                        className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-secondary hover:bg-secondary/80 text-sm transition-colors"
-                      >
-                        <Star className="h-3.5 w-3.5 fill-rating text-rating" />
-                        {rating}+
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Services */}
-                <div className="mb-6">
-                  <label className="text-sm font-medium text-foreground mb-3 block">Services</label>
-                  <div className="space-y-3">
-                    {["Full Grooming", "Bath & Dry", "Nail Trim", "De-shedding", "Teeth Cleaning"].map((service) => (
-                      <div key={service} className="flex items-center gap-2">
-                        <Checkbox id={service} />
-                        <label htmlFor={service} className="text-sm text-muted-foreground cursor-pointer">
-                          {service}
-                        </label>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                <Button variant="hero" className="w-full">Apply Filters</Button>
-              </div>
-            </aside>
-
-            {/* Main Content */}
-            <div className="flex-1">
-              {/* Controls */}
-              <div className="flex items-center justify-between mb-6">
-                <Button 
-                  variant="outline" 
-                  className="lg:hidden gap-2"
-                  onClick={() => setShowFilters(!showFilters)}
-                >
-                  <SlidersHorizontal className="h-4 w-4" />
-                  Filters
-                </Button>
-
-                <div className="flex items-center gap-2 ml-auto">
-                  <Button variant="outline" size="sm" className="gap-2">
-                    <ArrowUpDown className="h-4 w-4" />
-                    Sort
-                  </Button>
-                  <div className="hidden md:flex items-center gap-1 p-1 bg-secondary rounded-lg">
-                    <button
-                      onClick={() => setViewMode("grid")}
-                      className={`p-2 rounded-md transition-colors ${
-                        viewMode === "grid" ? "bg-card shadow-sm" : "hover:bg-card/50"
-                      }`}
-                    >
-                      <Grid3X3 className="h-4 w-4" />
-                    </button>
-                    <button
-                      onClick={() => setViewMode("list")}
-                      className={`p-2 rounded-md transition-colors ${
-                        viewMode === "list" ? "bg-card shadow-sm" : "hover:bg-card/50"
-                      }`}
-                    >
-                      <List className="h-4 w-4" />
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              {/* Grooming Grid */}
-              <div className={`grid gap-6 ${
-                viewMode === "grid" 
-                  ? "grid-cols-1 md:grid-cols-2 xl:grid-cols-3" 
-                  : "grid-cols-1"
-              }`}>
-                {groomingShops.map((shop) => (
-                  <GroomingCard key={shop.id} grooming={shop} />
-                ))}
-              </div>
-
-              {/* Load More */}
-              <div className="text-center mt-10">
-                <Button variant="outline" size="lg">
-                  Load More Grooming Salons
-                </Button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </main>
-      <Footer />
-    </div>
-  );
-};
-
-export default Grooming;
-</file>
-
 <file path="src/pages/GroomingDetail.tsx">
 import { useParams, Link, useNavigate } from "react-router-dom";
 import Header from "@/components/Header";
@@ -20930,6 +20435,130 @@ const GroomingDetail = () => {
 };
 
 export default GroomingDetail;
+</file>
+
+<file path="src/pages/Hotels.tsx">
+import { useState, useEffect } from "react";
+import Header from "@/components/Header";
+import Footer from "@/components/Footer";
+import HotelCard from "@/components/HotelCard";
+import { Button } from "@/components/ui/button";
+import { SlidersHorizontal, MapPin, Star, Loader2 } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Slider } from "@/components/ui/slider";
+import { Badge } from "@/components/ui/badge";
+import { fetchProperties } from "@/services/propertyApi";
+
+const Hotels = () => {
+  const [hotels, setHotels] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [priceRange, setPriceRange] = useState([0, 5000]);
+  const [showFilters, setShowFilters] = useState(false);
+  const [location, setLocation] = useState("");
+
+  const loadHotels = async () => {
+    setLoading(true);
+    try {
+      // Pass explicit filters to the API
+      const data = await fetchProperties({
+        propertyType: "hotel",
+        serviceCategory: "Boarding", // Only look at hotel/boarding prices
+        location: location.trim() || undefined,
+        minPrice: priceRange[0],
+        maxPrice: priceRange[1],
+      });
+      setHotels(data || []);
+    } catch (err) {
+      console.error("Filter Error:", err);
+      setHotels([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Run on initial mount
+  useEffect(() => {
+    loadHotels();
+  }, []);
+
+  return (
+    <div className="min-h-screen bg-background">
+      <Header />
+      <section className="py-16 md:py-24 bg-gradient-to-b from-accent/10 to-background">
+        <div className="container">
+          <div className="grid lg:grid-cols-2 gap-12 items-center">
+            <div>
+              <Badge className="bg-accent/10 text-accent border-accent/20 mb-4">Pet Hotels</Badge>
+              <h1 className="font-display text-4xl md:text-5xl lg:text-6xl font-bold text-foreground mb-4">
+                Find the Perfect Stay for Your <span className="text-gradient">Furry Friend</span>
+              </h1>
+              <p className="text-lg text-muted-foreground mb-8">Discover verified pet-friendly hotels offering comfort and safety.</p>
+            </div>
+            <div className="relative hidden lg:block">
+              <img src="https://images.unsplash.com/photo-1587300003388-59208cc962cb?w=600" className="rounded-2xl shadow-elevated" alt="Hotel" />
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <main className="py-8">
+        <div className="container">
+          <div className="flex flex-col lg:flex-row gap-8">
+            <aside className={`lg:w-72 shrink-0 ${showFilters ? 'block' : 'hidden lg:block'}`}>
+              <div className="bg-card rounded-2xl p-6 shadow-soft sticky top-24 border">
+                <h3 className="font-semibold text-lg mb-6">Filters</h3>
+                
+                {/* Location Input */}
+                <div className="mb-6">
+                  <label className="text-sm font-medium text-foreground mb-2 block">Location</label>
+                  <Input 
+                    value={location} 
+                    onChange={(e) => setLocation(e.target.value)} 
+                    placeholder="e.g. Makati" 
+                    onKeyDown={(e) => e.key === 'Enter' && loadHotels()}
+                  />
+                </div>
+                
+                {/* Price Slider */}
+                <div className="mb-6">
+                  <label className="text-sm font-medium text-foreground mb-4 block">
+                    Price: ₱{priceRange[0]} - ₱{priceRange[1]}
+                  </label>
+                  <Slider value={priceRange} onValueChange={setPriceRange} max={10000} step={100} />
+                </div>
+                
+                <Button variant="hero" className="w-full" onClick={loadHotels}>Apply Filters</Button>
+              </div>
+            </aside>
+
+            <div className="flex-1">
+              {loading ? (
+                <div className="flex justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
+              ) : hotels.length === 0 ? (
+                <div className="text-center py-20 text-muted-foreground">No hotels found. Try adjusting your filters.</div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                  {hotels.map((h) => (
+                    <HotelCard key={h.id} hotel={{
+                      ...h,
+                      image: h.cover_image || "https://images.unsplash.com/photo-1587300003388-59208cc962cb?w=800",
+                      location: h.city,
+                      price: h.cheapest_service_price,
+                      amenities: h.property_amenities?.map((a:any) => a.amenities.amenity) || []
+                    }} />
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </main>
+      <Footer />
+    </div>
+  );
+};
+export default Hotels;
 </file>
 
 <file path="src/pages/SearchResults.tsx">
@@ -21924,6 +21553,52 @@ function haversineDistance(
 };
 
 export default SearchResults;
+</file>
+
+<file path="src/services/propertyApi.ts">
+type PropertyFilters = {
+  location?: string;
+  petType?: string;
+  dogSize?: string;
+  propertyType?: string;
+  serviceCategory?: string;  // per-service filter: Boarding, Grooming, Veterinary, etc.
+  checkIn?: string;
+  checkOut?: string;
+  timeSlot?: string;          // for same-day services like grooming/vet
+  minPrice?: number;
+  maxPrice?: number;
+  rating?: number;
+  amenities?: string[];
+  keyword?: string;
+  lat?: number;
+  lng?: number;
+  radiusKm?: number;
+};
+
+export async function fetchProperties(filters: PropertyFilters) {
+  const res = await fetch("/api/properties/search", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(filters),
+  });
+
+  if (!res.ok) throw new Error("Failed to fetch properties");
+
+  const data = await res.json();
+  return data.properties;
+}
+
+export async function fetchPropertyById(id: string) {
+  const res = await fetch(`/api/properties/${id}`, {
+    method: "GET",
+    headers: { "Content-Type": "application/json" },
+  });
+
+  if (!res.ok) throw new Error("Failed to fetch property details");
+
+  const data = await res.json();
+  return data.property;
+}
 </file>
 
 <file path="src/components/property-listing/StepIndicator.tsx">
@@ -23084,561 +22759,294 @@ const About = () => {
 export default About;
 </file>
 
-<file path="src/pages/HotelDetail.tsx">
-import { useParams, Link, useNavigate } from "react-router-dom";
+<file path="src/pages/Grooming.tsx">
 import { useState, useEffect } from "react";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
+import GroomingCard from "@/components/GroomingCard";
 import { Button } from "@/components/ui/button";
+import { SlidersHorizontal, ArrowUpDown, Grid3X3, List, MapPin, Star, ArrowRight, Loader2 } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Slider } from "@/components/ui/slider";
 import { Badge } from "@/components/ui/badge";
-import { Star, MapPin, Loader2, Check, Phone, Mail, Clock, Heart } from "lucide-react";
-import { favoritesApi } from "../services/favoritesApi";
-import { Card } from "@/components/ui/card";
-import { fetchPropertyById } from "../services/propertyApi";
+import { Link } from "react-router-dom";
+import { fetchProperties } from "@/services/propertyApi";
 
-const HotelDetail = () => {
-  const { id } = useParams();
-  const navigate = useNavigate();
-  const [property, setProperty] = useState<any>(null);
+const Grooming = () => {
+  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
+  const [priceRange, setPriceRange] = useState([0, 2000]);
+  const [location, setLocation] = useState("");
+  const [showFilters, setShowFilters] = useState(false);
+  
+  // Dynamic Data States
+  const [shops, setShops] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedService, setSelectedService] = useState<any>(null);
-  const [isLiked, setIsLiked] = useState(false);
 
-  const isAuthenticated =
-    typeof window !== "undefined" &&
-    localStorage.getItem("pawstay.authenticated") === "true";
-
-  useEffect(() => {
-    const fetchDetail = async () => {
-      try {
-        const item = await fetchPropertyById(id || "");
-        setProperty(item);
-        
-        // Set first service or default boarding service
-        if (item?.property_services?.length > 0) {
-          const activeServices = item.property_services.filter((s: any) => s.is_active);
-          setSelectedService(activeServices[0] || { name: "Boarding", price: item.cheapest_service_price || 0 });
-        } else {
-          setSelectedService({ name: "Boarding", price: item?.cheapest_service_price || 0 });
-        }
-      } catch (err) {
-        console.error(err);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchDetail();
-  }, [id]);
-
-  // Check if this property is already favorited on mount
-  useEffect(() => {
-    let mounted = true;
-    if (!isAuthenticated || !id) return;
-    const load = async () => {
-      try {
-        const fav = await favoritesApi.checkFavorite(id);
-        if (mounted) setIsLiked(Boolean(fav));
-      } catch (err) {
-        console.error("checkFavorite failed", err);
-      }
-    };
-    load();
-    return () => { mounted = false; };
-  }, [id, isAuthenticated]);
-
-  const handleLikeClick = async () => {
-    if (!isAuthenticated) {
-      navigate(`/signin?redirect=${encodeURIComponent(`/hotels/${id}`)}`);
-      return;
-    }
-    if (!id) return;
-    const previous = isLiked;
-    setIsLiked(!previous);
+  const loadGrooming = async () => {
+    setLoading(true);
     try {
-      if (previous) {
-        await favoritesApi.removeFavorite(id);
-      } else {
-        await favoritesApi.addFavorite(id);
-      }
+      const data = await fetchProperties({
+        propertyType: "grooming",
+        serviceCategory: "Grooming",
+        location: location.trim() || undefined,
+        minPrice: priceRange[0],
+        maxPrice: priceRange[1],
+      });
+      setShops(data || []);
     } catch (err) {
-      console.error("favorite toggle failed", err);
-      setIsLiked(previous);
+      console.error("Grooming Fetch Error:", err);
+      setShops([]);
+    } finally {
+      setLoading(false);
     }
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    );
-  }
-
-  if (!property) {
-    return (
-      <div className="min-h-screen bg-background">
-        <Header />
-        <div className="text-center py-20">Property not found</div>
-        <Footer />
-      </div>
-    );
-  }
+  // Load initial data
+  useEffect(() => {
+    loadGrooming();
+  }, []);
 
   return (
     <div className="min-h-screen bg-background">
       <Header />
-      <main className="py-8">
-        <div className="container">
-          <Link to="/hotels" className="inline-flex items-center gap-2 text-primary hover:underline mb-4">
-            ← Back to Hotels
-          </Link>
-
-          <h1 className="text-4xl font-bold mb-4">{property.name}</h1>
-          
-          <div className="grid lg:grid-cols-3 gap-8">
-            <div className="lg:col-span-2">
-              {property.cover_image && (
-                <img 
-                  src={property.cover_image} 
-                  className="w-full h-96 object-cover rounded-2xl mb-6" 
-                  alt={property.name}
-                />
-              )}
-              <p className="text-lg text-muted-foreground mb-6">{property.description || "No description available"}</p>
+       {/* Hero Section */}
+        <section className="py-16 md:py-24 bg-gradient-to-b from-orange-100/20 to-background">
+          <div className="container">
+            <div className="grid lg:grid-cols-2 gap-12 items-center">
               
-              {property.property_amenities && property.property_amenities.length > 0 && (
-                <div className="mb-8">
-                  <h2 className="text-2xl font-semibold mb-4">Amenities</h2>
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                    {property.property_amenities.map((a: any, i: number) => (
-                      <div key={i} className="flex items-center gap-2 p-3 bg-secondary rounded-lg">
-                        <Check className="h-5 w-5 text-primary" />
-                        <span>{a.amenities?.amenity}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
+              {/* Left Content */}
+              <div>
+                <Badge className="bg-orange-100 text-orange-600 border-orange-200 mb-4">
+                  Professional Pet Grooming
+                </Badge>
+                <h1 className="font-display text-4xl md:text-5xl lg:text-6xl font-bold text-foreground mb-4">
+                  Find Grooming Services for Your{" "}
+                  <span className="text-gradient bg-gradient-to-r from-orange-400 via-pink-500 to-purple-500 bg-clip-text text-transparent">
+                    Furry Friend
+                  </span>
+                </h1>
+                <p className="text-lg text-muted-foreground mb-8 max-w-xl">
+                  Connect with certified grooming salons offering top-quality services to keep your 
+                  pet looking and feeling their absolute best.
+                </p>
 
-              {/* Services Section */}
-              {property.property_services && property.property_services.filter((s: any) => s.is_active).length > 0 && (
-                <div className="mb-8">
-                  <h2 className="text-2xl font-semibold mb-4">Available Services</h2>
-                  <div className="space-y-3">
-                    {property.property_services.filter((s: any) => s.is_active).map((service: any) => (
-                      <div
-                        key={service.id}
-                        onClick={() => setSelectedService(service)}
-                        className={`p-4 rounded-xl border-2 cursor-pointer transition-all ${
-                          selectedService?.id === service.id
-                            ? "border-primary bg-primary/5"
-                            : "border-border hover:border-primary/50"
-                        }`}
-                      >
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <h3 className="font-semibold text-foreground">{service.name}</h3>
-                            <p className="text-sm text-muted-foreground">{service.description || service.category}</p>
-                            {service.duration_minutes && (
-                              <div className="flex items-center gap-1 mt-1 text-xs text-muted-foreground">
-                                <Clock className="h-3 w-3" />
-                                <span>{service.duration_minutes} min</span>
-                              </div>
-                            )}
-                          </div>
-                          <div className="text-right">
-                            <p className="text-xl font-bold text-foreground">₱{service.price}</p>
-                            <span className="text-sm text-muted-foreground">/ night</span>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-            
-            <div className="lg:col-span-1">
-              <Card className="p-6 sticky top-24">
-                <div className="flex items-center justify-between mb-4">
-                  <div>
-                    <div className="text-2xl font-bold">₱{selectedService?.price || property.cheapest_service_price || 0}</div>
-                    <span className="text-sm text-muted-foreground">/ night</span>
-                  </div>
-                  <Button variant="ghost" size="icon" onClick={handleLikeClick}>
-                    <Heart className={`h-5 w-5 ${isLiked ? "fill-primary text-primary" : ""}`} />
+                <div className="flex flex-wrap gap-4 mb-8">
+                  <Link to="#salons">
+                    <Button variant="hero" size="xl" className="gap-2 bg-orange-500 hover:bg-orange-600">
+                      Browse Salons
+                      <ArrowRight className="h-5 w-5" />
+                    </Button>
+                  </Link>
+                  <Button variant="outline" size="xl" className="gap-2 border-orange-500 text-orange-600 hover:bg-orange-50">
+                    View Gallery
                   </Button>
                 </div>
 
-                {selectedService && (
-                  <div className="mb-4 p-3 bg-secondary rounded-lg">
-                    <span className="text-sm font-medium">{selectedService.name}</span>
+                {/* Stats Section */}
+                <div className="flex gap-8">
+                  <div>
+                    <p className="text-3xl font-bold text-foreground">100+</p>
+                    <p className="text-sm text-muted-foreground">Salons Available</p>
                   </div>
-                )}
-                
-                {property.rating && (
-                  <div className="flex items-center gap-1 mb-4">
-                    <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-                    <span className="font-semibold">{property.rating}</span>
-                    <span className="text-sm text-muted-foreground">({property.review_count || 0} reviews)</span>
+                  <div>
+                    <p className="text-3xl font-bold text-foreground">20k+</p>
+                    <p className="text-sm text-muted-foreground">Pets Groomed</p>
                   </div>
-                )}
+                  <div>
+                    <p className="text-3xl font-bold text-foreground">4.9★</p>
+                    <p className="text-sm text-muted-foreground">Average Rating</p>
+                  </div>
+                </div>
+              </div>
 
+              {/* Right Image */}
+              <div className="relative hidden lg:block">
+                <img
+                  src="https://images.unsplash.com/photo-1516734212186-a967f81ad0d7?w=600&auto=format&fit=crop"
+                  alt="Pet grooming"
+                  className="rounded-2xl shadow-elevated"
+                />
+                {/* Floating Info Card */}
+                <div className="absolute -bottom-6 -right-6 bg-card rounded-xl p-4 shadow-elevated border border-orange-200">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-full bg-orange-100 flex items-center justify-center">
+                      <Star className="h-6 w-6 text-orange-500" />
+                    </div>
+                    <div>
+                      <p className="font-semibold">Featured Salons</p>
+                      <p className="text-sm text-muted-foreground">Top-rated and trusted</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </section>
+
+
+        
+      <main className="py-8">
+        <div className="container">
+          {/* Page Header */}
+          <div className="mb-8">
+            <h1 className="font-display text-3xl md:text-4xl font-bold text-foreground mb-2">
+              Pet Grooming Services
+            </h1>
+            <p className="text-muted-foreground">
+              Find the best grooming salons for your furry friend
+            </p>
+          </div>
+
+          <div className="flex flex-col lg:flex-row gap-8">
+            {/* Filters Sidebar */}
+            <aside className={`lg:w-72 shrink-0 ${showFilters ? 'block' : 'hidden lg:block'}`}>
+              <div className="bg-card rounded-2xl p-6 shadow-soft sticky top-24 border">
+                <h3 className="font-semibold text-lg mb-6">Filters</h3>
+
+                {/* Location */}
+                <div className="mb-6">
+                  <label className="text-sm font-medium text-foreground mb-2 block">Location</label>
+                  <div className="relative">
+                    <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input 
+                      placeholder="e.g. Taguig" 
+                      className="pl-10" 
+                      value={location}
+                      onChange={(e) => setLocation(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && loadGrooming()}
+                    />
+                  </div>
+                </div>
+
+                {/* Price Range */}
+                <div className="mb-6">
+                  <label className="text-sm font-medium text-foreground mb-4 block">
+                    Price: ₱{priceRange[0]} - ₱{priceRange[1]}
+                  </label>
+                  <Slider
+                    value={priceRange}
+                    onValueChange={setPriceRange}
+                    max={5000}
+                    step={50}
+                    className="w-full"
+                  />
+                </div>
+
+                {/* Rating */}
+                <div className="mb-6">
+                  <label className="text-sm font-medium text-foreground mb-3 block">Minimum Rating</label>
+                  <div className="flex gap-2">
+                    {[3, 4, 4.5].map((rating) => (
+                      <button
+                        key={rating}
+                        className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-secondary hover:bg-secondary/80 text-sm transition-colors"
+                      >
+                        <Star className="h-3.5 w-3.5 fill-rating text-rating" />
+                        {rating}+
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Services */}
+                <div className="mb-6">
+                  <label className="text-sm font-medium text-foreground mb-3 block">Services</label>
+                  <div className="space-y-3">
+                    {["Full Grooming", "Bath & Dry", "Nail Trim", "De-shedding", "Teeth Cleaning"].map((service) => (
+                      <div key={service} className="flex items-center gap-2">
+                        <Checkbox id={service} />
+                        <label htmlFor={service} className="text-sm text-muted-foreground cursor-pointer">
+                          {service}
+                        </label>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <Button variant="hero" className="w-full" onClick={loadGrooming}>Apply Filters</Button>
+              </div>
+            </aside>
+
+            {/* Main Content */}
+            <div className="flex-1">
+              {/* Controls */}
+              <div className="flex items-center justify-between mb-6">
                 <Button 
-                  variant="hero" 
-                  className="w-full mb-4" 
-                  onClick={() => navigate("/booking", {
-                    state: {
-                      shop: {
-                        type: "hotel",
-                        name: property.name,
-                        location: property.city,
-                        image: property.cover_image,
-                        price: selectedService?.price || property.cheapest_service_price,
-                        propertyId: property.id,
-                        serviceId: selectedService?.id,
-                        serviceName: selectedService?.name || "Standard Boarding"
-                      }
-                    }
-                  })}
+                  variant="outline" 
+                  className="lg:hidden gap-2"
+                  onClick={() => setShowFilters(!showFilters)}
                 >
-                  Book Now
+                  <SlidersHorizontal className="h-4 w-4" />
+                  Filters
                 </Button>
 
-                <p className="text-center text-xs text-muted-foreground mb-4">
-                  Free cancellation up to 24 hours
-                </p>
-
-                <div className="border-t pt-4 space-y-3">
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <MapPin className="h-4 w-4" />
-                    <span>{property.city || property.address}</span>
-                  </div>
-                  {property.phone && (
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <Phone className="h-4 w-4" />
-                      <span>{property.phone}</span>
-                    </div>
-                  )}
-                  {property.email && (
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <Mail className="h-4 w-4" />
-                      <span>{property.email}</span>
-                    </div>
-                  )}
-                </div>
-              </Card>
-            </div>
-          </div>
-        </div>
-      </main>
-      <Footer />
-    </div>
-  );
-};
-
-export default HotelDetail;
-</file>
-
-<file path="src/pages/VeterinaryDetail.tsx">
-import { useParams, Link, useNavigate } from "react-router-dom";
-import Header from "@/components/Header";
-import Footer from "@/components/Footer";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { 
-  Star, Heart, MapPin, Stethoscope, HeartPulse, Syringe,
-  ArrowLeft, Share2, Check,
-  Phone, Mail, Clock, Shield, Award, Users, Loader2
-} from "lucide-react";
-import { useState, useEffect } from "react";
-import { favoritesApi } from "../services/favoritesApi";
-import { fetchPropertyById } from "../services/propertyApi";
-
-const VeterinaryDetail = () => {
-  const { id } = useParams();
-  const navigate = useNavigate();
-  const [property, setProperty] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
-  const [isLiked, setIsLiked] = useState(false);
-  const [selectedService, setSelectedService] = useState<any>(null);
-
-  const isAuthenticated =
-    typeof window !== "undefined" &&
-    localStorage.getItem("pawstay.authenticated") === "true";
-
-  useEffect(() => {
-    let mounted = true;
-    const load = async () => {
-      try {
-        setLoading(true);
-        const data = await fetchPropertyById(id || "");
-        if (mounted && data) {
-          setProperty(data);
-          // Set first service as selected
-          if (data.services && data.services.length > 0) {
-            setSelectedService(data.services[0]);
-          }
-        }
-      } catch (err) {
-        console.error("Failed to fetch property", err);
-      } finally {
-        if (mounted) setLoading(false);
-      }
-    };
-    load();
-    return () => { mounted = false; };
-  }, [id]);
-
-  useEffect(() => {
-    let mounted = true;
-    if (!isAuthenticated || !property?.id) return;
-    const load = async () => {
-      try {
-        const fav = await favoritesApi.checkFavorite(property.id);
-        if (mounted) setIsLiked(Boolean(fav));
-      } catch (err) {
-        console.error("checkFavorite failed", err);
-      }
-    };
-    load();
-    return () => { mounted = false; };
-  }, [property?.id, isAuthenticated]);
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <Header />
-        <div className="flex flex-col items-center gap-4">
-          <Loader2 className="h-12 w-12 animate-spin text-primary" />
-          <p className="text-muted-foreground">Loading clinic details...</p>
-        </div>
-        <Footer />
-      </div>
-    );
-  }
-
-  if (!property) {
-    return (
-      <div className="min-h-screen bg-background">
-        <Header />
-        <main className="py-8">
-          <div className="container">
-            <p className="text-muted-foreground">Clinic not found</p>
-          </div>
-        </main>
-        <Footer />
-      </div>
-    );
-  }
-
-  // Use actual property_services if available, otherwise fallback
-  const services = property.property_services?.filter((s: any) => s.is_active)?.length > 0
-    ? property.property_services.filter((s: any) => s.is_active).map((s: any) => ({
-        id: s.id,
-        name: s.name,
-        price: s.price || 75,
-        duration: s.duration_minutes ? `${s.duration_minutes} min` : "30 min",
-        description: s.description || `Professional ${s.name.toLowerCase()} service`
-      }))
-    : [
-        { id: "default-1", name: "Consultation", price: 75, duration: "30 min", description: "Comprehensive health checkup" },
-        { id: "default-2", name: "Vaccination", price: 120, duration: "20 min", description: "Core vaccines for pets" }
-      ];
-
-  const selected = selectedService || services[0];
-  const serviceFee = Math.round(selected.price * 0.10 * 100) / 100;
-  const coverImage = property.cover_image || "https://images.unsplash.com/photo-1628009368231-7bb7cfcb0def?w=800&auto=format&fit=crop";
-
-  return (
-    <div className="min-h-screen bg-background">
-      <Header />
-      <main className="py-8">
-        <div className="container">
-          {/* Back Button */}
-          <Link to="/veterinary" className="inline-flex items-center gap-2 text-muted-foreground hover:text-foreground mb-6 transition-colors">
-            <ArrowLeft className="h-4 w-4" />
-            Back to Veterinary
-          </Link>
-
-          {/* Image Gallery */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
-            <div className="aspect-[4/3] rounded-2xl overflow-hidden">
-              <img
-                src={coverImage}
-                alt={property.name}
-                className="w-full h-full object-cover"
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              {[1, 2, 3, 4].map((i) => (
-                <div key={i} className="aspect-[4/3] rounded-xl overflow-hidden">
-                  <img src={coverImage} alt="" className="w-full h-full object-cover" />
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="grid lg:grid-cols-3 gap-8">
-            {/* Main Content */}
-            <div className="lg:col-span-2">
-              {/* Header */}
-              <div className="flex items-start justify-between mb-6">
-                <div>
-                  <div className="flex items-center gap-2 mb-2">
-                    <Badge className="bg-success/10 text-success border-success/20">Veterinary Clinic</Badge>
-                    <div className="flex items-center gap-1 px-2 py-1 rounded-md bg-rating/10">
-                      <Star className="h-4 w-4 fill-rating text-rating" />
-                      <span className="text-sm font-bold">{property.rating || 4.8}</span>
-                    </div>
-                    <span className="text-sm text-muted-foreground">(0 reviews)</span>
-                  </div>
-                  <h1 className="font-display text-3xl md:text-4xl font-bold text-foreground mb-2">
-                    {property.name}
-                  </h1>
-                  <div className="flex items-center gap-1 text-muted-foreground">
-                    <MapPin className="h-4 w-4" />
-                    <span>{property.city || "Los Angeles, CA"}</span>
-                  </div>
-                </div>
-                <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={async () => {
-                      if (!isAuthenticated) {
-                        navigate(`/veterinary/${id}?redirect=${encodeURIComponent(`/veterinary/${id}`)}`);
-                        return;
-                      }
-                      const previous = isLiked;
-                      setIsLiked(!previous);
-                      try {
-                        if (previous) {
-                          await favoritesApi.removeFavorite(property.id);
-                        } else {
-                          await favoritesApi.addFavorite(property.id);
-                        }
-                      } catch (err) {
-                        console.error("favorite toggle failed", err);
-                        setIsLiked(previous);
-                      }
-                    }}
-                  >
-                    <Heart className={`h-5 w-5 ${isLiked ? "fill-primary text-primary" : ""}`} />
+                <div className="flex items-center gap-2 ml-auto">
+                  <Button variant="outline" size="sm" className="gap-2">
+                    <ArrowUpDown className="h-4 w-4" />
+                    Sort
                   </Button>
-                  <Button variant="outline" size="icon">
-                    <Share2 className="h-5 w-5" />
-                  </Button>
-                </div>
-              </div>
-
-              {/* Description */}
-              <div className="mb-8">
-                <h2 className="font-semibold text-xl mb-3">About This Clinic</h2>
-                <p className="text-muted-foreground leading-relaxed">
-                  {property.description || "Comprehensive veterinary care with board-certified veterinarians. We use state-of-the-art equipment and the latest medical advances to ensure the best outcomes for your pets."}
-                </p>
-              </div>
-
-              {/* Amenities */}
-              <div className="mb-8">
-                <h2 className="font-semibold text-xl mb-4">Services Offered</h2>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  {services.map((service: any, i: number) => (
-                    <div key={i} className="flex items-center gap-3 p-4 rounded-xl bg-secondary/50">
-                      <Stethoscope className="h-5 w-5 text-success" />
-                      <span className="text-sm font-medium">{service.name}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Services */}
-              <div className="mb-8">
-                <h2 className="font-semibold text-xl mb-4">Available Services</h2>
-                <div className="space-y-3">
-                  {services.map((service: any) => (
-                    <div
-                      key={service.id || service.name}
-                      onClick={() => setSelectedService(service)}
-                      className={`p-4 rounded-xl border-2 cursor-pointer transition-all ${
-                        selected.id === service.id || selected.name === service.name
-                          ? "border-primary bg-primary/5"
-                          : "border-border hover:border-primary/50"
+                  <div className="hidden md:flex items-center gap-1 p-1 bg-secondary rounded-lg">
+                    <button
+                      onClick={() => setViewMode("grid")}
+                      className={`p-2 rounded-md transition-colors ${
+                        viewMode === "grid" ? "bg-card shadow-sm" : "hover:bg-card/50"
                       }`}
                     >
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <h3 className="font-semibold text-foreground">{service.name}</h3>
-                          <p className="text-sm text-muted-foreground">{service.description}</p>
-                          <div className="flex items-center gap-1 mt-1 text-xs text-muted-foreground">
-                            <Clock className="h-3 w-3" />
-                            <span>{service.duration}</span>
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-xl font-bold text-foreground">₱{service.price}</p>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
+                      <Grid3X3 className="h-4 w-4" />
+                    </button>
+                    <button
+                      onClick={() => setViewMode("list")}
+                      className={`p-2 rounded-md transition-colors ${
+                        viewMode === "list" ? "bg-card shadow-sm" : "hover:bg-card/50"
+                      }`}
+                    >
+                      <List className="h-4 w-4" />
+                    </button>
+                  </div>
                 </div>
               </div>
-            </div>
 
-            {/* Booking Card */}
-            <div className="lg:col-span-1">
-              <div className="bg-card rounded-2xl p-6 shadow-elevated sticky top-24">
-                <div className="flex items-center gap-2 mb-2">
-                  <Stethoscope className="h-5 w-5 text-success" />
-                  <span className="font-medium">{selected.name}</span>
+              {/* Grooming Grid */}
+              {loading ? (
+                <div className="flex justify-center py-20">
+                  <Loader2 className="h-8 w-8 animate-spin text-primary" />
                 </div>
-                <div className="flex items-baseline gap-2 mb-6">
-                  <span className="text-3xl font-bold text-foreground">₱{selected.price}</span>
-                  <span className="text-muted-foreground">• {selected.duration}</span>
+              ) : shops.length === 0 ? (
+                <div className="text-center py-20 text-muted-foreground">
+                  No grooming salons found in this area/price range.
                 </div>
-
-                {/* Price Summary */}
-                <div className="border-t border-border pt-4 mb-4 space-y-2">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">{selected.name}</span>
-                    <span>₱{selected.price}</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Service fee (10%)</span>
-                    <span>₱{serviceFee}</span>
-                  </div>
-                  <div className="flex justify-between font-semibold pt-2 border-t border-border">
-                    <span>Total</span>
-                    <span>₱{selected.price + serviceFee}</span>
-                  </div>
+              ) : (
+                <div className={`grid gap-6 ${
+                  viewMode === "grid" 
+                    ? "grid-cols-1 md:grid-cols-2 xl:grid-cols-3" 
+                    : "grid-cols-1"
+                }`}>
+                  {shops.map((shop) => (
+                    <GroomingCard 
+                      key={shop.id} 
+                      grooming={{
+                        id: shop.id,
+                        name: shop.name,
+                        image: shop.cover_image || "https://images.unsplash.com/photo-1516734212186-a967f81ad0d7?w=800",
+                        location: shop.city || shop.address,
+                        rating: shop.rating || 0,
+                        reviews: shop.review_count || 0,
+                        price: shop.cheapest_service_price || 0,
+                        services: ["Full Grooming", "Bath & Dry"],
+                        availability: "Available"
+                      }} 
+                    />
+                  ))}
                 </div>
+              )}
 
-                <Link to="/booking" state={{ shop: { type: "veterinary", name: property.name, location: property.city, image: coverImage, price: selected.price, serviceName: selected.name, serviceId: selected.id, propertyId: property.id } }}>
-                  <Button variant="hero" size="lg" className="w-full mb-4">
-                    Book Appointment
-                  </Button>
-                </Link>
-
-                <p className="text-center text-xs text-muted-foreground mb-6">
-                  Free rescheduling up to 24 hours before appointment
-                </p>
-
-                {/* Contact */}
-                <div className="border-t border-border pt-4 space-y-3">
-                  <div className="flex items-center gap-3 text-sm text-muted-foreground">
-                    <Phone className="h-4 w-4" />
-                    <span>{property.phone || "+1 (555) 911-PETS"}</span>
-                  </div>
-                  <div className="flex items-center gap-3 text-sm text-muted-foreground">
-                    <Mail className="h-4 w-4" />
-                    <span>{property.email || "care@clinic.com"}</span>
-                  </div>
-                  <div className="flex items-center gap-3 text-sm text-muted-foreground">
-                    <Clock className="h-4 w-4" />
-                    <span>{property.hours || "Mon-Fri: 8AM - 8PM"}</span>
-                  </div>
-                </div>
+              {/* Load More */}
+              <div className="text-center mt-10">
+                <Button variant="outline" size="lg">
+                  Load More Grooming Salons
+                </Button>
               </div>
             </div>
           </div>
@@ -23649,7 +23057,7 @@ const VeterinaryDetail = () => {
   );
 };
 
-export default VeterinaryDetail;
+export default Grooming;
 </file>
 
 <file path="vite.config.ts">
@@ -24263,114 +23671,250 @@ const Header = () => {
 export default Header;
 </file>
 
-<file path="src/pages/Veterinary.tsx">
+<file path="src/pages/HotelDetail.tsx">
+import { useParams, Link, useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
-import VeterinaryCard from "@/components/VeterinaryCard";
-import { fetchProperties } from "@/services/propertyApi";
-import { Loader2 } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Slider } from "@/components/ui/slider";
+import { Badge } from "@/components/ui/badge";
+import { Star, MapPin, Loader2, Check, Phone, Mail, Clock, Heart } from "lucide-react";
+import { favoritesApi } from "../services/favoritesApi";
+import { Card } from "@/components/ui/card";
+import { fetchPropertyById } from "../services/propertyApi";
 
-const Veterinary = () => {
-  const [clinics, setClinics] = useState<any[]>([]);
+const HotelDetail = () => {
+  const { id } = useParams();
+  const navigate = useNavigate();
+  const [property, setProperty] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [priceRange, setPriceRange] = useState([0, 5000]);
-  const [location, setLocation] = useState("");
-  const [showFilters, setShowFilters] = useState(false);
+  const [selectedService, setSelectedService] = useState<any>(null);
+  const [isLiked, setIsLiked] = useState(false);
 
-  const loadClinics = async () => {
-    setLoading(true);
+  const isAuthenticated =
+    typeof window !== "undefined" &&
+    localStorage.getItem("pawstay.authenticated") === "true";
+
+  useEffect(() => {
+    const fetchDetail = async () => {
+      try {
+        const item = await fetchPropertyById(id || "");
+        setProperty(item);
+        
+        // Set first service or default boarding service
+        if (item?.property_services?.length > 0) {
+          const activeServices = item.property_services.filter((s: any) => s.is_active);
+          setSelectedService(activeServices[0] || { name: "Boarding", price: item.cheapest_service_price || 0 });
+        } else {
+          setSelectedService({ name: "Boarding", price: item?.cheapest_service_price || 0 });
+        }
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchDetail();
+  }, [id]);
+
+  // Check if this property is already favorited on mount
+  useEffect(() => {
+    let mounted = true;
+    if (!isAuthenticated || !id) return;
+    const load = async () => {
+      try {
+        const fav = await favoritesApi.checkFavorite(id);
+        if (mounted) setIsLiked(Boolean(fav));
+      } catch (err) {
+        console.error("checkFavorite failed", err);
+      }
+    };
+    load();
+    return () => { mounted = false; };
+  }, [id, isAuthenticated]);
+
+  const handleLikeClick = async () => {
+    if (!isAuthenticated) {
+      navigate(`/signin?redirect=${encodeURIComponent(`/hotels/${id}`)}`);
+      return;
+    }
+    if (!id) return;
+    const previous = isLiked;
+    setIsLiked(!previous);
     try {
-      const data = await fetchProperties({
-        propertyType: "veterinary",
-        location: location || undefined,
-        minPrice: priceRange[0] > 0 ? priceRange[0] : undefined,
-        maxPrice: priceRange[1],
-      });
-      setClinics(data);
+      if (previous) {
+        await favoritesApi.removeFavorite(id);
+      } else {
+        await favoritesApi.addFavorite(id);
+      }
     } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
+      console.error("favorite toggle failed", err);
+      setIsLiked(previous);
     }
   };
 
-  useEffect(() => {
-    loadClinics();
-  }, []);
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (!property) {
+    return (
+      <div className="min-h-screen bg-background">
+        <Header />
+        <div className="text-center py-20">Property not found</div>
+        <Footer />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background">
       <Header />
-      
-      <section className="py-16 md:py-24 bg-gradient-to-b from-success/10 to-background">
-        <div className="container">
-          <div className="grid lg:grid-cols-2 gap-12 items-center">
-            <div>
-              <Badge className="bg-success/10 text-success border-success/20 mb-4">Veterinary Care</Badge>
-              <h1 className="font-display text-4xl md:text-5xl lg:text-6xl font-bold text-foreground mb-4">
-                Find Expert Care for Your <span className="text-gradient">Beloved Pets</span>
-              </h1>
-              <p className="text-lg text-muted-foreground mb-8">Connect with trusted veterinary clinics offering compassionate, comprehensive care for all your pet's health needs.</p>
-            </div>
-            <div className="relative hidden lg:block">
-              <img src="https://images.unsplash.com/photo-1628009368231-7bb7cfcb0def?w=600" className="rounded-2xl shadow-elevated" alt="Veterinary" />
-            </div>
-          </div>
-        </div>
-      </section>
-
       <main className="py-8">
         <div className="container">
-          <div className="flex flex-col lg:flex-row gap-8">
-            {/* Filters Sidebar */}
-            <aside className={`lg:w-72 shrink-0 ${showFilters ? 'block' : 'hidden lg:block'}`}>
-              <div className="bg-card rounded-2xl p-6 shadow-soft sticky top-24 border">
-                <h3 className="font-semibold text-lg mb-6">Filters</h3>
-                <div className="mb-6">
-                  <label className="text-sm font-medium text-foreground mb-2 block">Location</label>
-                  <Input value={location} onChange={(e) => setLocation(e.target.value)} placeholder="City..." />
-                </div>
-                <div className="mb-6">
-                  <label className="text-sm font-medium text-foreground mb-4 block">Max Price: ₱{priceRange[1]}</label>
-                  <Slider value={priceRange} onValueChange={setPriceRange} max={10000} step={100} />
-                </div>
-                <Button variant="hero" className="w-full" onClick={loadClinics}>Apply Filters</Button>
-              </div>
-            </aside>
+          <Link to="/hotels" className="inline-flex items-center gap-2 text-primary hover:underline mb-4">
+            ← Back to Hotels
+          </Link>
 
-            {/* Results */}
-            <div className="flex-1">
-              <div className="flex items-center justify-between mb-6 lg:hidden">
-                <h2 className="text-2xl font-bold">Veterinary Clinics</h2>
-                <Button variant="outline" onClick={() => setShowFilters(!showFilters)}>
-                  {showFilters ? 'Hide Filters' : 'Show Filters'}
-                </Button>
-              </div>
+          <h1 className="text-4xl font-bold mb-4">{property.name}</h1>
+          
+          <div className="grid lg:grid-cols-3 gap-8">
+            <div className="lg:col-span-2">
+              {property.cover_image && (
+                <img 
+                  src={property.cover_image} 
+                  className="w-full h-96 object-cover rounded-2xl mb-6" 
+                  alt={property.name}
+                />
+              )}
+              <p className="text-lg text-muted-foreground mb-6">{property.description || "No description available"}</p>
               
-              {loading ? (
-                <div className="flex justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
-              ) : clinics.length === 0 ? (
-                <div className="text-center py-20 text-muted-foreground">No clinics found. Try adjusting your filters.</div>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                  {clinics.map((c) => (
-                    <VeterinaryCard key={c.id} clinic={{
-                      ...c,
-                      image: c.cover_image || "https://images.unsplash.com/photo-1628009368231-7bb7cfcb0def?w=800",
-                      location: c.city,
-                      price: c.cheapest_service_price,
-                      services: ["Consultation", "Vaccination"],
-                      rating: c.rating || 0,
-                      reviews: c.review_count || 0
-                    }} />
-                  ))}
+              {property.property_amenities && property.property_amenities.length > 0 && (
+                <div className="mb-8">
+                  <h2 className="text-2xl font-semibold mb-4">Amenities</h2>
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                    {property.property_amenities.map((a: any, i: number) => (
+                      <div key={i} className="flex items-center gap-2 p-3 bg-secondary rounded-lg">
+                        <Check className="h-5 w-5 text-primary" />
+                        <span>{a.amenities?.amenity}</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
+
+              {/* Services Section */}
+              {property.property_services && property.property_services.filter((s: any) => s.is_active).length > 0 && (
+                <div className="mb-8">
+                  <h2 className="text-2xl font-semibold mb-4">Available Services</h2>
+                  <div className="space-y-3">
+                    {property.property_services.filter((s: any) => s.is_active).map((service: any) => (
+                      <div
+                        key={service.id}
+                        onClick={() => setSelectedService(service)}
+                        className={`p-4 rounded-xl border-2 cursor-pointer transition-all ${
+                          selectedService?.id === service.id
+                            ? "border-primary bg-primary/5"
+                            : "border-border hover:border-primary/50"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <h3 className="font-semibold text-foreground">{service.name}</h3>
+                            <p className="text-sm text-muted-foreground">{service.description || service.category}</p>
+                            {service.duration_minutes && (
+                              <div className="flex items-center gap-1 mt-1 text-xs text-muted-foreground">
+                                <Clock className="h-3 w-3" />
+                                <span>{service.duration_minutes} min</span>
+                              </div>
+                            )}
+                          </div>
+                          <div className="text-right">
+                            <p className="text-xl font-bold text-foreground">₱{service.price}</p>
+                            <span className="text-sm text-muted-foreground">/ night</span>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+            
+            <div className="lg:col-span-1">
+              <Card className="p-6 sticky top-24">
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <div className="text-2xl font-bold">₱{selectedService?.price || property.cheapest_service_price || 0}</div>
+                    <span className="text-sm text-muted-foreground">/ night</span>
+                  </div>
+                  <Button variant="ghost" size="icon" onClick={handleLikeClick}>
+                    <Heart className={`h-5 w-5 ${isLiked ? "fill-primary text-primary" : ""}`} />
+                  </Button>
+                </div>
+
+                {selectedService && (
+                  <div className="mb-4 p-3 bg-secondary rounded-lg">
+                    <span className="text-sm font-medium">{selectedService.name}</span>
+                  </div>
+                )}
+                
+                {property.rating && (
+                  <div className="flex items-center gap-1 mb-4">
+                    <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
+                    <span className="font-semibold">{property.rating}</span>
+                    <span className="text-sm text-muted-foreground">({property.review_count || 0} reviews)</span>
+                  </div>
+                )}
+
+                <Button 
+                  variant="hero" 
+                  className="w-full mb-4" 
+                  onClick={() => navigate("/booking", {
+                    state: {
+                      shop: {
+                        type: "hotel",
+                        name: property.name,
+                        location: property.city,
+                        image: property.cover_image,
+                        price: selectedService?.price || property.cheapest_service_price,
+                        propertyId: property.id,
+                        serviceId: selectedService?.id,
+                        serviceName: selectedService?.name || "Standard Boarding"
+                      }
+                    }
+                  })}
+                >
+                  Book Now
+                </Button>
+
+                <p className="text-center text-xs text-muted-foreground mb-4">
+                  Free cancellation up to 24 hours
+                </p>
+
+                <div className="border-t pt-4 space-y-3">
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <MapPin className="h-4 w-4" />
+                    <span>{property.city || property.address}</span>
+                  </div>
+                  {property.phone && (
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <Phone className="h-4 w-4" />
+                      <span>{property.phone}</span>
+                    </div>
+                  )}
+                  {property.email && (
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <Mail className="h-4 w-4" />
+                      <span>{property.email}</span>
+                    </div>
+                  )}
+                </div>
+              </Card>
             </div>
           </div>
         </div>
@@ -24379,7 +23923,320 @@ const Veterinary = () => {
     </div>
   );
 };
-export default Veterinary;
+
+export default HotelDetail;
+</file>
+
+<file path="src/pages/VeterinaryDetail.tsx">
+import { useParams, Link, useNavigate } from "react-router-dom";
+import Header from "@/components/Header";
+import Footer from "@/components/Footer";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { 
+  Star, Heart, MapPin, Stethoscope, HeartPulse, Syringe,
+  ArrowLeft, Share2, Check,
+  Phone, Mail, Clock, Shield, Award, Users, Loader2
+} from "lucide-react";
+import { useState, useEffect } from "react";
+import { favoritesApi } from "../services/favoritesApi";
+import { fetchPropertyById } from "../services/propertyApi";
+
+const VeterinaryDetail = () => {
+  const { id } = useParams();
+  const navigate = useNavigate();
+  const [property, setProperty] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [isLiked, setIsLiked] = useState(false);
+  const [selectedService, setSelectedService] = useState<any>(null);
+
+  const isAuthenticated =
+    typeof window !== "undefined" &&
+    localStorage.getItem("pawstay.authenticated") === "true";
+
+  useEffect(() => {
+    let mounted = true;
+    const load = async () => {
+      try {
+        setLoading(true);
+        const data = await fetchPropertyById(id || "");
+        if (mounted && data) {
+          setProperty(data);
+          // Set first service as selected
+          if (data.services && data.services.length > 0) {
+            setSelectedService(data.services[0]);
+          }
+        }
+      } catch (err) {
+        console.error("Failed to fetch property", err);
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    };
+    load();
+    return () => { mounted = false; };
+  }, [id]);
+
+  useEffect(() => {
+    let mounted = true;
+    if (!isAuthenticated || !property?.id) return;
+    const load = async () => {
+      try {
+        const fav = await favoritesApi.checkFavorite(property.id);
+        if (mounted) setIsLiked(Boolean(fav));
+      } catch (err) {
+        console.error("checkFavorite failed", err);
+      }
+    };
+    load();
+    return () => { mounted = false; };
+  }, [property?.id, isAuthenticated]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Header />
+        <div className="flex flex-col items-center gap-4">
+          <Loader2 className="h-12 w-12 animate-spin text-primary" />
+          <p className="text-muted-foreground">Loading clinic details...</p>
+        </div>
+        <Footer />
+      </div>
+    );
+  }
+
+  if (!property) {
+    return (
+      <div className="min-h-screen bg-background">
+        <Header />
+        <main className="py-8">
+          <div className="container">
+            <p className="text-muted-foreground">Clinic not found</p>
+          </div>
+        </main>
+        <Footer />
+      </div>
+    );
+  }
+
+  // Use actual property_services if available, otherwise fallback
+  const services = property.property_services?.filter((s: any) => s.is_active)?.length > 0
+    ? property.property_services.filter((s: any) => s.is_active).map((s: any) => ({
+        id: s.id,
+        name: s.name,
+        price: s.price || 75,
+        duration: s.duration_minutes ? `${s.duration_minutes} min` : "30 min",
+        description: s.description || `Professional ${s.name.toLowerCase()} service`
+      }))
+    : [
+        { id: "default-1", name: "Consultation", price: 75, duration: "30 min", description: "Comprehensive health checkup" },
+        { id: "default-2", name: "Vaccination", price: 120, duration: "20 min", description: "Core vaccines for pets" }
+      ];
+
+  const selected = selectedService || services[0];
+  const serviceFee = Math.round(selected.price * 0.10 * 100) / 100;
+  const coverImage = property.cover_image || "https://images.unsplash.com/photo-1628009368231-7bb7cfcb0def?w=800&auto=format&fit=crop";
+
+  return (
+    <div className="min-h-screen bg-background">
+      <Header />
+      <main className="py-8">
+        <div className="container">
+          {/* Back Button */}
+          <Link to="/veterinary" className="inline-flex items-center gap-2 text-muted-foreground hover:text-foreground mb-6 transition-colors">
+            <ArrowLeft className="h-4 w-4" />
+            Back to Veterinary
+          </Link>
+
+          {/* Image Gallery */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+            <div className="aspect-[4/3] rounded-2xl overflow-hidden">
+              <img
+                src={coverImage}
+                alt={property.name}
+                className="w-full h-full object-cover"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              {[1, 2, 3, 4].map((i) => (
+                <div key={i} className="aspect-[4/3] rounded-xl overflow-hidden">
+                  <img src={coverImage} alt="" className="w-full h-full object-cover" />
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="grid lg:grid-cols-3 gap-8">
+            {/* Main Content */}
+            <div className="lg:col-span-2">
+              {/* Header */}
+              <div className="flex items-start justify-between mb-6">
+                <div>
+                  <div className="flex items-center gap-2 mb-2">
+                    <Badge className="bg-success/10 text-success border-success/20">Veterinary Clinic</Badge>
+                    <div className="flex items-center gap-1 px-2 py-1 rounded-md bg-rating/10">
+                      <Star className="h-4 w-4 fill-rating text-rating" />
+                      <span className="text-sm font-bold">{property.rating || 4.8}</span>
+                    </div>
+                    <span className="text-sm text-muted-foreground">(0 reviews)</span>
+                  </div>
+                  <h1 className="font-display text-3xl md:text-4xl font-bold text-foreground mb-2">
+                    {property.name}
+                  </h1>
+                  <div className="flex items-center gap-1 text-muted-foreground">
+                    <MapPin className="h-4 w-4" />
+                    <span>{property.city || "Los Angeles, CA"}</span>
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={async () => {
+                      if (!isAuthenticated) {
+                        navigate(`/veterinary/${id}?redirect=${encodeURIComponent(`/veterinary/${id}`)}`);
+                        return;
+                      }
+                      const previous = isLiked;
+                      setIsLiked(!previous);
+                      try {
+                        if (previous) {
+                          await favoritesApi.removeFavorite(property.id);
+                        } else {
+                          await favoritesApi.addFavorite(property.id);
+                        }
+                      } catch (err) {
+                        console.error("favorite toggle failed", err);
+                        setIsLiked(previous);
+                      }
+                    }}
+                  >
+                    <Heart className={`h-5 w-5 ${isLiked ? "fill-primary text-primary" : ""}`} />
+                  </Button>
+                  <Button variant="outline" size="icon">
+                    <Share2 className="h-5 w-5" />
+                  </Button>
+                </div>
+              </div>
+
+              {/* Description */}
+              <div className="mb-8">
+                <h2 className="font-semibold text-xl mb-3">About This Clinic</h2>
+                <p className="text-muted-foreground leading-relaxed">
+                  {property.description || "Comprehensive veterinary care with board-certified veterinarians. We use state-of-the-art equipment and the latest medical advances to ensure the best outcomes for your pets."}
+                </p>
+              </div>
+
+              {/* Amenities */}
+              <div className="mb-8">
+                <h2 className="font-semibold text-xl mb-4">Services Offered</h2>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  {services.map((service: any, i: number) => (
+                    <div key={i} className="flex items-center gap-3 p-4 rounded-xl bg-secondary/50">
+                      <Stethoscope className="h-5 w-5 text-success" />
+                      <span className="text-sm font-medium">{service.name}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Services */}
+              <div className="mb-8">
+                <h2 className="font-semibold text-xl mb-4">Available Services</h2>
+                <div className="space-y-3">
+                  {services.map((service: any) => (
+                    <div
+                      key={service.id || service.name}
+                      onClick={() => setSelectedService(service)}
+                      className={`p-4 rounded-xl border-2 cursor-pointer transition-all ${
+                        selected.id === service.id || selected.name === service.name
+                          ? "border-primary bg-primary/5"
+                          : "border-border hover:border-primary/50"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h3 className="font-semibold text-foreground">{service.name}</h3>
+                          <p className="text-sm text-muted-foreground">{service.description}</p>
+                          <div className="flex items-center gap-1 mt-1 text-xs text-muted-foreground">
+                            <Clock className="h-3 w-3" />
+                            <span>{service.duration}</span>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-xl font-bold text-foreground">₱{service.price}</p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Booking Card */}
+            <div className="lg:col-span-1">
+              <div className="bg-card rounded-2xl p-6 shadow-elevated sticky top-24">
+                <div className="flex items-center gap-2 mb-2">
+                  <Stethoscope className="h-5 w-5 text-success" />
+                  <span className="font-medium">{selected.name}</span>
+                </div>
+                <div className="flex items-baseline gap-2 mb-6">
+                  <span className="text-3xl font-bold text-foreground">₱{selected.price}</span>
+                  <span className="text-muted-foreground">• {selected.duration}</span>
+                </div>
+
+                {/* Price Summary */}
+                <div className="border-t border-border pt-4 mb-4 space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">{selected.name}</span>
+                    <span>₱{selected.price}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Service fee (10%)</span>
+                    <span>₱{serviceFee}</span>
+                  </div>
+                  <div className="flex justify-between font-semibold pt-2 border-t border-border">
+                    <span>Total</span>
+                    <span>₱{selected.price + serviceFee}</span>
+                  </div>
+                </div>
+
+                <Link to="/booking" state={{ shop: { type: "veterinary", name: property.name, location: property.city, image: coverImage, price: selected.price, serviceName: selected.name, serviceId: selected.id, propertyId: property.id } }}>
+                  <Button variant="hero" size="lg" className="w-full mb-4">
+                    Book Appointment
+                  </Button>
+                </Link>
+
+                <p className="text-center text-xs text-muted-foreground mb-6">
+                  Free rescheduling up to 24 hours before appointment
+                </p>
+
+                {/* Contact */}
+                <div className="border-t border-border pt-4 space-y-3">
+                  <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                    <Phone className="h-4 w-4" />
+                    <span>{property.phone || "+1 (555) 911-PETS"}</span>
+                  </div>
+                  <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                    <Mail className="h-4 w-4" />
+                    <span>{property.email || "care@clinic.com"}</span>
+                  </div>
+                  <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                    <Clock className="h-4 w-4" />
+                    <span>{property.hours || "Mon-Fri: 8AM - 8PM"}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </main>
+      <Footer />
+    </div>
+  );
+};
+
+export default VeterinaryDetail;
 </file>
 
 <file path="src/services/authApi.ts">
@@ -25025,6 +24882,141 @@ export const authController = {
     }
   },
 };
+</file>
+
+<file path="src/pages/Veterinary.tsx">
+import { useState, useEffect } from "react";
+import Header from "@/components/Header";
+import Footer from "@/components/Footer";
+import VeterinaryCard from "@/components/VeterinaryCard";
+import { fetchProperties } from "@/services/propertyApi";
+import { Loader2 } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Slider } from "@/components/ui/slider";
+
+const Veterinary = () => {
+  const [clinics, setClinics] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [priceRange, setPriceRange] = useState([0, 5000]);
+  const [location, setLocation] = useState("");
+  const [showFilters, setShowFilters] = useState(false);
+
+  const loadClinics = async () => {
+    setLoading(true);
+    try {
+      // Pass explicit filters to the API
+      const data = await fetchProperties({
+        propertyType: "veterinary",
+        serviceCategory: "Veterinary", // Only look at veterinary service prices
+        location: location.trim() || undefined,
+        minPrice: priceRange[0],
+        maxPrice: priceRange[1],
+      });
+      setClinics(data || []);
+    } catch (err) {
+      console.error("Filter Error:", err);
+      setClinics([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Run on initial mount
+  useEffect(() => {
+    loadClinics();
+  }, []);
+
+  return (
+    <div className="min-h-screen bg-background">
+      <Header />
+      
+      <section className="py-16 md:py-24 bg-gradient-to-b from-success/10 to-background">
+        <div className="container">
+          <div className="grid lg:grid-cols-2 gap-12 items-center">
+            <div>
+              <Badge className="bg-success/10 text-success border-success/20 mb-4">Veterinary Care</Badge>
+              <h1 className="font-display text-4xl md:text-5xl lg:text-6xl font-bold text-foreground mb-4">
+                Find Expert Care for Your <span className="text-gradient">Beloved Pets</span>
+              </h1>
+              <p className="text-lg text-muted-foreground mb-8">Connect with trusted veterinary clinics offering compassionate, comprehensive care for all your pet's health needs.</p>
+            </div>
+            <div className="relative hidden lg:block">
+              <img src="https://images.unsplash.com/photo-1628009368231-7bb7cfcb0def?w=600" className="rounded-2xl shadow-elevated" alt="Veterinary" />
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <main className="py-8">
+        <div className="container">
+          <div className="flex flex-col lg:flex-row gap-8">
+            {/* Filters Sidebar */}
+            <aside className={`lg:w-72 shrink-0 ${showFilters ? 'block' : 'hidden lg:block'}`}>
+              <div className="bg-card rounded-2xl p-6 shadow-soft sticky top-24 border">
+                <h3 className="font-semibold text-lg mb-6">Filters</h3>
+                
+                {/* Location Input */}
+                <div className="mb-6">
+                  <label className="text-sm font-medium text-foreground mb-2 block">Location</label>
+                  <Input 
+                    value={location} 
+                    onChange={(e) => setLocation(e.target.value)} 
+                    placeholder="e.g. Makati" 
+                    onKeyDown={(e) => e.key === 'Enter' && loadClinics()}
+                  />
+                </div>
+                
+                {/* Price Slider */}
+                <div className="mb-6">
+                  <label className="text-sm font-medium text-foreground mb-4 block">
+                    Price: ₱{priceRange[0]} - ₱{priceRange[1]}
+                  </label>
+                  <Slider value={priceRange} onValueChange={setPriceRange} max={10000} step={100} />
+                </div>
+                
+                <Button variant="hero" className="w-full" onClick={loadClinics}>Apply Filters</Button>
+              </div>
+            </aside>
+
+            {/* Results */}
+            <div className="flex-1">
+              <div className="flex items-center justify-between mb-6 lg:hidden">
+                <h2 className="text-2xl font-bold">Veterinary Clinics</h2>
+                <Button variant="outline" onClick={() => setShowFilters(!showFilters)}>
+                  {showFilters ? 'Hide Filters' : 'Show Filters'}
+                </Button>
+              </div>
+              
+              {loading ? (
+                <div className="flex justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
+              ) : clinics.length === 0 ? (
+                <div className="text-center py-20 text-muted-foreground">No clinics found. Try adjusting your filters.</div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                  {clinics.map((c) => (
+                    <VeterinaryCard key={c.id} clinic={{
+                      ...c,
+                      image: c.cover_image || "https://images.unsplash.com/photo-1628009368231-7bb7cfcb0def?w=800",
+                      location: c.city,
+                      price: c.cheapest_service_price,
+                      services: ["Consultation", "Vaccination"],
+                      rating: c.rating || 0,
+                      reviews: c.review_count || 0
+                    }} />
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </main>
+      <Footer />
+    </div>
+  );
+};
+export default Veterinary;
 </file>
 
 <file path="backend/schema.sql">
