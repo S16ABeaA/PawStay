@@ -19,8 +19,8 @@ export default {
     },
     extend: {
       fontFamily: {
-        sans: ['Nunito', 'system-ui', 'sans-serif'],
-        display: ['Playfair Display', 'serif'],
+        sans: ['Poppins', 'system-ui', 'sans-serif'],
+        display: ['Fredoka', 'sans-serif'],
       },
       colors: {
         border: "hsl(var(--border))",

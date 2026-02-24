@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Menu, X, PawPrint, User, Heart } from "lucide-react";
+import { Menu, X, User, Heart } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { authApi } from "@/services/authApi";
 
@@ -37,10 +37,8 @@ const Header = () => {
     <header className="sticky top-0 z-50 w-full border-b border-border/50 bg-background/80 backdrop-blur-lg">
       <div className="container flex h-16 items-center justify-between">
         {/* Logo */}
-        <Link to="/" className="flex items-center gap-2 group">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-hero shadow-soft group-hover:shadow-glow transition-shadow">
-            <PawPrint className="h-5 w-5 text-primary-foreground" />
-          </div>
+        <Link to="/" className="flex items-center gap-1 group">
+          <img src="/PawStay Logo.jpg" alt="PawStay" className="h-10 w-10 rounded-xl object-cover" />
           <span className="font-display text-xl font-bold text-foreground">
             PawStay
           </span>
