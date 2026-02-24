@@ -277,6 +277,33 @@ export const authController = {
     }
   },
 
+  forgotPassword: async (req: Request, res: Response) => {
+    const { email } = req.body;
+    if (!email) {
+      return res.status(400).json({ message: "Email is required." });
+    }
+
+    try {
+      const frontendUrl =
+        process.env.FRONTEND_URL || "http://localhost:8080";
+
+      const { error } = await supabaseClient.auth.resetPasswordForEmail(email, {
+        redirectTo: `${frontendUrl}/forgot-password`,
+      });
+
+      if (error) {
+        return res.status(400).json({ message: error.message });
+      }
+
+      return res.status(200).json({
+        message: "Password reset email sent successfully.",
+      });
+    } catch (err: any) {
+      console.error("Forgot Password Error:", err);
+      return res.status(500).json({ message: "Internal server error." });
+    }
+  },
+
   getProfile: async (req: Request, res: Response) => {
     const user = (req as any).user;
     if (!user) {

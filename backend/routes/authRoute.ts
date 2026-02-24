@@ -9,6 +9,7 @@ router.post("/resendConfirmation", authController.resendConfirmation);
 router.post("/signIn", authController.signIn);
 router.get("/signInWithGoogle", authController.signInWithGoogle);
 router.get("/oauth/callback", authController.oauthCallback); // Google OAuth callback
+router.post("/forgotPassword", authController.forgotPassword);
 router.get("/profile", authMiddleware, authController.getProfile); // Get current user
 router.post("/signOut", authMiddleware, authController.signOut);
 

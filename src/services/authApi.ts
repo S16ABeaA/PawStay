@@ -7,6 +7,7 @@ export const authApi = {
   resendConfirmation: async (data: any) => authHelper.post(`${API_BASE_URL}/api/auth/resendConfirmation`, data),
   signIn: async (data: any) => authHelper.post(`${API_BASE_URL}/api/auth/signIn`, data),
   signInWithGoogle: async () => authHelper.get(`${API_BASE_URL}/api/auth/signInWithGoogle`),
+  forgotPassword: async (data: any) => authHelper.post(`${API_BASE_URL}/api/auth/forgotPassword`, data),
   signOut: async () => authHelper.post(`${API_BASE_URL}/api/auth/signOut`),
   getProfile: async () => authHelper.get(`${API_BASE_URL}/api/auth/profile`),
 };
