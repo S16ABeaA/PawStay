@@ -9,4 +9,11 @@ export const authApi = {
   signInWithGoogle: async () => authHelper.get(`${API_BASE_URL}/api/auth/signInWithGoogle`),
   signOut: async () => authHelper.post(`${API_BASE_URL}/api/auth/signOut`),
   getProfile: async () => authHelper.get(`${API_BASE_URL}/api/auth/profile`),
+  getUsers: async () => authHelper.get(`${API_BASE_URL}/api/auth/users`),
+  promoteUser: async (data: { email: string; role: string }) =>
+    authHelper.post(`${API_BASE_URL}/api/auth/promote`, data),
+  banUser: async (id: string, ban: boolean) =>
+    authHelper.patch(`${API_BASE_URL}/api/auth/users/${id}/ban`, { ban }),
+  deleteUser: async (id: string) =>
+    authHelper.delete(`${API_BASE_URL}/api/auth/users/${id}`),
 };

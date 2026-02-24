@@ -116,14 +116,14 @@ const SuperAdminSupport = () => {
       {/* Stats */}
       <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         {ticketStats.map((stat) => (
-          <Card key={stat.label} className="bg-slate-800/50 border-slate-700">
+          <Card key={stat.label} className="bg-[#292929] border-white/[0.07]">
             <CardContent className="p-4 flex items-center gap-4">
-              <div className={`p-3 rounded-lg bg-slate-900 ${stat.color}`}>
+              <div className={`p-3 rounded-lg bg-[#1b1b1b] ${stat.color}`}>
                 <stat.icon className="h-5 w-5" />
               </div>
               <div>
                 <p className="text-2xl font-bold text-white">{stat.value}</p>
-                <p className="text-sm text-slate-400">{stat.label}</p>
+                <p className="text-sm text-[#808080]">{stat.label}</p>
               </div>
             </CardContent>
           </Card>
@@ -132,44 +132,44 @@ const SuperAdminSupport = () => {
 
       <div className="grid lg:grid-cols-5 gap-6">
         {/* Tickets List */}
-        <Card className="lg:col-span-2 bg-slate-800/50 border-slate-700">
+        <Card className="lg:col-span-2 bg-[#292929] border-white/[0.07]">
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
               <CardTitle className="text-white">Tickets</CardTitle>
-              <Button variant="outline" size="sm" className="border-slate-600 text-slate-300 hover:bg-slate-700">
+              <Button variant="outline" size="sm" className="border-white/[0.1] text-white/80 hover:bg-white/[0.06]">
                 <Filter className="h-4 w-4 mr-2" />
                 Filter
               </Button>
             </div>
             <div className="flex gap-2 mt-3">
               <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#808080]" />
                 <Input 
                   placeholder="Search tickets..." 
-                  className="pl-9 bg-slate-900 border-slate-600 text-white placeholder:text-slate-500"
+                  className="pl-9 bg-[#292929] border-white/[0.09] text-white placeholder:text-[#808080]"
                 />
               </div>
               <Select defaultValue="all">
-                <SelectTrigger className="w-28 bg-slate-900 border-slate-600 text-white">
+                <SelectTrigger className="w-28 bg-[#292929] border-white/[0.09] text-white">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All</SelectItem>
-                  <SelectItem value="open">Open</SelectItem>
-                  <SelectItem value="pending">Pending</SelectItem>
-                  <SelectItem value="resolved">Resolved</SelectItem>
+                  <SelectItem value="all" className="text-white focus:bg-white/[0.06] focus:text-white">All</SelectItem>
+                  <SelectItem value="open" className="text-white focus:bg-white/[0.06] focus:text-white">Open</SelectItem>
+                  <SelectItem value="pending" className="text-white focus:bg-white/[0.06] focus:text-white">Pending</SelectItem>
+                  <SelectItem value="resolved" className="text-white focus:bg-white/[0.06] focus:text-white">Resolved</SelectItem>
                 </SelectContent>
               </Select>
             </div>
           </CardHeader>
           <CardContent className="p-0">
-            <div className="divide-y divide-slate-700">
+            <div className="divide-y divide-white/[0.06]">
               {tickets.map((ticket) => (
                 <button
                   key={ticket.id}
                   onClick={() => setSelectedTicket(ticket)}
-                  className={`w-full p-4 text-left hover:bg-slate-700/50 transition-colors ${
-                    selectedTicket.id === ticket.id ? "bg-slate-700/50" : ""
+                  className={`w-full p-4 text-left hover:bg-white/[0.04] transition-colors ${
+                    selectedTicket.id === ticket.id ? "bg-[#ffa31a]/[0.08]" : ""
                   }`}
                 >
                   <div className="flex items-start justify-between mb-2">
@@ -179,7 +179,7 @@ const SuperAdminSupport = () => {
                         className={
                           ticket.priority === "High" ? "text-red-400 border-red-400/30" :
                           ticket.priority === "Medium" ? "text-amber-400 border-amber-400/30" :
-                          "text-slate-400 border-slate-400/30"
+                          "text-[#808080] border-[#808080]/30"
                         }
                       >
                         {ticket.priority}
@@ -195,17 +195,17 @@ const SuperAdminSupport = () => {
                         {ticket.status}
                       </Badge>
                     </div>
-                    <span className="text-xs text-slate-500">{ticket.created}</span>
+                    <span className="text-xs text-[#808080]">{ticket.created}</span>
                   </div>
                   <p className="font-medium text-white mb-1 line-clamp-1">{ticket.subject}</p>
-                  <div className="flex items-center gap-2 text-sm text-slate-400">
+                  <div className="flex items-center gap-2 text-sm text-[#808080]">
                     {ticket.userType === "Customer" ? (
                       <User className="h-3 w-3" />
                     ) : (
                       <Building2 className="h-3 w-3" />
                     )}
                     <span className="truncate">{ticket.from}</span>
-                    <span className="text-slate-600">•</span>
+                    <span className="text-[#808080]">•</span>
                     <MessageSquare className="h-3 w-3" />
                     <span>{ticket.messages}</span>
                   </div>
@@ -216,18 +216,18 @@ const SuperAdminSupport = () => {
         </Card>
 
         {/* Ticket Detail */}
-        <Card className="lg:col-span-3 bg-slate-800/50 border-slate-700">
-          <CardHeader className="border-b border-slate-700">
+        <Card className="lg:col-span-3 bg-[#292929] border-white/[0.07]">
+          <CardHeader className="border-b border-white/[0.07]">
             <div className="flex items-start justify-between">
               <div>
                 <div className="flex items-center gap-2 mb-2">
-                  <span className="text-sm text-slate-500">{selectedTicket.id}</span>
+                  <span className="text-sm text-[#808080]">{selectedTicket.id}</span>
                   <Badge 
                     variant="outline"
                     className={
                       selectedTicket.priority === "High" ? "text-red-400 border-red-400/30" :
                       selectedTicket.priority === "Medium" ? "text-amber-400 border-amber-400/30" :
-                      "text-slate-400 border-slate-400/30"
+                      "text-[#808080] border-[#808080]/30"
                     }
                   >
                     {selectedTicket.priority}
@@ -244,17 +244,17 @@ const SuperAdminSupport = () => {
                   </Badge>
                 </div>
                 <CardTitle className="text-white">{selectedTicket.subject}</CardTitle>
-                <p className="text-sm text-slate-400 mt-1">From: {selectedTicket.from}</p>
+                <p className="text-sm text-[#808080] mt-1">From: {selectedTicket.from}</p>
               </div>
               <div className="flex gap-2">
                 <Select defaultValue={selectedTicket.status.toLowerCase()}>
-                  <SelectTrigger className="w-32 bg-slate-900 border-slate-600 text-white">
+                  <SelectTrigger className="w-32 bg-[#292929] border-white/[0.09] text-white">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="open">Open</SelectItem>
-                    <SelectItem value="pending">Pending</SelectItem>
-                    <SelectItem value="resolved">Resolved</SelectItem>
+                    <SelectItem value="open" className="text-white focus:bg-white/[0.06] focus:text-white">Open</SelectItem>
+                    <SelectItem value="pending" className="text-white focus:bg-white/[0.06] focus:text-white">Pending</SelectItem>
+                    <SelectItem value="resolved" className="text-white focus:bg-white/[0.06] focus:text-white">Resolved</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -270,8 +270,8 @@ const SuperAdminSupport = () => {
                 >
                   <div className={`max-w-[80%] p-3 rounded-lg ${
                     msg.type === "agent" 
-                      ? "bg-violet-600 text-white" 
-                      : "bg-slate-700 text-slate-200"
+                      ? "bg-[#ffa31a] text-[#1b1b1b]" 
+                      : "bg-white/[0.06] text-white/90"
                   }`}>
                     <div className="flex items-center gap-2 mb-1">
                       <span className="text-xs font-medium opacity-80">{msg.sender}</span>
@@ -284,11 +284,11 @@ const SuperAdminSupport = () => {
             </div>
 
             {/* Reply Box */}
-            <div className="p-4 border-t border-slate-700">
+            <div className="p-4 border-t border-white/[0.07]">
               <Tabs defaultValue="reply">
-                <TabsList className="bg-slate-900 mb-3">
-                  <TabsTrigger value="reply" className="data-[state=active]:bg-slate-700">Reply</TabsTrigger>
-                  <TabsTrigger value="internal" className="data-[state=active]:bg-slate-700">Internal Note</TabsTrigger>
+                <TabsList className="bg-[#292929] mb-3">
+                  <TabsTrigger value="reply" className="text-[#808080] data-[state=active]:bg-[#ffa31a]/10 data-[state=active]:text-[#ffa31a]">Reply</TabsTrigger>
+                  <TabsTrigger value="internal" className="text-[#808080] data-[state=active]:bg-[#ffa31a]/10 data-[state=active]:text-[#ffa31a]">Internal Note</TabsTrigger>
                 </TabsList>
                 <TabsContent value="reply" className="mt-0">
                   <div className="space-y-3">
@@ -296,18 +296,18 @@ const SuperAdminSupport = () => {
                       placeholder="Type your reply..." 
                       value={replyText}
                       onChange={(e) => setReplyText(e.target.value)}
-                      className="bg-slate-900 border-slate-600 text-white placeholder:text-slate-500 min-h-24"
+                      className="bg-[#292929] border-white/[0.09] text-white placeholder:text-[#808080] min-h-24"
                     />
                     <div className="flex justify-between items-center">
                       <div className="flex gap-2">
-                        <Button variant="outline" size="sm" className="border-slate-600 text-slate-300 hover:bg-slate-700">
+                        <Button variant="outline" size="sm" className="border-white/[0.1] text-white/80 hover:bg-white/[0.06]">
                           Use Template
                         </Button>
-                        <Button variant="outline" size="sm" className="border-slate-600 text-slate-300 hover:bg-slate-700">
+                        <Button variant="outline" size="sm" className="border-white/[0.1] text-white/80 hover:bg-white/[0.06]">
                           Attach File
                         </Button>
                       </div>
-                      <Button className="bg-violet-600 hover:bg-violet-700">
+                      <Button className="bg-[#ffa31a] hover:bg-[#ffa31a]/90 text-[#1b1b1b]">
                         <Send className="h-4 w-4 mr-2" />
                         Send Reply
                       </Button>
@@ -318,10 +318,10 @@ const SuperAdminSupport = () => {
                   <div className="space-y-3">
                     <Textarea 
                       placeholder="Add an internal note (not visible to the user)..." 
-                      className="bg-slate-900 border-slate-600 text-white placeholder:text-slate-500 min-h-24"
+                      className="bg-[#292929] border-white/[0.09] text-white placeholder:text-[#808080] min-h-24"
                     />
                     <div className="flex justify-end">
-                      <Button variant="outline" className="border-slate-600 text-slate-300 hover:bg-slate-700">
+                      <Button variant="outline" className="border-white/[0.1] text-white/80 hover:bg-white/[0.06]">
                         Add Note
                       </Button>
                     </div>
