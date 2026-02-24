@@ -230,6 +230,46 @@ export const authController = {
     }
   },
 
+  updateProfile: async (req: Request, res: Response) => {
+    const user = (req as any).user;
+    if (!user) {
+      return res.status(401).json({ error: "User not authenticated" });
+    }
+
+    try {
+      const { first_name, last_name, phone, address, avatar_url } = req.body;
+
+      const updates: Record<string, any> = {};
+      if (first_name !== undefined) updates.first_name = first_name;
+      if (last_name !== undefined) updates.last_name = last_name;
+      if (phone !== undefined) updates.phone = phone;
+      if (address !== undefined) updates.address = address;
+      if (avatar_url !== undefined) updates.avatar_url = avatar_url;
+
+      if (Object.keys(updates).length === 0) {
+        return res.status(400).json({ error: "No fields to update." });
+      }
+
+      const updatedProfile = await userModel.updateUser(user.id, updates);
+
+      return res.status(200).json({
+        user: {
+          id: updatedProfile.id,
+          first_name: updatedProfile.first_name,
+          last_name: updatedProfile.last_name,
+          role: updatedProfile.role,
+          phone: updatedProfile.phone || "",
+          address: updatedProfile.address || "",
+          avatar_url: updatedProfile.avatar_url || "",
+          email: user.email,
+        },
+      });
+    } catch (err: any) {
+      console.error("updateProfile error:", err);
+      return res.status(500).json({ error: "Failed to update profile." });
+    }
+  },
+
   signOut: async (req: Request, res: Response) => {
     try {
       // const sessionId = req.cookies?.session_id;

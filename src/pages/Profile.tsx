@@ -126,12 +126,50 @@ const Profile = () => {
 
   const [isEditing, setIsEditing] = useState(false);
 
-  const handleSave = () => {
-    setIsEditing(false);
-    toast({
-      title: "Profile Updated",
-      description: "Your profile has been updated successfully.",
-    });
+  const handleAvatarUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const base64 = reader.result as string;
+        setUser({ ...user, avatar: base64 });
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleSave = async () => {
+    try {
+      const res = await authApi.updateProfile({
+        first_name: user.firstName,
+        last_name: user.lastName,
+        phone: user.phone,
+        address: user.address,
+        avatar_url: user.avatar,
+      });
+      // Update local state with the response
+      setUser({
+        ...user,
+        firstName: res.user.first_name,
+        lastName: res.user.last_name,
+        phone: res.user.phone,
+        address: res.user.address,
+        avatar: res.user.avatar_url,
+        email: res.user.email,
+      });
+      setIsEditing(false);
+      toast({
+        title: "Profile Updated",
+        description: "Your profile has been updated successfully.",
+      });
+    } catch (err: any) {
+      console.error("Failed to update profile:", err);
+      toast({
+        title: "Error",
+        description: err?.error || "Failed to update profile. Please try again.",
+        variant: "destructive",
+      });
+    }
   };
 
   const handleLogout =  async() => {
@@ -178,7 +216,15 @@ const Profile = () => {
                 </AvatarFallback>
               </Avatar>
               <button className="absolute bottom-0 right-0 h-8 w-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-soft hover:bg-primary/90 transition-colors">
-                <Camera className="h-4 w-4" />
+                <label className="cursor-pointer flex items-center justify-center w-full h-full">
+                  <Camera className="h-4 w-4" />
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={handleAvatarUpload}
+                  />
+                </label>
               </button>
             </div>
             <div className="flex-1">

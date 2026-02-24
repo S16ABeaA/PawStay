@@ -9,4 +9,5 @@ export const authApi = {
   signInWithGoogle: async () => authHelper.post(`${API_BASE_URL}/api/auth/signIn`),
   signOut: async () => authHelper.post(`${API_BASE_URL}/api/auth/signOut`),
   getProfile: async () => authHelper.get(`${API_BASE_URL}/api/auth/profile`),
+  updateProfile: async (data: any) => authHelper.put(`${API_BASE_URL}/api/auth/profile`, data),
 };
