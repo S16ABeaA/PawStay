@@ -4,9 +4,11 @@ import { authApi } from "@/services/authApi";
 
 type RequireAuthProps = {
   children: ReactNode;
+  /** When true, redirect unauthenticated users to the sign-up form instead of sign-in */
+  signUpFirst?: boolean;
 };
 
-const RequireAuth = ({ children }: RequireAuthProps) => {
+const RequireAuth = ({ children, signUpFirst = false }: RequireAuthProps) => {
   const location = useLocation();
   const [isLoading, setIsLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -50,7 +52,8 @@ const RequireAuth = ({ children }: RequireAuthProps) => {
 
   if (!isAuthenticated) {
     const redirect = encodeURIComponent(`${location.pathname}${location.search}`);
-    return <Navigate to={`/signin?redirect=${redirect}`} replace />;
+    const mode = signUpFirst ? "&mode=signup" : "";
+    return <Navigate to={`/signin?redirect=${redirect}${mode}`} replace />;
   }
 
   return <>{children}</>;

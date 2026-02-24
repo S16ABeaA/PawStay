@@ -12,6 +12,7 @@ import { useState } from "react";
 
 const groomingData: Record<number, {
   id: number;
+  propertyId?: string;
   name: string;
   images: string[];
   location: string;
@@ -228,7 +229,7 @@ const GroomingDetail = () => {
                           </div>
                         </div>
                         <div className="text-right">
-                          <p className="text-xl font-bold text-foreground">${service.price}</p>
+                          <p className="text-xl font-bold text-foreground">₱{service.price}</p>
                         </div>
                       </div>
                     </div>
@@ -245,7 +246,7 @@ const GroomingDetail = () => {
                   <span className="font-medium">{selectedService.name}</span>
                 </div>
                 <div className="flex items-baseline gap-2 mb-6">
-                  <span className="text-3xl font-bold text-foreground">${selectedService.price}</span>
+                  <span className="text-3xl font-bold text-foreground">₱{selectedService.price}</span>
                   <span className="text-muted-foreground">• {selectedService.duration}</span>
                 </div>
 
@@ -253,15 +254,15 @@ const GroomingDetail = () => {
                 <div className="border-t border-border pt-4 mb-4 space-y-2">
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">{selectedService.name}</span>
-                    <span>${selectedService.price}</span>
+                    <span>₱{selectedService.price}</span>
                   </div>
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">Service fee (10%)</span>
-                    <span>${serviceFee}</span>
+                    <span>₱{serviceFee}</span>
                   </div>
                   <div className="flex justify-between font-semibold pt-2 border-t border-border">
                     <span>Total</span>
-                    <span>${selectedService.price + serviceFee}</span>
+                    <span>₱{selectedService.price + serviceFee}</span>
                   </div>
                 </div>
 

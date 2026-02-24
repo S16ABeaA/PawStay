@@ -1321,24 +1321,24 @@ const Booking = () => {
                     <>
                       <div className="space-y-2 py-4">
                         <div className="flex justify-between text-sm">
-                          <span className="text-muted-foreground">{isHotel(shop) ? `$${basePrice} x ${nights} night(s)` : (shop?.serviceName ?? "Service")}</span>
-                          <span>${isHotel(shop) ? basePrice * nights : basePrice}</span>
+                          <span className="text-muted-foreground">{isHotel(shop) ? `₱${basePrice} x ${nights} night(s)` : (shop?.serviceName ?? "Service")}</span>
+                          <span>₱{isHotel(shop) ? basePrice * nights : basePrice}</span>
                         </div>
                         {shop?.type === "grooming" && petType === "dog" && dogSize && dogSize !== "small" && (
                           <div className="flex justify-between text-sm">
                             <span className="text-muted-foreground">Dog size ({dogSize}) +{dogSizeMultiplier === 1.15 ? "15" : dogSizeMultiplier === 1.30 ? "30" : "50"}%</span>
-                            <span>+${Math.round((priceWithDogSize - basePrice) * (isHotel(shop) ? nights : 1) * 100) / 100}</span>
+                            <span>+₱{Math.round((priceWithDogSize - basePrice) * (isHotel(shop) ? nights : 1) * 100) / 100}</span>
                           </div>
                         )}
                         <div className="flex justify-between text-sm">
                           <span className="text-muted-foreground">Service fee (10%)</span>
-                          <span>${serviceFee}</span>
+                          <span>₱{serviceFee}</span>
                         </div>
                       </div>
                       <Separator />
                       <div className="flex justify-between py-4 font-semibold">
                         <span>Total</span>
-                        <span>${total}</span>
+                        <span>₱{total}</span>
                       </div>
                     </>
                   );

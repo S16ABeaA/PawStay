@@ -1,3 +1,4 @@
+import { ThemeProvider } from "next-themes";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -43,11 +44,12 @@ import SuperAdminSettings from "./pages/superadmin/Settings";
 const queryClient = new QueryClient();
 
 const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <Toaster />
-      <Sonner />
-      <BrowserRouter>
+  <ThemeProvider attribute="class" defaultTheme="light" enableSystem>
+    <QueryClientProvider client={queryClient}>
+      <TooltipProvider>
+        <Toaster />
+        <Sonner />
+        <BrowserRouter>
         <ScrollToTop />
         <Routes>
           {/* Public routes */}
@@ -69,8 +71,22 @@ const App = () => (
               </RequireAuth>
             }
           />
-          <Route path="/favorites" element={<Favorites />} />
-          <Route path="/booking" element={<Booking />} />
+          <Route
+            path="/favorites"
+            element={
+              <RequireAuth>
+                <Favorites />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/booking"
+            element={
+              <RequireAuth signUpFirst>
+                <Booking />
+              </RequireAuth>
+            }
+          />
           <Route path="/search" element={<SearchResults />} />
           <Route
             path="/profile"
@@ -80,7 +96,14 @@ const App = () => (
               </RequireAuth>
             }
           />
-          <Route path="/my-pets" element={<MyPets />} />
+          <Route
+            path="/my-pets"
+            element={
+              <RequireAuth>
+                <MyPets />
+              </RequireAuth>
+            }
+          />
           <Route
             path="/my-bookings"
             element={
@@ -111,6 +134,7 @@ const App = () => (
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>
+  </ThemeProvider>
 );
 
 export default App;
