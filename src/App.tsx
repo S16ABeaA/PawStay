@@ -23,6 +23,7 @@ import NotFound from "./pages/NotFound";
 import Profile from "./pages/Profile";
 import MyPets from "./pages/MyPets";
 import MyBookings from "./pages/MyBookings";
+import Notifications from "./pages/Notifications";
 import RequireAuth from "./components/RequireAuth";
 
 // Admin pages
@@ -88,6 +89,14 @@ const App = () => (
             element={
               <RequireAuth>
                 <MyBookings />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/notifications"
+            element={
+              <RequireAuth>
+                <Notifications />
               </RequireAuth>
             }
           />

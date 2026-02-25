@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Menu, X, PawPrint, User, Heart } from "lucide-react";
+import { Menu, X, PawPrint, User, Heart, Bell } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { authApi } from "@/services/authApi";
+import NotificationBell from "@/components/NotificationBell";
 
 const Header = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -66,6 +67,7 @@ const Header = () => {
        {/* Desktop Actions */}
         {isLoggedIn && (
           <div className="hidden md:flex items-center gap-3">
+            <NotificationBell />
             <Link to="/favorites">
               <Button variant="ghost" size="icon" className="text-muted-foreground">
                 <Heart className="h-5 w-5" />
@@ -125,6 +127,12 @@ const Header = () => {
             <Link to="/veterinary" className="py-2 text-sm font-medium text-foreground" onClick={() => setIsMenuOpen(false)}>Veterinary</Link>
             <Link to="/about" className="py-2 text-sm font-medium text-foreground" onClick={() => setIsMenuOpen(false)}>About</Link>
             <hr className="border-border my-2" />
+            {isLoggedIn && (
+              <Link to="/notifications" className="py-2 text-sm font-medium text-foreground flex items-center gap-2" onClick={() => setIsMenuOpen(false)}>
+                <Bell className="h-4 w-4" />
+                Notifications
+              </Link>
+            )}
             {isLoggedIn ? (
               <Link to="/profile" onClick={() => setIsMenuOpen(false)}>
                 <Button variant="outline" className="w-full gap-2">
