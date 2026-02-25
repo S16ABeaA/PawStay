@@ -111,7 +111,8 @@ export const adminPropertyController = {
         const { data: bookings } = await supabaseAdmin
           .from("bookings")
           .select("property_id, total_price, status")
-          .in("property_id", propertyIds);
+          .in("property_id", propertyIds)
+          .eq("is_deleted", false);
 
         (bookings ?? []).forEach((b: any) => {
           if (!bookingStats[b.property_id]) {
@@ -266,6 +267,7 @@ export const adminPropertyController = {
           .from("bookings")
           .select("id, status, total_price, created_at")
           .eq("property_id", id)
+          .eq("is_deleted", false)
           .order("created_at", { ascending: false })
           .limit(10),
         supabaseAdmin
@@ -281,7 +283,8 @@ export const adminPropertyController = {
       const { data: allBookings } = await supabaseAdmin
         .from("bookings")
         .select("status, total_price")
-        .eq("property_id", id);
+        .eq("property_id", id)
+        .eq("is_deleted", false);
 
       const bookingStats = (allBookings ?? []).reduce(
         (acc: any, b: any) => {

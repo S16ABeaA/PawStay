@@ -1,6 +1,6 @@
-import { ReactNode, useEffect, useState } from "react";
+import { ReactNode, useEffect, useState, useRef } from "react";
 import SuperAdminSidebar from "./SuperAdminSidebar";
-import { Bell, Search, ChevronDown, LogOut, User } from "lucide-react";
+import { Bell, Search, ChevronDown, LogOut, User, ChevronRight, Clock } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -11,7 +11,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import { authApi } from "@/services/authApi";
 import { useToast } from "@/hooks/use-toast";
 
@@ -23,10 +23,32 @@ interface SuperAdminLayoutProps {
 
 export type SAUser = { firstName: string; lastName: string; email: string } | null;
 
+const BREADCRUMB_MAP: Record<string, string> = {
+  "/superadmin": "Dashboard",
+  "/superadmin/users": "Users",
+  "/superadmin/properties": "Properties",
+  "/superadmin/analytics": "Analytics",
+  "/superadmin/revenue": "Revenue",
+  "/superadmin/support": "Support",
+  "/superadmin/settings": "Settings",
+};
+
 const SuperAdminLayout = ({ children, title, subtitle }: SuperAdminLayoutProps) => {
   const [user, setUser] = useState<SAUser>(null);
+  const [clock, setClock] = useState("");
   const navigate = useNavigate();
+  const location = useLocation();
   const { toast } = useToast();
+  const mainRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    // Apply Inter font to document.body so Radix portals (dialogs, dropdowns, etc.)
+    // that render outside .sa-panel also inherit Inter instead of the global Calli Cat.
+    document.body.classList.add("sa-panel");
+    return () => {
+      document.body.classList.remove("sa-panel");
+    };
+  }, []);
 
   useEffect(() => {
     authApi.getProfile().then((profile) => {
@@ -39,6 +61,33 @@ const SuperAdminLayout = ({ children, title, subtitle }: SuperAdminLayoutProps) 
       }
     }).catch(() => {});
   }, []);
+
+  // Live clock
+  useEffect(() => {
+    const fmt = () => {
+      const now = new Date();
+      setClock(now.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true }));
+    };
+    fmt();
+    const id = setInterval(fmt, 30_000);
+    return () => clearInterval(id);
+  }, []);
+
+  // Scroll to top on page change
+  useEffect(() => {
+    mainRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+  }, [location.pathname]);
+
+  // Breadcrumb segments
+  const crumbs = (() => {
+    const path = location.pathname;
+    const parts: { label: string; href: string }[] = [{ label: "Dashboard", href: "/superadmin" }];
+    if (path !== "/superadmin") {
+      const label = BREADCRUMB_MAP[path] ?? path.split("/").pop() ?? "";
+      parts.push({ label, href: path });
+    }
+    return parts;
+  })();
 
   const handleLogout = async () => {
     try {
@@ -60,11 +109,22 @@ const SuperAdminLayout = ({ children, title, subtitle }: SuperAdminLayoutProps) 
 
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {/* ── Top Header ── */}
-        <header className="sticky top-0 z-30 h-16 bg-[#1b1b1b]/95 backdrop-blur-sm border-b border-white/[0.06] flex items-center gap-4 px-6">
-          {/* Page title */}
+        <header className="sticky top-0 z-30 h-16 bg-[#1b1b1b]/80 backdrop-blur-md border-b border-white/[0.06] flex items-center gap-4 px-6">
+          {/* Breadcrumb + title */}
           <div className="flex-1 min-w-0">
-            <h1 className="text-base font-semibold text-white truncate">{title}</h1>
-            {subtitle && <p className="text-xs text-[#808080] truncate">{subtitle}</p>}
+            <nav className="flex items-center gap-1 text-xs text-[#808080] mb-0.5">
+              {crumbs.map((c, i) => (
+                <span key={c.href} className="flex items-center gap-1">
+                  {i > 0 && <ChevronRight className="h-3 w-3 text-[#808080]/40" />}
+                  {i === crumbs.length - 1 ? (
+                    <span className="text-white/60 font-medium">{c.label}</span>
+                  ) : (
+                    <Link to={c.href} className="hover:text-[#ffa31a] transition-colors">{c.label}</Link>
+                  )}
+                </span>
+              ))}
+            </nav>
+            <h1 className="text-base font-semibold text-white truncate leading-tight">{title}</h1>
           </div>
 
           {/* Search */}
@@ -76,6 +136,14 @@ const SuperAdminLayout = ({ children, title, subtitle }: SuperAdminLayoutProps) 
             />
           </div>
 
+          {/* Live clock */}
+          <div className="hidden lg:flex items-center gap-1.5 text-xs text-[#808080]">
+            <Clock className="h-3.5 w-3.5" />
+            <span className="tabular-nums">{clock}</span>
+          </div>
+
+          <div className="w-px h-6 bg-white/[0.06] hidden lg:block" />
+
           {/* Notification bell */}
           <Button
             variant="ghost"
@@ -83,7 +151,7 @@ const SuperAdminLayout = ({ children, title, subtitle }: SuperAdminLayoutProps) 
             className="relative h-9 w-9 rounded-lg text-[#808080] hover:text-white hover:bg-white/[0.05]"
           >
             <Bell className="h-[18px] w-[18px]" />
-            <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-[#ffa31a] ring-2 ring-[#1b1b1b]" />
+            <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-[#ffa31a] ring-2 ring-[#1b1b1b] sa-pulse-dot" />
           </Button>
 
           {/* User avatar dropdown */}
@@ -132,8 +200,10 @@ const SuperAdminLayout = ({ children, title, subtitle }: SuperAdminLayoutProps) 
         </header>
 
         {/* ── Page Content ── */}
-        <main className="flex-1 overflow-auto p-6 md:p-8">
-          {children}
+        <main ref={mainRef} className="flex-1 overflow-auto p-6 md:p-8">
+          <div className="sa-animate-in">
+            {children}
+          </div>
         </main>
       </div>
     </div>

@@ -28,7 +28,7 @@ export const authController = {
 
     try {
       // Check if user already exists
-      const { data: existingUser } = await supabaseAdmin.auth.admin.listUsers();
+      const { data: existingUser } = await supabaseAdmin.auth.admin.listUsers({ perPage: 1000 });
       const userExists = existingUser?.users?.some(u => u.email === email);
       if (userExists) {
           return res.status(409).json({ message: "User with this email already exists." });
@@ -320,7 +320,8 @@ export const authController = {
       const [profilesResult, authResult] = await Promise.all([
         supabaseAdmin
           .from("profiles")
-          .select("id, first_name, last_name, email, role, created_at")
+          .select("id, first_name, last_name, email, role, phone, address, avatar_url, created_at")
+          .eq("is_deleted", false)
           .order("created_at", { ascending: false }),
         supabaseAdmin.auth.admin.listUsers({ perPage: 1000 }),
       ]);
@@ -408,14 +409,25 @@ export const authController = {
     }
 
     try {
-      // Find user in Supabase Auth by email
-      const { data: listData, error: listError } = await supabaseAdmin.auth.admin.listUsers();
-      if (listError) return res.status(500).json({ error: listError.message });
+      // Look up the profile by email first (avoids listUsers pagination bug)
+      const { data: profile, error: profileLookupError } = await supabaseAdmin
+        .from("profiles")
+        .select("id")
+        .eq("email", email)
+        .eq("is_deleted", false)
+        .maybeSingle();
 
-      const authUser = listData?.users?.find(u => u.email === email);
-      if (!authUser) {
+      if (profileLookupError) return res.status(500).json({ error: profileLookupError.message });
+      if (!profile) {
         return res.status(404).json({ error: `No user found with email: ${email}` });
       }
+
+      // Fetch the auth user by ID (reliable, no pagination)
+      const { data: authData, error: authError } = await supabaseAdmin.auth.admin.getUserById(profile.id);
+      if (authError || !authData?.user) {
+        return res.status(404).json({ error: `Auth record not found for: ${email}` });
+      }
+      const authUser = authData.user;
 
       // Update role in profiles table
       const { error: profileError } = await supabaseAdmin

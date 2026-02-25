@@ -49,9 +49,9 @@ const SuperAdminRevenue = () => {
   return (
     <SuperAdminLayout title="Revenue & Payouts" subtitle="Track platform revenue and manage property payouts">
       {/* Stats Grid */}
-      <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+      <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8 sa-stagger">
         {revenueStats.map((stat) => (
-          <Card key={stat.label} className="bg-[#292929] border-white/[0.07]">
+          <Card key={stat.label} className="bg-[#292929] border-white/[0.07] sa-card sa-slide-in">
             <CardContent className="p-5">
               <div className="flex items-center justify-between mb-3">
                 <div className="p-2 rounded-lg bg-[#ffa31a]/20">
@@ -65,16 +65,16 @@ const SuperAdminRevenue = () => {
                   {stat.change}
                 </Badge>
               </div>
-              <p className="text-2xl font-bold text-white">{stat.value}</p>
+              <p className="text-2xl font-bold text-white tabular-nums">{stat.value}</p>
               <p className="text-sm text-[#808080]">{stat.label}</p>
             </CardContent>
           </Card>
         ))}
       </div>
 
-      <div className="grid lg:grid-cols-3 gap-6">
+      <div className="grid lg:grid-cols-3 gap-6 sa-slide-in" style={{ animationDelay: '120ms' }}>
         {/* Transactions Table */}
-        <Card className="lg:col-span-2 bg-[#292929] border-white/[0.07]">
+        <Card className="lg:col-span-2 bg-[#292929] border-white/[0.07] sa-card">
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle className="text-white">Recent Transactions</CardTitle>
             <div className="flex gap-2">
@@ -152,7 +152,7 @@ const SuperAdminRevenue = () => {
         </Card>
 
         {/* Pending Payouts */}
-        <Card className="bg-[#292929] border-white/[0.07]">
+        <Card className="bg-[#292929] border-white/[0.07] sa-card">
           <CardHeader>
             <CardTitle className="text-white">Pending Payouts</CardTitle>
           </CardHeader>

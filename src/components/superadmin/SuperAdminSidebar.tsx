@@ -5,6 +5,12 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import type { SAUser } from "./SuperAdminLayout";
 
 const navItems = [
@@ -30,112 +36,163 @@ const SuperAdminSidebar = ({ user }: SidebarProps) => {
       ? location.pathname === item.href
       : location.pathname === item.href || location.pathname.startsWith(item.href + "/");
 
-  return (
-    <aside
-      className={cn(
-        "sticky top-0 h-screen flex flex-col border-r border-white/[0.06] transition-all duration-300",
-        "bg-[#1b1b1b]",
-        collapsed ? "w-[60px]" : "w-60"
-      )}
-    >
-      {/* ── Logo ── */}
-      <div className="h-16 flex items-center justify-between px-3 border-b border-white/[0.06] shrink-0">
-        {!collapsed ? (
-          <>
-            <Link to="/superadmin" className="flex items-center gap-2.5">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#ffa31a]">
-                <PawPrint className="h-4 w-4 text-[#1b1b1b]" />
-              </div>
-              <div className="leading-none">
-                <span className="block text-sm font-bold text-white tracking-tight">PawStay</span>
-                <span className="block text-[9px] font-semibold text-[#ffa31a] uppercase tracking-[0.12em] mt-0.5">Super Admin</span>
-              </div>
-            </Link>
-            <button
-              onClick={() => setCollapsed(true)}
-              className="h-7 w-7 rounded-lg flex items-center justify-center text-[#808080] hover:text-white hover:bg-white/[0.06] transition-colors"
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </button>
-          </>
-        ) : (
-          <button
-            onClick={() => setCollapsed(false)}
-            className="w-full flex items-center justify-center h-8 rounded-lg text-[#808080] hover:text-white hover:bg-white/[0.06] transition-colors"
-          >
-            <Menu className="h-4 w-4" />
-          </button>
+  const NavLink = ({ item }: { item: typeof navItems[0] }) => {
+    const active = isActive(item);
+    const link = (
+      <Link
+        to={item.href}
+        className={cn(
+          "group relative flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 select-none",
+          active
+            ? "bg-[#ffa31a]/10 text-white shadow-[0_0_12px_rgba(255,163,26,0.06)]"
+            : "text-[#808080] hover:bg-white/[0.04] hover:text-white",
+          collapsed && "justify-center"
         )}
-      </div>
-
-      {/* ── Navigation ── */}
-      <nav className="flex-1 p-2 space-y-0.5 overflow-y-auto mt-1">
-        {navItems.map((item) => {
-          const active = isActive(item);
-          return (
-            <Link
-              key={item.href}
-              to={item.href}
-              title={collapsed ? item.label : undefined}
-              className={cn(
-                "group relative flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 select-none",
-                active
-                  ? "bg-[#ffa31a]/10 text-white"
-                  : "text-[#808080] hover:bg-white/[0.04] hover:text-white"
-              )}
-            >
-              {active && (
-                <span className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 rounded-r-full bg-[#ffa31a]" />
-              )}
-              <item.icon
-                className={cn(
-                  "h-[18px] w-[18px] shrink-0 transition-colors",
-                  active ? "text-[#ffa31a]" : "text-[#808080] group-hover:text-white"
-                )}
-              />
-              {!collapsed && (
-                <span className="truncate flex-1">{item.label}</span>
-              )}
-              {active && !collapsed && (
-                <span className="w-1.5 h-1.5 rounded-full shrink-0 bg-[#ffa31a]" />
-              )}
-            </Link>
-          );
-        })}
-      </nav>
-
-      {/* ── Footer ── */}
-      <div className="p-2 border-t border-white/[0.06] space-y-0.5 shrink-0">
-        {/* User chip */}
-        <div
+      >
+        {active && (
+          <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 rounded-r-full bg-[#ffa31a]" />
+        )}
+        <item.icon
           className={cn(
-            "flex items-center gap-2.5 px-3 py-2 rounded-xl",
-            collapsed && "justify-center"
+            "h-[18px] w-[18px] shrink-0 transition-colors",
+            active ? "text-[#ffa31a]" : "text-[#808080] group-hover:text-white"
           )}
-        >
-          <div className="w-7 h-7 rounded-lg bg-[#ffa31a]/20 border border-[#ffa31a]/30 flex items-center justify-center shrink-0">
-            <Shield className="h-3.5 w-3.5 text-[#ffa31a]" />
-          </div>
-          {!collapsed && (
-            <div className="min-w-0">
-              <p className="text-xs font-semibold text-white truncate leading-tight">
-                {user ? `${user.firstName} ${user.lastName}` : "Super Admin"}
-              </p>
-              <p className="text-[10px] text-[#808080] truncate leading-tight">{user?.email ?? ""}</p>
-            </div>
+        />
+        {!collapsed && (
+          <span className="truncate flex-1">{item.label}</span>
+        )}
+        {active && !collapsed && (
+          <span className="w-1.5 h-1.5 rounded-full shrink-0 bg-[#ffa31a] sa-pulse-dot" />
+        )}
+      </Link>
+    );
+
+    if (collapsed) {
+      return (
+        <Tooltip delayDuration={0}>
+          <TooltipTrigger asChild>{link}</TooltipTrigger>
+          <TooltipContent side="right" className="bg-[#292929] border-white/10 text-white text-xs font-medium px-3 py-1.5">
+            {item.label}
+          </TooltipContent>
+        </Tooltip>
+      );
+    }
+    return link;
+  };
+
+  return (
+    <TooltipProvider>
+      <aside
+        className={cn(
+          "sticky top-0 h-screen flex flex-col border-r border-white/[0.06] transition-all duration-300",
+          "bg-[#141414]",
+          collapsed ? "w-[68px]" : "w-60"
+        )}
+      >
+        {/* Logo */}
+        <div className="h-16 flex items-center justify-between px-3 border-b border-white/[0.06] shrink-0">
+          {!collapsed ? (
+            <>
+              <Link to="/superadmin" className="flex items-center gap-2.5">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#ffa31a] shadow-[0_0_16px_rgba(255,163,26,0.2)]">
+                  <PawPrint className="h-4 w-4 text-[#1b1b1b]" />
+                </div>
+                <div className="leading-none">
+                  <span className="block text-sm font-bold text-white tracking-tight">PawStay</span>
+                  <span className="block text-[9px] font-semibold text-[#ffa31a] uppercase tracking-[0.12em] mt-0.5">Super Admin</span>
+                </div>
+              </Link>
+              <button
+                onClick={() => setCollapsed(true)}
+                className="h-7 w-7 rounded-lg flex items-center justify-center text-[#808080] hover:text-white hover:bg-white/[0.06] transition-colors"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </button>
+            </>
+          ) : (
+            <Tooltip delayDuration={0}>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={() => setCollapsed(false)}
+                  className="w-full flex items-center justify-center h-8 rounded-lg text-[#808080] hover:text-white hover:bg-white/[0.06] transition-colors"
+                >
+                  <Menu className="h-4 w-4" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="right" className="bg-[#292929] border-white/10 text-white text-xs">
+                Expand sidebar
+              </TooltipContent>
+            </Tooltip>
           )}
         </div>
 
-        <Link
-          to="/"
-          title={collapsed ? "Back to Site" : undefined}
-          className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-[#808080] hover:bg-white/[0.04] hover:text-white transition-colors"
-        >
-          <LogOut className="h-[18px] w-[18px] shrink-0" />
-          {!collapsed && <span>Back to Site</span>}
-        </Link>
-      </div>
-    </aside>
+        {/* Section label */}
+        {!collapsed && (
+          <div className="px-5 pt-4 pb-1">
+            <p className="text-[10px] font-semibold text-[#808080]/60 uppercase tracking-[0.15em]">Main Menu</p>
+          </div>
+        )}
+
+        {/* Navigation */}
+        <nav className="flex-1 px-2 pb-2 space-y-0.5 overflow-y-auto">
+          {navItems.map((item) => (
+            <NavLink key={item.href} item={item} />
+          ))}
+        </nav>
+
+        {/* Footer */}
+        <div className="p-2 border-t border-white/[0.06] space-y-0.5 shrink-0">
+          <div
+            className={cn(
+              "flex items-center gap-2.5 px-3 py-2 rounded-xl",
+              collapsed && "justify-center"
+            )}
+          >
+            <div className="w-7 h-7 rounded-lg bg-[#ffa31a]/20 border border-[#ffa31a]/30 flex items-center justify-center shrink-0">
+              <Shield className="h-3.5 w-3.5 text-[#ffa31a]" />
+            </div>
+            {!collapsed && (
+              <div className="min-w-0">
+                <p className="text-xs font-semibold text-white truncate leading-tight">
+                  {user ? `${user.firstName} ${user.lastName}` : "Super Admin"}
+                </p>
+                <p className="text-[10px] text-[#808080] truncate leading-tight">{user?.email ?? ""}</p>
+              </div>
+            )}
+          </div>
+
+          {collapsed ? (
+            <Tooltip delayDuration={0}>
+              <TooltipTrigger asChild>
+                <Link
+                  to="/"
+                  className="flex items-center justify-center px-3 py-2.5 rounded-xl text-sm font-medium text-[#808080] hover:bg-white/[0.04] hover:text-white transition-colors"
+                >
+                  <LogOut className="h-[18px] w-[18px] shrink-0" />
+                </Link>
+              </TooltipTrigger>
+              <TooltipContent side="right" className="bg-[#292929] border-white/10 text-white text-xs">
+                Back to Site
+              </TooltipContent>
+            </Tooltip>
+          ) : (
+            <Link
+              to="/"
+              className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-[#808080] hover:bg-white/[0.04] hover:text-white transition-colors"
+            >
+              <LogOut className="h-[18px] w-[18px] shrink-0" />
+              <span>Back to Site</span>
+            </Link>
+          )}
+
+          {!collapsed && (
+            <div className="flex items-center justify-center pt-1 pb-0.5">
+              <span className="text-[10px] text-[#808080]/40 tracking-wide">v1.0.0</span>
+            </div>
+          )}
+        </div>
+      </aside>
+    </TooltipProvider>
   );
 };
 

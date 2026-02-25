@@ -28,7 +28,8 @@ import {
 import {
   Search, Download, MoreHorizontal, ShieldCheck, Loader2, RefreshCw,
   Users, UserCheck, Building2, Shield, Ban, Trash2, Copy, CheckCheck,
-  ChevronLeft, ChevronRight, AlertTriangle,
+  ChevronLeft, ChevronRight, AlertTriangle, ArrowUpDown, Calendar, Mail,
+  PawPrint, Home, CreditCard, AlertCircle,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -47,6 +48,9 @@ type User = {
   last_name: string;
   email: string;
   role: string;
+  phone: string | null;
+  address: string | null;
+  avatar_url: string | null;
   created_at: string;
   banned_until: string | null;
   email_confirmed_at: string | null;
@@ -54,6 +58,9 @@ type User = {
 
 const ROLES = ["customer", "proprietor", "admin", "super_admin"] as const;
 const PAGE_SIZE = 10;
+
+type SortField = "name" | "email" | "role" | "joined";
+type SortDir = "asc" | "desc";
 
 const isBanned = (u: User) =>
   !!u.banned_until && u.banned_until !== "none" && new Date(u.banned_until) > new Date();
@@ -75,6 +82,9 @@ const SuperAdminUsers = () => {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [roleFilter, setRoleFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [sortField, setSortField] = useState<SortField>("joined");
+  const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [page, setPage] = useState(1);
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
@@ -115,27 +125,62 @@ const SuperAdminUsers = () => {
   useEffect(() => { fetchUsers(); }, []);
 
   // --- Stats ---
+  const suspendedCount = users.filter(u => isBanned(u)).length;
+  const unverifiedCount = users.filter(u => !u.email_confirmed_at && !isBanned(u)).length;
+
   const stats = [
     { label: "Total Users",  value: users.length,                                                          icon: Users,     accent: "text-[#ffa31a]",   bg: "bg-[#ffa31a]/10",   border: "border-[#ffa31a]/20" },
     { label: "Customers",    value: users.filter(u => u.role === "customer").length,                       icon: UserCheck, accent: "text-emerald-400", bg: "bg-emerald-400/10", border: "border-emerald-400/20" },
     { label: "Proprietors",  value: users.filter(u => u.role === "proprietor").length,                     icon: Building2, accent: "text-blue-400",    bg: "bg-blue-400/10",    border: "border-blue-400/20" },
     { label: "Staff",        value: users.filter(u => u.role === "admin" || u.role === "super_admin").length, icon: Shield, accent: "text-[#ffa31a]",   bg: "bg-[#ffa31a]/10",   border: "border-[#ffa31a]/20" },
+    { label: "Suspended",    value: suspendedCount,                                                        icon: Ban,       accent: "text-red-400",     bg: "bg-red-400/10",     border: "border-red-400/20" },
+    { label: "Unverified",   value: unverifiedCount,                                                       icon: AlertCircle, accent: "text-amber-400", bg: "bg-amber-400/10",  border: "border-amber-400/20" },
   ];
 
-  // --- Filtering + pagination ---
+  // --- Filtering + sorting + pagination ---
   const filteredUsers = users.filter(u => {
     const name = `${u.first_name} ${u.last_name}`.toLowerCase();
     const matchesSearch = name.includes(searchQuery.toLowerCase()) ||
       u.email.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesRole = roleFilter === "all" || u.role === roleFilter;
-    return matchesSearch && matchesRole;
+    let matchesStatus = true;
+    if (statusFilter === "active") matchesStatus = !!u.email_confirmed_at && !isBanned(u);
+    else if (statusFilter === "suspended") matchesStatus = isBanned(u);
+    else if (statusFilter === "unverified") matchesStatus = !u.email_confirmed_at && !isBanned(u);
+    return matchesSearch && matchesRole && matchesStatus;
   });
 
-  const totalPages = Math.max(1, Math.ceil(filteredUsers.length / PAGE_SIZE));
-  const pagedUsers = filteredUsers.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  // Sort
+  const sortedUsers = [...filteredUsers].sort((a, b) => {
+    let cmp = 0;
+    switch (sortField) {
+      case "name":
+        cmp = `${a.first_name} ${a.last_name}`.localeCompare(`${b.first_name} ${b.last_name}`);
+        break;
+      case "email":
+        cmp = a.email.localeCompare(b.email);
+        break;
+      case "role":
+        cmp = a.role.localeCompare(b.role);
+        break;
+      case "joined":
+        cmp = new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+        break;
+    }
+    return sortDir === "asc" ? cmp : -cmp;
+  });
+
+  const totalPages = Math.max(1, Math.ceil(sortedUsers.length / PAGE_SIZE));
+  const pagedUsers = sortedUsers.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   const handleSearch = (v: string) => { setSearchQuery(v); setPage(1); };
   const handleRoleFilter = (v: string) => { setRoleFilter(v); setPage(1); };
+  const handleStatusFilter = (v: string) => { setStatusFilter(v); setPage(1); };
+  const toggleSort = (field: SortField) => {
+    if (sortField === field) setSortDir(d => d === "asc" ? "desc" : "asc");
+    else { setSortField(field); setSortDir("asc"); }
+    setPage(1);
+  };
 
   // --- Copy email ---
   const copyEmail = (user: User) => {
@@ -227,7 +272,7 @@ const SuperAdminUsers = () => {
   const handleExport = () => {
     const rows = [
       ["Name", "Email", "Role", "Status", "Email Verified", "Joined"],
-      ...filteredUsers.map(u => [
+      ...sortedUsers.map(u => [
         `${u.first_name} ${u.last_name}`,
         u.email,
         roleLabel(u.role),
@@ -244,16 +289,16 @@ const SuperAdminUsers = () => {
     a.download = `pawstay-users-${new Date().toISOString().slice(0, 10)}.csv`;
     a.click();
     URL.revokeObjectURL(url);
-    toast({ title: "Export Complete", description: `${filteredUsers.length} users exported to CSV.` });
+    toast({ title: "Export Complete", description: `${sortedUsers.length} users exported to CSV.` });
   };
 
   return (
     <SuperAdminLayout title="Users" subtitle="Manage platform users and property owners">
 
       {/* Stats bar */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 mb-6">
         {stats.map(s => (
-          <div key={s.label} className="flex items-center gap-4 p-4 rounded-xl bg-[#292929] border border-white/[0.07]">
+          <div key={s.label} className="sa-card sa-slide-in flex items-center gap-4 p-4 rounded-xl bg-[#292929] border border-white/[0.07]">
             <div className={`p-2.5 rounded-lg ${s.bg} border ${s.border} shrink-0`}>
               <s.icon className={`h-5 w-5 ${s.accent}`} />
             </div>
@@ -266,7 +311,7 @@ const SuperAdminUsers = () => {
       </div>
 
       {/* Filters */}
-      <div className="flex flex-col md:flex-row gap-3 mb-5">
+      <div className="flex flex-col md:flex-row gap-3 mb-5 sa-slide-in" style={{ animationDelay: '100ms' }}>
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#808080]" />
           <Input
@@ -288,40 +333,69 @@ const SuperAdminUsers = () => {
             <SelectItem value="super_admin" className="text-white focus:bg-white/[0.06] focus:text-white">Super Admins</SelectItem>
           </SelectContent>
         </Select>
+        <Select value={statusFilter} onValueChange={handleStatusFilter}>
+          <SelectTrigger className="w-full md:w-40 bg-[#292929] border-white/10 text-white">
+            <SelectValue placeholder="Status" />
+          </SelectTrigger>
+          <SelectContent className="bg-[#292929] border-white/10 text-white">
+            <SelectItem value="all" className="text-white focus:bg-white/[0.06] focus:text-white">All Statuses</SelectItem>
+            <SelectItem value="active" className="text-white focus:bg-white/[0.06] focus:text-white">Active</SelectItem>
+            <SelectItem value="suspended" className="text-white focus:bg-white/[0.06] focus:text-white">Suspended</SelectItem>
+            <SelectItem value="unverified" className="text-white focus:bg-white/[0.06] focus:text-white">Unverified</SelectItem>
+          </SelectContent>
+        </Select>
         <Button variant="outline" className="gap-2 border-white/10 text-[#808080] hover:bg-white/5 hover:text-white" onClick={fetchUsers} disabled={loading}>
           <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
           Refresh
         </Button>
-        <Button variant="outline" className="gap-2 border-white/10 text-[#808080] hover:bg-white/5 hover:text-white" onClick={handleExport} disabled={loading || filteredUsers.length === 0}>
+        <Button variant="outline" className="gap-2 border-white/10 text-[#808080] hover:bg-white/5 hover:text-white" onClick={handleExport} disabled={loading || sortedUsers.length === 0}>
           <Download className="h-4 w-4" />
           Export CSV
         </Button>
       </div>
 
       {/* Table */}
-      <div className="bg-[#292929] rounded-xl border border-white/10 overflow-hidden">
+      <div className="bg-[#292929] rounded-xl border border-white/10 overflow-hidden sa-slide-in" style={{ animationDelay: '150ms' }}>
         <Table>
           <TableHeader>
             <TableRow className="border-white/10 hover:bg-transparent">
-              <TableHead className="text-[#808080] font-semibold uppercase text-xs tracking-wider">User</TableHead>
-              <TableHead className="text-[#808080] font-semibold uppercase text-xs tracking-wider">Role</TableHead>
+              <TableHead className="text-[#808080] font-semibold uppercase text-xs tracking-wider cursor-pointer select-none" onClick={() => toggleSort("name")}>
+                <span className="flex items-center gap-1">User <ArrowUpDown className={`h-3 w-3 ${sortField === "name" ? "text-[#ffa31a]" : "text-[#808080]/50"}`} /></span>
+              </TableHead>
+              <TableHead className="text-[#808080] font-semibold uppercase text-xs tracking-wider cursor-pointer select-none" onClick={() => toggleSort("role")}>
+                <span className="flex items-center gap-1">Role <ArrowUpDown className={`h-3 w-3 ${sortField === "role" ? "text-[#ffa31a]" : "text-[#808080]/50"}`} /></span>
+              </TableHead>
               <TableHead className="text-[#808080] font-semibold uppercase text-xs tracking-wider hidden md:table-cell">Status</TableHead>
-              <TableHead className="text-[#808080] font-semibold uppercase text-xs tracking-wider hidden lg:table-cell">Joined</TableHead>
+              <TableHead className="text-[#808080] font-semibold uppercase text-xs tracking-wider hidden lg:table-cell cursor-pointer select-none" onClick={() => toggleSort("joined")}>
+                <span className="flex items-center gap-1">Joined <ArrowUpDown className={`h-3 w-3 ${sortField === "joined" ? "text-[#ffa31a]" : "text-[#808080]/50"}`} /></span>
+              </TableHead>
               <TableHead className="text-[#808080] font-semibold uppercase text-xs tracking-wider text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={5} className="text-center py-16 text-[#808080]">
-                  <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2 text-[#ffa31a]" />
-                  Loading users…
+                <TableCell colSpan={5} className="text-center py-0">
+                  <div className="py-4 space-y-3">
+                    {Array.from({ length: 5 }).map((_, i) => (
+                      <div key={i} className="flex items-center gap-3 px-2 animate-pulse">
+                        <div className="w-10 h-10 rounded-full bg-white/[0.06]" />
+                        <div className="flex-1 space-y-2">
+                          <div className="h-3 w-32 bg-white/[0.06] rounded" />
+                          <div className="h-2 w-48 bg-white/[0.04] rounded" />
+                        </div>
+                        <div className="h-5 w-16 bg-white/[0.06] rounded-full" />
+                      </div>
+                    ))}
+                  </div>
                 </TableCell>
               </TableRow>
             ) : pagedUsers.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={5} className="text-center py-16 text-[#808080]">
-                  No users found.
+                  <Users className="h-8 w-8 mx-auto mb-2 text-[#808080]/40" />
+                  <p className="text-sm">No users found matching your filters.</p>
+                  <p className="text-xs text-[#808080]/60 mt-1">Try adjusting your search or filter criteria.</p>
                 </TableCell>
               </TableRow>
             ) : (
@@ -332,10 +406,14 @@ const SuperAdminUsers = () => {
                 >
                   <TableCell>
                     <div className="flex items-center gap-3">
-                      <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${isBanned(user) ? "bg-red-500/10 border border-red-500/20" : "bg-[#ffa31a]/10 border border-[#ffa31a]/20"}`}>
-                        <span className={`font-bold text-sm ${isBanned(user) ? "text-red-400" : "text-[#ffa31a]"}`}>
-                          {(user.first_name?.[0] ?? user.email[0]).toUpperCase()}
-                        </span>
+                      <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 overflow-hidden ${isBanned(user) ? "bg-red-500/10 border border-red-500/20" : "bg-[#ffa31a]/10 border border-[#ffa31a]/20"}`}>
+                        {user.avatar_url ? (
+                          <img src={user.avatar_url} alt="" className="w-full h-full object-cover" />
+                        ) : (
+                          <span className={`font-bold text-sm ${isBanned(user) ? "text-red-400" : "text-[#ffa31a]"}`}>
+                            {(user.first_name?.[0] ?? user.email[0]).toUpperCase()}
+                          </span>
+                        )}
                       </div>
                       <div>
                         <p className="font-medium text-white">{user.first_name} {user.last_name}</p>
@@ -419,10 +497,10 @@ const SuperAdminUsers = () => {
       </div>
 
       {/* Pagination */}
-      {!loading && filteredUsers.length > 0 && (
+      {!loading && sortedUsers.length > 0 && (
         <div className="flex items-center justify-between mt-4">
           <p className="text-sm text-[#808080]">
-            Showing {Math.min((page - 1) * PAGE_SIZE + 1, filteredUsers.length)}–{Math.min(page * PAGE_SIZE, filteredUsers.length)} of {filteredUsers.length} users
+            Showing {Math.min((page - 1) * PAGE_SIZE + 1, sortedUsers.length)}–{Math.min(page * PAGE_SIZE, sortedUsers.length)} of {sortedUsers.length} users
           </p>
           <div className="flex items-center gap-1">
             <Button
@@ -569,23 +647,31 @@ const SuperAdminUsers = () => {
 
       {/* ── View User Dialog ── */}
       <Dialog open={viewUserDialogOpen} onOpenChange={setViewUserDialogOpen}>
-        <DialogContent className="bg-[#1b1b1b] border-white/10">
+        <DialogContent className="bg-[#1b1b1b] border-white/10 max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-white">User Details</DialogTitle>
+            <DialogDescription className="text-[#808080]">Full profile overview and quick actions</DialogDescription>
           </DialogHeader>
           {selectedUser && (
-            <div className="space-y-4">
+            <div className="space-y-5">
+              {/* Avatar & name */}
               <div className="flex items-center gap-4">
-                <div className={`w-16 h-16 rounded-full flex items-center justify-center ${isBanned(selectedUser) ? "bg-red-500/10 border border-red-500/20" : "bg-[#ffa31a]/10 border border-[#ffa31a]/20"}`}>
-                  <span className={`text-2xl font-bold ${isBanned(selectedUser) ? "text-red-400" : "text-[#ffa31a]"}`}>
-                    {(selectedUser.first_name?.[0] ?? selectedUser.email[0]).toUpperCase()}
-                  </span>
+                <div className={`w-16 h-16 rounded-full flex items-center justify-center overflow-hidden ${isBanned(selectedUser) ? "bg-red-500/10 border border-red-500/20" : "bg-[#ffa31a]/10 border border-[#ffa31a]/20"}`}>
+                  {selectedUser.avatar_url ? (
+                    <img src={selectedUser.avatar_url} alt="" className="w-full h-full object-cover" />
+                  ) : (
+                    <span className={`text-2xl font-bold ${isBanned(selectedUser) ? "text-red-400" : "text-[#ffa31a]"}`}>
+                      {(selectedUser.first_name?.[0] ?? selectedUser.email[0]).toUpperCase()}
+                    </span>
+                  )}
                 </div>
-                <div>
+                <div className="flex-1 min-w-0">
                   <p className="text-lg font-semibold text-white">{selectedUser.first_name} {selectedUser.last_name}</p>
-                  <p className="text-sm text-[#808080]">{selectedUser.email}</p>
+                  <p className="text-sm text-[#808080] flex items-center gap-1 truncate"><Mail className="h-3 w-3 shrink-0" />{selectedUser.email}</p>
                 </div>
               </div>
+
+              {/* Info grid */}
               <div className="grid grid-cols-2 gap-4 pt-4 border-t border-white/[0.07]">
                 <div>
                   <p className="text-xs text-[#808080] uppercase tracking-wider mb-1">Role</p>
@@ -610,15 +696,47 @@ const SuperAdminUsers = () => {
                 </div>
                 <div>
                   <p className="text-xs text-[#808080] uppercase tracking-wider mb-1">Joined</p>
-                  <p className="text-white text-sm">
+                  <p className="text-white text-sm flex items-center gap-1">
+                    <Calendar className="h-3 w-3 text-[#808080]" />
                     {selectedUser.created_at ? new Date(selectedUser.created_at).toLocaleDateString() : "—"}
                   </p>
                 </div>
+                <div>
+                  <p className="text-xs text-[#808080] uppercase tracking-wider mb-1">User ID</p>
+                  <p className="text-white text-xs font-mono truncate">{selectedUser.id}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-[#808080] uppercase tracking-wider mb-1">Phone</p>
+                  <p className="text-white text-sm">{selectedUser.phone || "—"}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-[#808080] uppercase tracking-wider mb-1">Account Age</p>
+                  <p className="text-white text-sm">
+                    {selectedUser.created_at
+                      ? (() => {
+                          const days = Math.floor((Date.now() - new Date(selectedUser.created_at).getTime()) / 86400000);
+                          if (days < 1) return "Today";
+                          if (days < 30) return `${days} day${days > 1 ? "s" : ""}`;
+                          const months = Math.floor(days / 30);
+                          return `${months} month${months > 1 ? "s" : ""}`;
+                        })()
+                      : "—"}
+                  </p>
+                </div>
               </div>
-              <div className="flex gap-2 pt-2 flex-wrap">
-                <Button variant="outline" onClick={() => setViewUserDialogOpen(false)} className="border-white/10 text-[#808080] hover:text-white hover:bg-white/5">
-                  Close
-                </Button>
+
+              {/* Address (full width) */}
+              {selectedUser.address && (
+                <div className="pt-4 border-t border-white/[0.07]">
+                  <p className="text-xs text-[#808080] uppercase tracking-wider mb-1">Address</p>
+                  <p className="text-white text-sm flex items-center gap-1">
+                    <Home className="h-3 w-3 text-[#808080] shrink-0" />{selectedUser.address}
+                  </p>
+                </div>
+              )}
+
+              {/* Quick actions */}
+              <div className="flex flex-wrap gap-2 pt-4 border-t border-white/[0.07]">
                 <Button variant="outline" onClick={() => copyEmail(selectedUser)} className="border-white/10 text-[#808080] hover:text-white hover:bg-white/5 gap-2">
                   <Copy className="h-4 w-4" />
                   Copy Email
@@ -629,6 +747,17 @@ const SuperAdminUsers = () => {
                 >
                   <ShieldCheck className="h-4 w-4" />
                   Change Role
+                </Button>
+                <Button
+                  variant="outline"
+                  className={`gap-2 border-white/10 ${isBanned(selectedUser) ? "text-emerald-400 hover:text-emerald-300 hover:bg-emerald-400/10" : "text-amber-400 hover:text-amber-300 hover:bg-amber-400/10"}`}
+                  onClick={() => { setViewUserDialogOpen(false); openSuspendDialog(selectedUser); }}
+                >
+                  <Ban className="h-4 w-4" />
+                  {isBanned(selectedUser) ? "Reinstate" : "Suspend"}
+                </Button>
+                <Button variant="outline" onClick={() => setViewUserDialogOpen(false)} className="border-white/10 text-[#808080] hover:text-white hover:bg-white/5 ml-auto">
+                  Close
                 </Button>
               </div>
             </div>

@@ -47,7 +47,7 @@ const SuperAdminAnalytics = () => {
   return (
     <SuperAdminLayout title="Analytics" subtitle="Platform performance and insights">
       {/* Time Range Selector */}
-      <div className="flex justify-end mb-6">
+      <div className="flex justify-end mb-6 sa-slide-in">
         <Select defaultValue="6months">
           <SelectTrigger className="w-40 bg-[#292929] border-white/[0.09] text-white">
             <SelectValue />
@@ -62,8 +62,8 @@ const SuperAdminAnalytics = () => {
       </div>
 
       {/* Main Metrics */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-        <Card className="bg-[#292929] border-white/[0.07] col-span-1">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8 sa-stagger">
+        <Card className="bg-[#292929] border-white/[0.07] col-span-1 sa-card sa-slide-in">
           <CardContent className="p-5">
             <div className="flex items-center gap-3">
               <div className="p-3 rounded-lg bg-[#ffa31a]/20">
@@ -71,12 +71,12 @@ const SuperAdminAnalytics = () => {
               </div>
               <div>
                 <p className="text-sm text-[#808080]">Total Bookings</p>
-                <p className="text-xl font-bold text-white">48,291</p>
+                <p className="text-xl font-bold text-white tabular-nums">48,291</p>
               </div>
             </div>
           </CardContent>
         </Card>
-        <Card className="bg-[#292929] border-white/[0.07]">
+        <Card className="bg-[#292929] border-white/[0.07] sa-card sa-slide-in">
           <CardContent className="p-5">
             <div className="flex items-center gap-3">
               <div className="p-3 rounded-lg bg-emerald-600/20">
@@ -84,12 +84,12 @@ const SuperAdminAnalytics = () => {
               </div>
               <div>
                 <p className="text-sm text-[#808080]">Conversion Rate</p>
-                <p className="text-xl font-bold text-white">24.8%</p>
+                <p className="text-xl font-bold text-white tabular-nums">24.8%</p>
               </div>
             </div>
           </CardContent>
         </Card>
-        <Card className="bg-[#292929] border-white/[0.07]">
+        <Card className="bg-[#292929] border-white/[0.07] sa-card sa-slide-in">
           <CardContent className="p-5">
             <div className="flex items-center gap-3">
               <div className="p-3 rounded-lg bg-amber-600/20">
@@ -97,12 +97,12 @@ const SuperAdminAnalytics = () => {
               </div>
               <div>
                 <p className="text-sm text-[#808080]">Avg. User Spend</p>
-                <p className="text-xl font-bold text-white">$127</p>
+                <p className="text-xl font-bold text-white tabular-nums">$127</p>
               </div>
             </div>
           </CardContent>
         </Card>
-        <Card className="bg-[#292929] border-white/[0.07]">
+        <Card className="bg-[#292929] border-white/[0.07] sa-card sa-slide-in">
           <CardContent className="p-5">
             <div className="flex items-center gap-3">
               <div className="p-3 rounded-lg bg-rose-600/20">
@@ -110,16 +110,16 @@ const SuperAdminAnalytics = () => {
               </div>
               <div>
                 <p className="text-sm text-[#808080]">Avg. Occupancy</p>
-                <p className="text-xl font-bold text-white">72%</p>
+                <p className="text-xl font-bold text-white tabular-nums">72%</p>
               </div>
             </div>
           </CardContent>
         </Card>
       </div>
 
-      <div className="grid lg:grid-cols-3 gap-6">
+      <div className="grid lg:grid-cols-3 gap-6 sa-slide-in" style={{ animationDelay: '120ms' }}>
         {/* Bookings Chart */}
-        <Card className="lg:col-span-2 bg-[#292929] border-white/[0.07]">
+        <Card className="lg:col-span-2 bg-[#292929] border-white/[0.07] sa-card">
           <CardHeader>
             <CardTitle className="text-lg text-white">Booking Trends</CardTitle>
           </CardHeader>
@@ -145,7 +145,7 @@ const SuperAdminAnalytics = () => {
         </Card>
 
         {/* Service Breakdown */}
-        <Card className="bg-[#292929] border-white/[0.07]">
+        <Card className="bg-[#292929] border-white/[0.07] sa-card">
           <CardHeader>
             <CardTitle className="text-lg text-white">Service Breakdown</CardTitle>
           </CardHeader>
@@ -171,7 +171,7 @@ const SuperAdminAnalytics = () => {
       </div>
 
       {/* Top Locations */}
-      <Card className="mt-6 bg-[#292929] border-white/[0.07]">
+      <Card className="mt-6 bg-[#292929] border-white/[0.07] sa-slide-in sa-card" style={{ animationDelay: '200ms' }}>
         <CardHeader>
           <CardTitle className="text-lg text-white flex items-center gap-2">
             <MapPin className="h-5 w-5 text-[#ffa31a]" />

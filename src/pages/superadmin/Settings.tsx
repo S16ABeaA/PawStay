@@ -20,7 +20,7 @@ const SuperAdminSettings = () => {
 
   return (
     <SuperAdminLayout title="Settings" subtitle="Platform configuration and preferences">
-      <Tabs defaultValue="general" className="space-y-6">
+      <Tabs defaultValue="general" className="space-y-6 sa-slide-in">
         <TabsList className="bg-[#292929] border border-white/[0.07]">
           <TabsTrigger value="general" className="gap-2 text-[#808080] data-[state=active]:bg-[#ffa31a] data-[state=active]:text-[#1b1b1b] data-[state=active]:font-semibold">
             <Globe className="h-4 w-4" />
@@ -41,7 +41,7 @@ const SuperAdminSettings = () => {
         </TabsList>
 
         <TabsContent value="general">
-          <Card className="bg-[#292929] border-white/[0.07]">
+          <Card className="bg-[#292929] border-white/[0.07] sa-card">
             <CardHeader>
               <CardTitle className="text-white">Platform Settings</CardTitle>
               <CardDescription className="text-[#808080]">
@@ -121,7 +121,7 @@ const SuperAdminSettings = () => {
         </TabsContent>
 
         <TabsContent value="notifications">
-          <Card className="bg-[#292929] border-white/[0.07]">
+          <Card className="bg-[#292929] border-white/[0.07] sa-card">
             <CardHeader>
               <CardTitle className="text-white">Notification Settings</CardTitle>
               <CardDescription className="text-[#808080]">
@@ -176,7 +176,7 @@ const SuperAdminSettings = () => {
         </TabsContent>
 
         <TabsContent value="security">
-          <Card className="bg-[#292929] border-white/[0.07]">
+          <Card className="bg-[#292929] border-white/[0.07] sa-card">
             <CardHeader>
               <CardTitle className="text-white">Security Settings</CardTitle>
               <CardDescription className="text-[#808080]">
@@ -219,7 +219,7 @@ const SuperAdminSettings = () => {
         </TabsContent>
 
         <TabsContent value="email">
-          <Card className="bg-[#292929] border-white/[0.07]">
+          <Card className="bg-[#292929] border-white/[0.07] sa-card">
             <CardHeader>
               <CardTitle className="text-white">Email Configuration</CardTitle>
               <CardDescription className="text-[#808080]">
