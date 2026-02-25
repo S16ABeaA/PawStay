@@ -138,6 +138,7 @@ export interface PropertySubmissionData {
   // Additional fields
   occupancyRate: number
   animalCapacity: number
+  serviceCapacities: Array<{ name: string; capacity: number }>
   apartmentNum?: number
 }
 
