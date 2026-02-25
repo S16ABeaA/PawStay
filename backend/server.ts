@@ -7,12 +7,14 @@ import cookieParser from 'cookie-parser';
 import { submitProperty } from './routes/submit-property';
 import { authMiddleware } from './middleware/authMiddleware';
 import searchRoutes from "./routes/searchRoute";
+import adminPropertyRoute from "./routes/adminPropertyRoute";
 import amenitiesRoutes from "./routes/amenitiesRoute";
 import locationRoutes from "./routes/locationRoute";
 import authRoute from './routes/authRoute';
 import petRoutes from './routes/petRoute';
 import bookingRoutes from './routes/bookingRoute';
 import favoritesRoutes from './routes/favoritesRoute';
+import supportRoutes from './routes/supportRoute';
  
 dotenv.config({ path: '../.env' });
 dotenv.config();
@@ -74,6 +76,7 @@ app.use(express.urlencoded({ extended: true, limit: '20mb' }));
 
 // Routes
 app.use('/api/auth', authRoute);
+app.use('/api/admin/properties', adminPropertyRoute);
 app.post('/api/submit-property', apiLimiter, authMiddleware, submitProperty);
 app.use("/api/properties", searchRoutes);
 app.use("/api/amenities", amenitiesRoutes);
@@ -81,6 +84,7 @@ app.use("/api/location", locationRoutes);
 app.use("/api/pets", petRoutes);
 app.use("/api/bookings", bookingRoutes);
 app.use('/api/favorites', favoritesRoutes);
+app.use('/api/support', supportRoutes);
 
 // Simple health/root route
 app.get('/', (_req, res) => {
