@@ -127,6 +127,23 @@ const Booking = () => {
   const location = useLocation();
   const shop = (location.state as BookingLocationState | null)?.shop;
 
+  // ── Price calculation helper (reused for display + submission) ──
+  const calculatePrices = useCallback(() => {
+    const basePrice = shop?.price ?? 0;
+    const nights = isHotel(shop) && checkInDate && checkOutDate
+      ? Math.max(1, Math.ceil((checkOutDate.getTime() - checkInDate.getTime()) / (1000 * 60 * 60 * 24)))
+      : 1;
+    const isGrooming = shop?.type === "grooming";
+    const dogSizeMultiplier = isGrooming && petType === "dog" && dogSize
+      ? ({ small: 1.0, medium: 1.15, large: 1.30, giant: 1.50 }[dogSize] || 1.0)
+      : 1.0;
+    const priceWithDogSize = basePrice * dogSizeMultiplier;
+    const subtotal = isHotel(shop) ? priceWithDogSize * nights : priceWithDogSize;
+    const serviceFee = Math.round(subtotal * 0.10 * 100) / 100;
+    const total = Math.round((subtotal + serviceFee) * 100) / 100;
+    return { basePrice, nights, dogSizeMultiplier, priceWithDogSize, subtotal, serviceFee, total };
+  }, [shop, checkInDate, checkOutDate, petType, dogSize]);
+
   const shopQRCodes = {
     gcash: shop?.qrCodeGCash || null,
     paymaya: shop?.qrCodePayMaya || null,
@@ -442,6 +459,19 @@ const Booking = () => {
       : null;
 
     try {
+      // Calculate prices for the payload
+      const { subtotal, serviceFee, total } = calculatePrices();
+
+      // Validate prices before submitting
+      if (!subtotal || subtotal <= 0 || !total || total <= 0) {
+        toast({
+          title: "Price Error",
+          description: "Unable to calculate booking price. Please go back and verify your booking details.",
+          variant: "destructive",
+        });
+        return;
+      }
+
       await bookingApi.create({
         property_id: shop?.propertyId || "",
         pet_id: selectedPetId,
@@ -462,6 +492,9 @@ const Booking = () => {
         owner_email: email,
         owner_phone: phone,
         emergency_contact: emergencyContact,
+        subtotal,
+        service_fee: serviceFee,
+        total_price: total,
         payment_method: paymentMethod === "gcash" ? "gcash" : paymentMethod === "paymaya" ? "gcash" : paymentMethod === "cash" ? "cash" : "card",
         reference_number: paymentMethod === "cash" ? undefined : referenceNumber,
         amount_paid: paymentMethod === "cash" ? cashAmountPaid : amountPaid,
@@ -1306,16 +1339,7 @@ const Booking = () => {
                 </div>
 
                 {(() => {
-                  const basePrice = shop?.price ?? 0;
-                  const nights = isHotel(shop) && checkInDate && checkOutDate
-                    ? Math.max(1, Math.ceil((checkOutDate.getTime() - checkInDate.getTime()) / (1000 * 60 * 60 * 24)))
-                    : 1;
-                  const isGrooming = shop?.type === "grooming";
-                  const dogSizeMultiplier = isGrooming && petType === "dog" && dogSize ? { small: 1.0, medium: 1.15, large: 1.30, giant: 1.50 }[dogSize] || 1.0 : 1.0;
-                  const priceWithDogSize = basePrice * dogSizeMultiplier;
-                  const subtotal = isHotel(shop) ? priceWithDogSize * nights : priceWithDogSize;
-                  const serviceFee = Math.round(subtotal * 0.10 * 100) / 100;
-                  const total = subtotal + serviceFee;
+                  const { basePrice, nights, dogSizeMultiplier, priceWithDogSize, subtotal, serviceFee, total } = calculatePrices();
 
                   return (
                     <>

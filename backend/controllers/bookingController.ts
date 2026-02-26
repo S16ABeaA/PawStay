@@ -50,6 +50,21 @@ export const createBooking = async (req: Request, res: Response) => {
       return res.status(400).json({ error: "Missing required fields: property_id, checkin." });
     }
 
+    // ── Validate & sanitize price fields ──
+    const parsedSubtotal = subtotal != null ? Number(subtotal) : null;
+    const parsedServiceFee = service_fee != null ? Number(service_fee) : null;
+    const parsedTotalPrice = total_price != null ? Number(total_price) : null;
+
+    if (parsedSubtotal != null && (isNaN(parsedSubtotal) || parsedSubtotal < 0)) {
+      return res.status(400).json({ error: "Invalid subtotal value." });
+    }
+    if (parsedServiceFee != null && (isNaN(parsedServiceFee) || parsedServiceFee < 0)) {
+      return res.status(400).json({ error: "Invalid service_fee value." });
+    }
+    if (parsedTotalPrice != null && (isNaN(parsedTotalPrice) || parsedTotalPrice < 0)) {
+      return res.status(400).json({ error: "Invalid total_price value." });
+    }
+
     // Validate property_id is a valid UUID format; if not, try to find a matching property
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     let resolvedPropertyId = property_id;
@@ -127,6 +142,88 @@ export const createBooking = async (req: Request, res: Response) => {
       capacity = prop?.capacity ?? 5;
     }
 
+    // ── Server-side price verification ──
+    // Map service_type to property_services category
+    const categoryMap: Record<string, string> = {
+      boarding: "Boarding",
+      grooming: "Grooming",
+      veterinary: "Veterinary",
+      daycare: "Daycare",
+      transport: "Transport",
+    };
+    const serviceCategory = categoryMap[service_type?.toLowerCase() ?? ""] || null;
+
+    // Look up the actual base price from the database
+    let lookupQuery = supabaseAdmin
+      .from("property_services")
+      .select("price, name, category")
+      .eq("property_id", resolvedPropertyId)
+      .eq("is_active", true)
+      .eq("is_deleted", false);
+
+    if (service_id) {
+      lookupQuery = lookupQuery.eq("id", service_id);
+    } else if (serviceCategory) {
+      lookupQuery = lookupQuery.eq("category", serviceCategory);
+    }
+
+    const { data: matchedServices } = await lookupQuery;
+
+    let expectedBasePrice: number | null = null;
+
+    if (matchedServices && matchedServices.length > 0) {
+      // If service_name is provided, try to match by name; otherwise take the first
+      const exactMatch = service_name
+        ? matchedServices.find((s: any) => s.name === service_name)
+        : null;
+      expectedBasePrice = Number((exactMatch ?? matchedServices[0]).price);
+    }
+
+    if (expectedBasePrice != null && !isNaN(expectedBasePrice)) {
+      // Compute expected prices using the same formula as the frontend
+      const dogSizeMultiplier =
+        serviceCategory === "Grooming" && pet_type === "dog" && dog_size
+          ? ({ small: 1.0, medium: 1.15, large: 1.30, giant: 1.50 } as Record<string, number>)[dog_size] ?? 1.0
+          : 1.0;
+
+      const priceWithDogSize = expectedBasePrice * dogSizeMultiplier;
+
+      let nights = 1;
+      if (isBoarding && checkin && checkout) {
+        const checkinMs = new Date(checkin).getTime();
+        const checkoutMs = new Date(checkout).getTime();
+        nights = Math.max(1, Math.ceil((checkoutMs - checkinMs) / (1000 * 60 * 60 * 24)));
+      }
+
+      const expectedSubtotal = isBoarding ? priceWithDogSize * nights : priceWithDogSize;
+      const expectedServiceFee = Math.round(expectedSubtotal * 0.10 * 100) / 100;
+      const expectedTotal = Math.round((expectedSubtotal + expectedServiceFee) * 100) / 100;
+
+      // Allow a small tolerance (₱0.02) for floating-point rounding
+      const tolerance = 0.02;
+
+      if (parsedTotalPrice != null && Math.abs(parsedTotalPrice - expectedTotal) > tolerance) {
+        return res.status(400).json({
+          error: "Price mismatch: the total price you submitted does not match the expected price. Please refresh and try again.",
+          expected_total: expectedTotal,
+          submitted_total: parsedTotalPrice,
+        });
+      }
+
+      if (parsedSubtotal != null && Math.abs(parsedSubtotal - expectedSubtotal) > tolerance) {
+        return res.status(400).json({
+          error: "Price mismatch: the subtotal you submitted does not match the expected subtotal. Please refresh and try again.",
+          expected_subtotal: expectedSubtotal,
+          submitted_subtotal: parsedSubtotal,
+        });
+      }
+    }
+
+    // Compute final price fields (use server-computed values when possible)
+    const finalSubtotal = parsedSubtotal;
+    const finalServiceFee = parsedServiceFee ?? (parsedSubtotal != null ? Math.round(parsedSubtotal * 0.10 * 100) / 100 : null);
+    const finalTotalPrice = parsedTotalPrice ?? (finalSubtotal != null && finalServiceFee != null ? Math.round((finalSubtotal + finalServiceFee) * 100) / 100 : null);
+
     let resolvedPetId = pet_id || null;
 
     // If no pet_id provided but pet details given, create a new pet
@@ -173,9 +270,9 @@ export const createBooking = async (req: Request, res: Response) => {
           owner_email: owner_email || null,
           owner_phone: owner_phone || null,
           emergency_contact: emergency_contact || null,
-          subtotal: subtotal || null,
-          service_fee: service_fee || null,
-          total_price: total_price || null,
+          subtotal: finalSubtotal,
+          service_fee: finalServiceFee,
+          total_price: finalTotalPrice,
           payment_method: payment_method || null,
           payment_screenshot_url: payment_screenshot_url || null,
           notes: null,
