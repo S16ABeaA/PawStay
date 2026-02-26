@@ -319,7 +319,11 @@ const Profile = () => {
   };
 
   const handleSwitchToAdmin = () => {
-    navigate("/admin");
+    if (user?.isSuperAdmin) {
+      navigate("/superadmin");
+    } else {
+      navigate("/admin");
+    }
   };
   if(!user){
     return (
@@ -361,7 +365,13 @@ const Profile = () => {
                 <h1 className="text-2xl md:text-3xl font-display font-bold text-foreground">
                   {user.firstName} {user.lastName}
                 </h1>
-                {user.isAdmin && (
+                {user.isSuperAdmin && (
+                  <Badge variant="secondary" className="bg-violet-100 text-violet-700 dark:bg-violet-600/20 dark:text-violet-400">
+                    <Shield className="h-3 w-3 mr-1" />
+                    Super Admin
+                  </Badge>
+                )}
+                {user.isAdmin && !user.isSuperAdmin && (
                   <Badge variant="secondary" className="bg-primary/10 text-primary">
                     <Shield className="h-3 w-3 mr-1" />
                     Admin
@@ -619,8 +629,32 @@ const Profile = () => {
 
             {/* Sidebar */}
             <div className="space-y-6">
+              {/* Super Admin Switch Card */}
+              {user.isSuperAdmin && (
+                <Card className="border-violet-500/30 bg-violet-500/5">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <Shield className="h-5 w-5 text-violet-600 dark:text-violet-400" />
+                      Super Admin Access
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-sm text-muted-foreground mb-4">
+                      You have full platform control. Access the Super Admin dashboard to manage users, properties, analytics, and platform settings.
+                    </p>
+                    <Button
+                      className="w-full bg-violet-600 hover:bg-violet-700 text-white"
+                      onClick={handleSwitchToAdmin}
+                    >
+                      Go to Super Admin Panel
+                      <ChevronRight className="h-4 w-4 ml-1" />
+                    </Button>
+                  </CardContent>
+                </Card>
+              )}
+
               {/* Admin Switch Card */}
-              {user.isAdmin && (
+              {user.isAdmin && !user.isSuperAdmin && (
                 <Card className="border-primary/20 bg-primary/5">
                   <CardHeader className="pb-3">
                     <CardTitle className="text-base flex items-center gap-2">

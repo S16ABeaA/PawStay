@@ -20,73 +20,73 @@ const SuperAdminSettings = () => {
 
   return (
     <SuperAdminLayout title="Settings" subtitle="Platform configuration and preferences">
-      <Tabs defaultValue="general" className="space-y-6">
-        <TabsList className="bg-slate-900 border border-slate-800">
-          <TabsTrigger value="general" className="gap-2 data-[state=active]:bg-violet-600">
+      <Tabs defaultValue="general" className="space-y-6 sa-slide-in">
+        <TabsList className="bg-[#292929] border border-white/[0.07]">
+          <TabsTrigger value="general" className="gap-2 text-[#808080] data-[state=active]:bg-[#ffa31a] data-[state=active]:text-[#1b1b1b] data-[state=active]:font-semibold">
             <Globe className="h-4 w-4" />
             General
           </TabsTrigger>
-          <TabsTrigger value="notifications" className="gap-2 data-[state=active]:bg-violet-600">
+          <TabsTrigger value="notifications" className="gap-2 text-[#808080] data-[state=active]:bg-[#ffa31a] data-[state=active]:text-[#1b1b1b] data-[state=active]:font-semibold">
             <Bell className="h-4 w-4" />
             Notifications
           </TabsTrigger>
-          <TabsTrigger value="security" className="gap-2 data-[state=active]:bg-violet-600">
+          <TabsTrigger value="security" className="gap-2 text-[#808080] data-[state=active]:bg-[#ffa31a] data-[state=active]:text-[#1b1b1b] data-[state=active]:font-semibold">
             <Shield className="h-4 w-4" />
             Security
           </TabsTrigger>
-          <TabsTrigger value="email" className="gap-2 data-[state=active]:bg-violet-600">
+          <TabsTrigger value="email" className="gap-2 text-[#808080] data-[state=active]:bg-[#ffa31a] data-[state=active]:text-[#1b1b1b] data-[state=active]:font-semibold">
             <Mail className="h-4 w-4" />
             Email
           </TabsTrigger>
         </TabsList>
 
         <TabsContent value="general">
-          <Card className="bg-slate-900 border-slate-800">
+          <Card className="bg-[#292929] border-white/[0.07] sa-card">
             <CardHeader>
               <CardTitle className="text-white">Platform Settings</CardTitle>
-              <CardDescription className="text-slate-400">
+              <CardDescription className="text-[#808080]">
                 General platform configuration
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="grid md:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label className="text-slate-300">Platform Name</Label>
+                  <Label className="text-white/80">Platform Name</Label>
                   <Input
                     defaultValue="PawStay"
-                    className="bg-slate-800 border-slate-700 text-white"
+                    className="bg-[#292929] border-white/[0.09] text-white"
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label className="text-slate-300">Support Email</Label>
+                  <Label className="text-white/80">Support Email</Label>
                   <Input
                     defaultValue="support@pawstay.com"
-                    className="bg-slate-800 border-slate-700 text-white"
+                    className="bg-[#292929] border-white/[0.09] text-white"
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label className="text-slate-300">Platform Fee (%)</Label>
+                  <Label className="text-white/80">Platform Fee (%)</Label>
                   <Input
                     type="number"
                     defaultValue="10"
-                    className="bg-slate-800 border-slate-700 text-white"
+                    className="bg-[#292929] border-white/[0.09] text-white"
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label className="text-slate-300">Minimum Booking Amount</Label>
+                  <Label className="text-white/80">Minimum Booking Amount</Label>
                   <Input
                     type="number"
                     defaultValue="25"
-                    className="bg-slate-800 border-slate-700 text-white"
+                    className="bg-[#292929] border-white/[0.09] text-white"
                   />
                 </div>
               </div>
 
-              <div className="space-y-4 pt-4 border-t border-slate-800">
+              <div className="space-y-4 pt-4 border-t border-white/[0.06]">
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="font-medium text-white">Maintenance Mode</p>
-                    <p className="text-sm text-slate-400">
+                    <p className="text-sm text-[#808080]">
                       Take the platform offline for maintenance
                     </p>
                   </div>
@@ -95,14 +95,14 @@ const SuperAdminSettings = () => {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="font-medium text-white">New Registrations</p>
-                    <p className="text-sm text-slate-400">Allow new users to sign up</p>
+                    <p className="text-sm text-[#808080]">Allow new users to sign up</p>
                   </div>
                   <Switch defaultChecked />
                 </div>
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="font-medium text-white">Property Applications</p>
-                    <p className="text-sm text-slate-400">
+                    <p className="text-sm text-[#808080]">
                       Accept new property listing applications
                     </p>
                   </div>
@@ -112,7 +112,7 @@ const SuperAdminSettings = () => {
 
               <Button
                 onClick={handleSave}
-                className="bg-violet-600 hover:bg-violet-700"
+                className="bg-[#ffa31a] hover:bg-[#ffa31a]/90 text-[#1b1b1b]"
               >
                 Save Changes
               </Button>
@@ -121,10 +121,10 @@ const SuperAdminSettings = () => {
         </TabsContent>
 
         <TabsContent value="notifications">
-          <Card className="bg-slate-900 border-slate-800">
+          <Card className="bg-[#292929] border-white/[0.07] sa-card">
             <CardHeader>
               <CardTitle className="text-white">Notification Settings</CardTitle>
-              <CardDescription className="text-slate-400">
+              <CardDescription className="text-[#808080]">
                 Configure admin notification preferences
               </CardDescription>
             </CardHeader>
@@ -132,7 +132,7 @@ const SuperAdminSettings = () => {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="font-medium text-white">New Property Applications</p>
-                  <p className="text-sm text-slate-400">
+                  <p className="text-sm text-[#808080]">
                     Get notified when new properties apply
                   </p>
                 </div>
@@ -141,7 +141,7 @@ const SuperAdminSettings = () => {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="font-medium text-white">High-Value Bookings</p>
-                  <p className="text-sm text-slate-400">
+                  <p className="text-sm text-[#808080]">
                     Alert for bookings over $500
                   </p>
                 </div>
@@ -150,7 +150,7 @@ const SuperAdminSettings = () => {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="font-medium text-white">Negative Reviews</p>
-                  <p className="text-sm text-slate-400">
+                  <p className="text-sm text-[#808080]">
                     Alert for reviews with 2 stars or less
                   </p>
                 </div>
@@ -159,7 +159,7 @@ const SuperAdminSettings = () => {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="font-medium text-white">Weekly Reports</p>
-                  <p className="text-sm text-slate-400">
+                  <p className="text-sm text-[#808080]">
                     Receive weekly performance summary
                   </p>
                 </div>
@@ -167,7 +167,7 @@ const SuperAdminSettings = () => {
               </div>
               <Button
                 onClick={handleSave}
-                className="bg-violet-600 hover:bg-violet-700 mt-4"
+                className="bg-[#ffa31a] hover:bg-[#ffa31a]/90 text-[#1b1b1b] mt-4"
               >
                 Save Preferences
               </Button>
@@ -176,10 +176,10 @@ const SuperAdminSettings = () => {
         </TabsContent>
 
         <TabsContent value="security">
-          <Card className="bg-slate-900 border-slate-800">
+          <Card className="bg-[#292929] border-white/[0.07] sa-card">
             <CardHeader>
               <CardTitle className="text-white">Security Settings</CardTitle>
-              <CardDescription className="text-slate-400">
+              <CardDescription className="text-[#808080]">
                 Platform security configuration
               </CardDescription>
             </CardHeader>
@@ -187,7 +187,7 @@ const SuperAdminSettings = () => {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="font-medium text-white">Two-Factor Authentication</p>
-                  <p className="text-sm text-slate-400">
+                  <p className="text-sm text-[#808080]">
                     Require 2FA for all admin accounts
                   </p>
                 </div>
@@ -196,7 +196,7 @@ const SuperAdminSettings = () => {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="font-medium text-white">Session Timeout</p>
-                  <p className="text-sm text-slate-400">
+                  <p className="text-sm text-[#808080]">
                     Auto-logout after 30 minutes of inactivity
                   </p>
                 </div>
@@ -205,13 +205,13 @@ const SuperAdminSettings = () => {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="font-medium text-white">Login Alerts</p>
-                  <p className="text-sm text-slate-400">
+                  <p className="text-sm text-[#808080]">
                     Email notification on new device login
                   </p>
                 </div>
                 <Switch defaultChecked />
               </div>
-              <div className="pt-4 border-t border-slate-800">
+              <div className="pt-4 border-t border-white/[0.06]">
                 <Button variant="destructive">Force Logout All Users</Button>
               </div>
             </CardContent>
@@ -219,47 +219,47 @@ const SuperAdminSettings = () => {
         </TabsContent>
 
         <TabsContent value="email">
-          <Card className="bg-slate-900 border-slate-800">
+          <Card className="bg-[#292929] border-white/[0.07] sa-card">
             <CardHeader>
               <CardTitle className="text-white">Email Configuration</CardTitle>
-              <CardDescription className="text-slate-400">
+              <CardDescription className="text-[#808080]">
                 Configure email sending settings
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid md:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label className="text-slate-300">SMTP Host</Label>
+                  <Label className="text-white/80">SMTP Host</Label>
                   <Input
                     defaultValue="smtp.sendgrid.net"
-                    className="bg-slate-800 border-slate-700 text-white"
+                    className="bg-[#292929] border-white/[0.09] text-white"
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label className="text-slate-300">SMTP Port</Label>
+                  <Label className="text-white/80">SMTP Port</Label>
                   <Input
                     defaultValue="587"
-                    className="bg-slate-800 border-slate-700 text-white"
+                    className="bg-[#292929] border-white/[0.09] text-white"
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label className="text-slate-300">From Email</Label>
+                  <Label className="text-white/80">From Email</Label>
                   <Input
                     defaultValue="noreply@pawstay.com"
-                    className="bg-slate-800 border-slate-700 text-white"
+                    className="bg-[#292929] border-white/[0.09] text-white"
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label className="text-slate-300">From Name</Label>
+                  <Label className="text-white/80">From Name</Label>
                   <Input
                     defaultValue="PawStay"
-                    className="bg-slate-800 border-slate-700 text-white"
+                    className="bg-[#292929] border-white/[0.09] text-white"
                   />
                 </div>
               </div>
               <Button
                 onClick={handleSave}
-                className="bg-violet-600 hover:bg-violet-700 mt-4"
+                className="bg-[#ffa31a] hover:bg-[#ffa31a]/90 text-[#1b1b1b] mt-4"
               >
                 Save Email Settings
               </Button>
