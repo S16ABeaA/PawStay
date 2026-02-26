@@ -124,9 +124,7 @@ const Footer = () => {
           <p className="text-sm text-background/50">
             © 2025 PawStay. All rights reserved.
           </p>
-          <div className="flex items-center gap-4">
-            <span className="text-sm text-background/50">Made with ❤️ for pets everywhere</span>
-          </div>
+
         </div>
       </div>
     </footer>

@@ -65,6 +65,12 @@ export const createBooking = async (req: Request, res: Response) => {
       return res.status(400).json({ error: "Invalid total_price value." });
     }
 
+    // ── Validate amount_paid must exactly equal total_price ──
+    const parsedAmountPaid = amount_paid != null ? Number(amount_paid) : null;
+    if (parsedAmountPaid != null && parsedTotalPrice != null && parsedAmountPaid !== parsedTotalPrice) {
+      return res.status(400).json({ error: `Amount paid (₱${parsedAmountPaid.toFixed(2)}) must exactly match the total price (₱${parsedTotalPrice.toFixed(2)}).` });
+    }
+
     // Validate property_id is a valid UUID format; if not, try to find a matching property
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     let resolvedPropertyId = property_id;

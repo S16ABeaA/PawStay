@@ -436,6 +436,8 @@ const Booking = () => {
     if (paymentMethod === "creditcard") return false;
     const missing: string[] = [];
 
+    const { total } = calculatePrices();
+
     if (paymentMethod === "gcash" || paymentMethod === "paymaya") {
       if (!referenceNumber.trim()) missing.push("referenceNumber");
       if (!amountPaid.trim() || Number(amountPaid) <= 0) missing.push("amountPaid");
@@ -445,11 +447,21 @@ const Booking = () => {
         toast({ title: "Required Fields", description: !paymentScreenshot ? "Please upload a payment screenshot to continue." : "Please enter your payment reference number and amount paid.", variant: "destructive" });
         return false;
       }
+      if (Number(amountPaid) !== total) {
+        setError(["amountPaid"]);
+        toast({ title: "Amount Mismatch", description: `The amount paid must be exactly ₱${total.toFixed(2)}.`, variant: "destructive" });
+        return false;
+      }
     } else if (paymentMethod === "cash") {
       if (!cashAmountPaid.trim() || Number(cashAmountPaid) <= 0) missing.push("cashAmountPaid");
       if (missing.length > 0) {
         setError(missing);
         toast({ title: "Required Fields", description: "Please enter the amount to be paid.", variant: "destructive" });
+        return false;
+      }
+      if (Number(cashAmountPaid) !== total) {
+        setError(["cashAmountPaid"]);
+        toast({ title: "Amount Mismatch", description: `The amount to pay must be exactly ₱${total.toFixed(2)}.`, variant: "destructive" });
         return false;
       }
     }
@@ -1212,8 +1224,8 @@ const Booking = () => {
 
                         <div className="space-y-2">
                           <Label htmlFor="amountPaid">Amount Paid (₱) *</Label>
-                          <Input id="amountPaid" type="number" step="0.01" placeholder="0.00" value={amountPaid} onChange={(e) => setAmountPaid(e.target.value)} className={errorClass("amountPaid")} required />
-                          <p className="text-xs text-muted-foreground">Confirm the exact amount you transferred</p>
+                          <Input id="amountPaid" type="number" step="0.01" min="0" placeholder="0.00" value={amountPaid} onChange={(e) => setAmountPaid(e.target.value)} className={errorClass("amountPaid")} required />
+                          <p className="text-xs text-muted-foreground">Enter the exact total amount: <span className="font-semibold text-foreground">₱{calculatePrices().total.toFixed(2)}</span></p>
                         </div>
 
                         <div className="space-y-2">
@@ -1241,8 +1253,8 @@ const Booking = () => {
                         </div>
                         <div className="space-y-2">
                           <Label htmlFor="cashAmountPaid">Amount to Pay (₱) *</Label>
-                          <Input id="cashAmountPaid" type="number" step="0.01" placeholder="0.00" value={cashAmountPaid} onChange={(e) => setCashAmountPaid(e.target.value)} className={errorClass("cashAmountPaid")} required />
-                          <p className="text-xs text-muted-foreground">Enter the amount you will pay at the establishment</p>
+                          <Input id="cashAmountPaid" type="number" step="0.01" min="0" placeholder="0.00" value={cashAmountPaid} onChange={(e) => setCashAmountPaid(e.target.value)} className={errorClass("cashAmountPaid")} required />
+                          <p className="text-xs text-muted-foreground">Enter the exact total amount: <span className="font-semibold text-foreground">₱{calculatePrices().total.toFixed(2)}</span></p>
                         </div>
                         <div className="flex items-center gap-2 p-4 rounded-xl bg-amber-500/10 text-amber-700">
                           <Clock className="h-5 w-5 shrink-0" />
