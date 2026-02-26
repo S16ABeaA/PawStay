@@ -316,6 +316,14 @@ const Booking = () => {
     if (pet) autoFillFromPet(pet);
   };
 
+  // Auto-derive dog size from weight (kg) for grooming pricing
+  const deriveDogSizeFromWeight = (weightKg: number) => {
+    if (weightKg >= 45) return "giant";
+    if (weightKg >= 23) return "large";
+    if (weightKg >= 11) return "medium";
+    return "small";
+  };
+
   // Handle "Add New Pet" selection
   const handleNewPet = () => {
     setSelectedPetId(null);
@@ -396,11 +404,10 @@ const Booking = () => {
     if (!breed.trim()) missing.push("breed");
     if (!age.trim()) missing.push("age");
     if (!weight.trim()) missing.push("weight");
-    if (shop?.type === "grooming" && petType === "dog" && !dogSize) missing.push("dogSize");
     if (!vaccineRecord) missing.push("vaccineRecord");
     if (missing.length > 0) {
       setError(missing);
-      toast({ title: "Required Fields", description: !vaccineRecord ? "Please upload the vaccine record to continue." : petType === "dog" ? "Please fill in all required pet details including dog size." : "Please fill in all required pet details.", variant: "destructive" });
+      toast({ title: "Required Fields", description: !vaccineRecord ? "Please upload the vaccine record to continue." : "Please fill in all required pet details.", variant: "destructive" });
       return false;
     }
     clearErrors();
@@ -917,7 +924,7 @@ const Booking = () => {
                       <Label className="mb-3 block">Pet Type</Label>
                       <RadioGroup
                         value={petType}
-                        onValueChange={(val) => { setPetType(val); if (val !== "dog") setDogSize(""); }}
+                        onValueChange={(val) => { setPetType(val); if (val !== "dog") setDogSize(""); else if (weight) setDogSize(deriveDogSizeFromWeight(Number(weight))); }}
                         className="flex gap-4"
                         disabled={petSelectionMode === "existing"}
                       >
@@ -938,18 +945,29 @@ const Booking = () => {
 
                     {shop?.type === "grooming" && petType === "dog" && (
                       <div className="space-y-2">
-                        <Label>Dog Size *</Label>
-                        <Select value={dogSize} onValueChange={setDogSize} disabled={petSelectionMode === "existing"}>
-                          <SelectTrigger className={errorClass("dogSize")}>
-                            <SelectValue placeholder="Select dog size" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="small">Small (under 11 kg) - Base Price</SelectItem>
-                            <SelectItem value="medium">Medium (11-23 kg) - +15%</SelectItem>
-                            <SelectItem value="large">Large (23-45 kg) - +30%</SelectItem>
-                            <SelectItem value="giant">Giant (45+ kg) - +50%</SelectItem>
-                          </SelectContent>
-                        </Select>
+                        <Label>Dog Size (auto-determined from weight)</Label>
+                        <div className="grid grid-cols-2 gap-2">
+                          {[
+                            { value: "small", label: "Small", desc: "Under 11 kg", extra: "Base Price" },
+                            { value: "medium", label: "Medium", desc: "11–23 kg", extra: "+15%" },
+                            { value: "large", label: "Large", desc: "23–45 kg", extra: "+30%" },
+                            { value: "giant", label: "Giant", desc: "45+ kg", extra: "+50%" },
+                          ].map((tier) => (
+                            <div
+                              key={tier.value}
+                              className={`rounded-lg border p-3 text-sm transition-colors ${
+                                dogSize === tier.value
+                                  ? "border-primary bg-primary/5 ring-1 ring-primary"
+                                  : "border-border bg-muted/30 opacity-60"
+                              }`}
+                            >
+                              <span className="font-medium">{tier.label}</span>
+                              <span className="text-muted-foreground ml-1">({tier.desc})</span>
+                              <span className="block text-xs text-muted-foreground mt-0.5">{tier.extra}</span>
+                            </div>
+                          ))}
+                        </div>
+                        {!dogSize && <p className="text-xs text-muted-foreground">Enter your pet's weight below to auto-select the size tier.</p>}
                       </div>
                     )}
 
@@ -967,8 +985,16 @@ const Booking = () => {
                         <Input id="age" placeholder="e.g., 3 years" value={age} onChange={(e) => setAge(e.target.value)} className={errorClass("age")} readOnly={petSelectionMode === "existing"} />
                       </div>
                       <div className="space-y-2">
-                        <Label htmlFor="weight">Weight *</Label>
-                        <Input id="weight" placeholder="e.g., 25 lbs" value={weight} onChange={(e) => setWeight(e.target.value)} className={errorClass("weight")} readOnly={petSelectionMode === "existing"} />
+                        <Label htmlFor="weight">Weight (kg) *</Label>
+                        <Input id="weight" type="number" min="0" placeholder="e.g., 25" value={weight} onChange={(e) => {
+                          const val = e.target.value;
+                          setWeight(val);
+                          if (petType === "dog" && val) {
+                            setDogSize(deriveDogSizeFromWeight(Number(val)));
+                          } else if (petType === "dog") {
+                            setDogSize("");
+                          }
+                        }} className={errorClass("weight")} readOnly={petSelectionMode === "existing"} />
                       </div>
                     </div>
 
