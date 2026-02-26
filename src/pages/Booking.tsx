@@ -54,6 +54,13 @@ interface PetProfile {
 
 const isHotel = (shop?: BookingLocationState["shop"]) => shop?.type === "hotel";
 
+const formatPhoneInput = (value: string) => value.replace(/[^\d\s\-+()]/g, "");
+const isValidPhoneNumber = (phone: string) => {
+  if (!phone) return false;
+  const digitsOnly = phone.replace(/\D/g, "");
+  return digitsOnly.length >= 7 && digitsOnly.length <= 15;
+};
+
 // Calculate age string from birthday
 const calculateAgeStr = (birthday: string): string => {
   const birthDate = new Date(birthday);
@@ -409,6 +416,16 @@ const Booking = () => {
     if (missing.length > 0) {
       setError(missing);
       toast({ title: "Required Fields", description: "Please fill in all your information.", variant: "destructive" });
+      return false;
+    }
+    if (!isValidPhoneNumber(phone)) {
+      setError(["phone"]);
+      toast({ title: "Invalid Phone Number", description: "Please enter a valid phone number (at least 7 digits).", variant: "destructive" });
+      return false;
+    }
+    if (emergencyContact.trim() && !isValidPhoneNumber(emergencyContact)) {
+      setError(["emergency"]);
+      toast({ title: "Invalid Emergency Contact", description: "Emergency contact must be a valid phone number (at least 7 digits).", variant: "destructive" });
       return false;
     }
     clearErrors();
@@ -1053,7 +1070,7 @@ const Booking = () => {
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor="phone">Phone *</Label>
-                        <Input id="phone" type="tel" placeholder="(555) 123-4567" value={phone} onChange={(e) => setPhone(e.target.value)} className={errorClass("phone")} readOnly={!!profileFields.phone} tabIndex={profileFields.phone ? -1 : undefined} />
+                        <Input id="phone" type="tel" placeholder="(555) 123-4567" value={phone} onChange={(e) => setPhone(formatPhoneInput(e.target.value))} className={errorClass("phone")} readOnly={!!profileFields.phone} tabIndex={profileFields.phone ? -1 : undefined} />
                       </div>
                     </div>
 
@@ -1062,7 +1079,7 @@ const Booking = () => {
                         Emergency Contact
                         <span className="text-xs text-muted-foreground font-normal ml-1">(Optional)</span>
                       </Label>
-                      <Input id="emergency" placeholder="Name and phone number" value={emergencyContact} onChange={(e) => setEmergencyContact(e.target.value)} />
+                      <Input id="emergency" placeholder="Name and phone number" value={emergencyContact} onChange={(e) => setEmergencyContact(formatPhoneInput(e.target.value))} className={errorClass("emergency")} />
                     </div>
 
                     <div className="flex gap-3">

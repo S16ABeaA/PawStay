@@ -384,6 +384,15 @@ const ListProperty = () => {
   const hasGrooming = selectedTypes.includes("grooming");
   const hasVet = selectedTypes.includes("veterinary");
 
+  const isValidPhoneNumber = (phone: string) => {
+    const digitsOnly = phone.replace(/\D/g, '');
+    return digitsOnly.length >= 7 && digitsOnly.length <= 15;
+  };
+
+  const formatPhoneInput = (value: string) => {
+    return value.replace(/[^\d\s\-+()]/g, '');
+  };
+
   const pricingSteps = useMemo(() => {
     const stepsList = [1];
 
@@ -549,6 +558,80 @@ const ListProperty = () => {
     }
 
     if (currentStep === 2) {
+      // Validate based on current propertySetupStep
+      if (propertySetupStep === 1) {
+        if (formData.petTypesAccepted.length === 0) {
+          toast({
+            title: "Pet Types Required",
+            description: "Please select at least one pet type you accept.",
+            variant: "destructive",
+          });
+          return;
+        }
+      }
+
+      if (propertySetupStep === 3) {
+        if (formData.sameHoursEveryDay) {
+          if (!formData.dailyOpenTime || !formData.dailyCloseTime) {
+            toast({
+              title: "Operating Hours Required",
+              description: "Please set your daily open and close times.",
+              variant: "destructive",
+            });
+            return;
+          }
+        } else {
+          const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+          const hasAnyHours = days.some(
+            (day) => formData.weeklyHours?.[day]?.open && formData.weeklyHours?.[day]?.close
+          );
+          if (!hasAnyHours) {
+            toast({
+              title: "Operating Hours Required",
+              description: "Please set operating hours for at least one day of the week.",
+              variant: "destructive",
+            });
+            return;
+          }
+        }
+      }
+
+      if (propertySetupStep === 4) {
+        if (!formData.complianceRequirements?.includes("Vaccination records required")) {
+          toast({
+            title: "Vaccination Requirement Missing",
+            description: "Vaccination records required must be checked.",
+            variant: "destructive",
+          });
+          return;
+        }
+      }
+
+      if (propertySetupStep === 5) {
+        const missingEmergency: string[] = [];
+        if (!formData.emergencyContact) missingEmergency.push("Emergency contact number");
+        if (!formData.nearestVetHospital) missingEmergency.push("Nearest veterinary hospital");
+        if (!formData.emergencyResponseTime) missingEmergency.push("Emergency response time");
+
+        if (missingEmergency.length > 0) {
+          toast({
+            title: "Emergency Procedures Required",
+            description: `Please fill in: ${missingEmergency.join(", ")}`,
+            variant: "destructive",
+          });
+          return;
+        }
+
+        if (formData.emergencyContact && !isValidPhoneNumber(formData.emergencyContact)) {
+          toast({
+            title: "Invalid Phone Number",
+            description: "Emergency contact must be a valid phone number (at least 7 digits).",
+            variant: "destructive",
+          });
+          return;
+        }
+      }
+
       if (propertySetupStep < 5) {
         setPropertySetupCompleted(propertySetupStep);
         setPropertySetupStep((prev) => prev + 1);
@@ -573,6 +656,30 @@ const ListProperty = () => {
     }
 
     if (currentStep === 4) {
+      // Validate boarding rules step (vaccination required)
+      if (pricingCalendarStep === 5 && hasBoarding) {
+        if (!formData.boardingRules?.vaccinationRequired) {
+          toast({
+            title: "Vaccination Required",
+            description: "Vaccination required must be checked in boarding rules.",
+            variant: "destructive",
+          });
+          return;
+        }
+      }
+
+      // Validate payment options step
+      if (pricingCalendarStep === 7) {
+        if (!formData.paymentOptions?.methods || formData.paymentOptions.methods.length === 0) {
+          toast({
+            title: "Payment Method Required",
+            description: "Please select at least one payment method.",
+            variant: "destructive",
+          });
+          return;
+        }
+      }
+
       const currentIndex = pricingSteps.indexOf(pricingCalendarStep);
       const nextStep = pricingSteps[currentIndex + 1];
 
@@ -587,6 +694,20 @@ const ListProperty = () => {
     }
 
     if (currentStep === 5) {
+      const missingDocs: string[] = [];
+      if (formData.lguPermits.length === 0) missingDocs.push("LGU Permit");
+      if (!formData.baiDocument) missingDocs.push("BAI Document");
+      if (!formData.contractDocument) missingDocs.push("Signed Partner Contract");
+
+      if (missingDocs.length > 0) {
+        toast({
+          title: "Legal Documents Required",
+          description: `Please upload: ${missingDocs.join(", ")}`,
+          variant: "destructive",
+        });
+        return;
+      }
+
       setCurrentStep(6);
       return;
     }
@@ -685,11 +806,66 @@ const ListProperty = () => {
     try {
       // Temporarily disabled authentication for backend testing
 
-      // Validate required fields
-      if (!formData.propertyName || selectedTypes.length === 0 || !formData.contractingParty.firstName || !formData.legalEntityType) {
+      // Validate required fields for Review & Complete
+      if (!formData.legalEntityType) {
         toast({
-          title: "Validation Error",
-          description: "Please fill in all required fields.",
+          title: "Entity Type Required",
+          description: "Please select whether you are listing as an individual or business.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const missingReviewFields: string[] = [];
+      if (!formData.contractingParty.firstName) missingReviewFields.push("First Name");
+      if (!formData.contractingParty.middleName) missingReviewFields.push("Middle Name");
+      if (!formData.contractingParty.lastName) missingReviewFields.push("Last Name");
+      if (!formData.contractingParty.email) missingReviewFields.push("Email Address");
+      if (!formData.contractingParty.phone) missingReviewFields.push("Phone Number");
+      if (!formData.contractingPartyAddress.streetAddress) missingReviewFields.push("Address Line 1");
+      if (!formData.contractingPartyAddress.city) missingReviewFields.push("City");
+      if (!formData.contractingPartyAddress.postalCode) missingReviewFields.push("Zip Code");
+
+      if (missingReviewFields.length > 0) {
+        toast({
+          title: "Required Fields Missing",
+          description: `Please fill in: ${missingReviewFields.join(", ")}`,
+          variant: "destructive",
+        });
+        return;
+      }
+
+      if (!isValidPhoneNumber(formData.contractingParty.phone)) {
+        toast({
+          title: "Invalid Phone Number",
+          description: "Please enter a valid phone number with digits only (at least 7 digits).",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      if (!formData.legalAgreementAccepted.termsAccepted) {
+        toast({
+          title: "Agreement Required",
+          description: "Please accept the Terms of Service and Privacy Policy.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      if (!formData.legalAgreementAccepted.dataProcessing) {
+        toast({
+          title: "Agreement Required",
+          description: "Please consent to the processing of your personal/business data.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      if (!formData.finalAgreementAccepted) {
+        toast({
+          title: "Confirmation Required",
+          description: "Please confirm that all information provided is accurate and complete.",
           variant: "destructive",
         });
         return;
@@ -1736,7 +1912,7 @@ const ListProperty = () => {
                                 <Input
                                   placeholder="+63 XXX XXX XXXX"
                                   value={formData.emergencyContact || ""}
-                                  onChange={(e) => setFormData((prev) => ({ ...prev, emergencyContact: e.target.value }))}
+                                  onChange={(e) => setFormData((prev) => ({ ...prev, emergencyContact: formatPhoneInput(e.target.value) }))}
                                 />
                               </div>
                               <div className="space-y-2">
@@ -3188,7 +3364,7 @@ const ListProperty = () => {
                                       value={formData.contractingParty.phone || ""}
                                       onChange={(e) => setFormData(prev => ({
                                         ...prev,
-                                        contractingParty: { ...prev.contractingParty, phone: e.target.value }
+                                        contractingParty: { ...prev.contractingParty, phone: formatPhoneInput(e.target.value) }
                                       }))}
                                       placeholder="9XX XXX XXXX"
                                       className="rounded-l-none"

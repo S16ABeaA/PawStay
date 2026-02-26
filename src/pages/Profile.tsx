@@ -30,6 +30,13 @@ import { useTheme } from "next-themes";
 import { useToast } from "@/hooks/use-toast";
 
 import { authApi } from "../services/authApi";
+
+const formatPhoneInput = (value: string) => value.replace(/[^\d\s\-+()]/g, "");
+const isValidPhoneNumber = (phone: string) => {
+  if (!phone) return true; // empty is ok (optional)
+  const digitsOnly = phone.replace(/\D/g, "");
+  return digitsOnly.length >= 7 && digitsOnly.length <= 15;
+};
 import { petApi } from "@/services/petApi";
 
 type ProfilePet = {
@@ -139,6 +146,14 @@ const Profile = () => {
   };
 
   const handleSave = async () => {
+    if (!user.firstName.trim() || !user.lastName.trim()) {
+      toast({ title: "Validation Error", description: "First name and last name are required.", variant: "destructive" });
+      return;
+    }
+    if (user.phone && !isValidPhoneNumber(user.phone)) {
+      toast({ title: "Invalid Phone Number", description: "Please enter a valid phone number (digits, spaces, dashes, and parentheses only, at least 7 digits).", variant: "destructive" });
+      return;
+    }
     try {
       const res = await authApi.updateProfile({
         first_name: user.firstName,
@@ -316,7 +331,7 @@ const Profile = () => {
                         id="phone"
                         type="tel"
                         value={user.phone}
-                        onChange={(e) => setUser({ ...user, phone: e.target.value })}
+                        onChange={(e) => setUser({ ...user, phone: formatPhoneInput(e.target.value) })}
                         disabled={!isEditing}
                         className="pl-10"
                       />
