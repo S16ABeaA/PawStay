@@ -8,19 +8,109 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { Building2, Bell, CreditCard, Shield, Clock, Upload, X, QrCode, Smartphone, Wallet, Banknote } from "lucide-react";
-import { useState, useRef } from "react";
+import { Building2, Bell, CreditCard, Shield, Clock, Upload, X, QrCode, Smartphone, Wallet, Banknote, Wifi, WifiOff, Loader2 } from "lucide-react";
+import { useState, useRef, useEffect, useCallback } from "react";
+import { settingsApi, type SettingsData } from "@/services/settingsApi";
 
 const AdminSettings = () => {
   const { toast } = useToast();
 
-  // Payment settings state
-  const [acceptedMethods, setAcceptedMethods] = useState<string[]>(["GCash", "Cash"]);
+  // ─── Loading & connection state ───
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [backendStatus, setBackendStatus] = useState<"checking" | "connected" | "disconnected">("checking");
+  const [backendMessage, setBackendMessage] = useState("");
+  const [propertyId, setPropertyId] = useState<string | null>(null);
+
+  // ─── Business state ───
+  const [businessName, setBusinessName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [website, setWebsite] = useState("");
+  const [description, setDescription] = useState("");
+  const [address, setAddress] = useState("");
+
+  // ─── Notification state ───
+  const [newBookings, setNewBookings] = useState(true);
+  const [bookingReminders, setBookingReminders] = useState(true);
+  const [newReviews, setNewReviews] = useState(true);
+  const [marketingUpdates, setMarketingUpdates] = useState(false);
+
+  // ─── Availability state ───
+  const [maxCapacity, setMaxCapacity] = useState(0);
+  const [minStay, setMinStay] = useState(1);
+  const [checkInTime, setCheckInTime] = useState("09:00");
+  const [checkOutTime, setCheckOutTime] = useState("17:00");
+  const [sameDayBookings, setSameDayBookings] = useState(true);
+
+  // ─── Payment state ───
+  const [acceptedMethods, setAcceptedMethods] = useState<string[]>([]);
   const [qrCodeGCash, setQrCodeGCash] = useState<string | null>(null);
   const [qrCodePayMaya, setQrCodePayMaya] = useState<string | null>(null);
   const gcashInputRef = useRef<HTMLInputElement>(null);
   const paymayaInputRef = useRef<HTMLInputElement>(null);
 
+  // ─── Populate state from API response ───
+  const populateSettings = useCallback((data: SettingsData) => {
+    setPropertyId(data.propertyId);
+
+    // Business
+    setBusinessName(data.business.name || "");
+    setPhone(data.business.phone || "");
+    setWebsite(data.business.website || "");
+    setDescription(data.business.description || "");
+    setAddress(data.business.address || "");
+
+    // Notifications
+    setNewBookings(data.notifications.newBookings ?? true);
+    setBookingReminders(data.notifications.bookingReminders ?? true);
+    setNewReviews(data.notifications.newReviews ?? true);
+    setMarketingUpdates(data.notifications.marketingUpdates ?? false);
+
+    // Availability
+    setMaxCapacity(data.availability.maxCapacity || 0);
+    setMinStay(data.availability.minStay || 1);
+    setCheckInTime(data.availability.checkInTime || "09:00");
+    setCheckOutTime(data.availability.checkOutTime || "17:00");
+    setSameDayBookings(data.availability.sameDayBookings ?? true);
+
+    // Payment
+    setAcceptedMethods(data.payment.acceptedMethods || []);
+    setQrCodeGCash(data.payment.gcashQrUrl || null);
+    setQrCodePayMaya(data.payment.paymayaQrUrl || null);
+  }, []);
+
+  // ─── Load settings on mount ───
+  useEffect(() => {
+    const loadSettings = async () => {
+      setLoading(true);
+      setBackendStatus("checking");
+      try {
+        const data = await settingsApi.getSettings();
+        setBackendStatus("connected");
+        setBackendMessage("Connected — settings loaded from database");
+        populateSettings(data);
+      } catch (err: any) {
+        setBackendStatus("disconnected");
+        setBackendMessage(err?.error || err?.message || "Could not load settings");
+        // Try a simple health check to differentiate auth vs server issues
+        try {
+          const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:5001";
+          const healthRes = await fetch(`${API_BASE}`, { method: "GET" });
+          if (healthRes.ok) {
+            setBackendStatus("connected");
+            setBackendMessage("Backend online, but settings could not load (are you logged in as a property owner?)");
+          }
+        } catch {
+          // server truly unreachable
+        }
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadSettings();
+  }, [populateSettings]);
+
+  // ─── Handlers ───
   const toggleMethod = (method: string) => {
     setAcceptedMethods((prev) =>
       prev.includes(method) ? prev.filter((m) => m !== method) : [...prev, method]
@@ -34,27 +124,72 @@ const AdminSettings = () => {
     const file = e.target.files?.[0];
     if (file) {
       const reader = new FileReader();
-      reader.onloadend = () => {
-        setter(reader.result as string);
-      };
+      reader.onloadend = () => setter(reader.result as string);
       reader.readAsDataURL(file);
     }
   };
 
-  const handleSave = () => {
-    toast({
-      title: "Settings saved",
-      description: "Your changes have been saved successfully.",
-    });
+  const handleSaveBusiness = async () => {
+    setSaving(true);
+    try {
+      await settingsApi.updateBusiness({ name: businessName, phone, website, description, address });
+      toast({ title: "Business info saved", description: "Your business details have been updated." });
+    } catch (err: any) {
+      toast({ title: "Error", description: err?.error || "Failed to save business info.", variant: "destructive" });
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const handleSavePayment = () => {
-    // In a real app, this would call an API to update payment_options in property_pricing
-    toast({
-      title: "Payment settings saved",
-      description: "Your payment methods and QR codes have been updated.",
-    });
+  const handleSaveNotifications = async () => {
+    setSaving(true);
+    try {
+      await settingsApi.updateNotifications({ newBookings, bookingReminders, newReviews, marketingUpdates });
+      toast({ title: "Notification preferences saved", description: "Your preferences have been updated." });
+    } catch (err: any) {
+      toast({ title: "Error", description: err?.error || "Failed to save notification preferences.", variant: "destructive" });
+    } finally {
+      setSaving(false);
+    }
   };
+
+  const handleSaveAvailability = async () => {
+    setSaving(true);
+    try {
+      await settingsApi.updateAvailability({ maxCapacity, minStay, checkInTime, checkOutTime, sameDayBookings });
+      toast({ title: "Availability saved", description: "Your availability settings have been updated." });
+    } catch (err: any) {
+      toast({ title: "Error", description: err?.error || "Failed to save availability settings.", variant: "destructive" });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSavePayment = async () => {
+    setSaving(true);
+    try {
+      await settingsApi.updatePayment({ acceptedMethods, gcashQrUrl: qrCodeGCash, paymayaQrUrl: qrCodePayMaya });
+      toast({ title: "Payment settings saved", description: "Your payment methods and QR codes have been updated." });
+    } catch (err: any) {
+      toast({ title: "Error", description: err?.error || "Failed to save payment settings.", variant: "destructive" });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // ─── Loading skeleton ───
+  if (loading) {
+    return (
+      <AdminLayout title="Settings" subtitle="Manage your business preferences">
+        <div className="flex items-center justify-center py-20">
+          <div className="flex flex-col items-center gap-3">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            <p className="text-muted-foreground text-sm">Loading settings…</p>
+          </div>
+        </div>
+      </AdminLayout>
+    );
+  }
 
   return (
     <AdminLayout title="Settings" subtitle="Manage your business preferences">
@@ -82,48 +217,95 @@ const AdminSettings = () => {
           </TabsTrigger>
         </TabsList>
 
+        {/* ═══════════════════ BUSINESS TAB ═══════════════════ */}
         <TabsContent value="business">
+          {/* Backend Connection Status */}
+          <Card className="mb-6">
+            <CardContent className="py-4">
+              <div className="flex items-center gap-3">
+                {backendStatus === "checking" ? (
+                  <Loader2 className="h-5 w-5 text-muted-foreground animate-spin" />
+                ) : backendStatus === "connected" ? (
+                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-green-500/10">
+                    <Wifi className="h-4 w-4 text-green-600" />
+                  </div>
+                ) : (
+                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-red-500/10">
+                    <WifiOff className="h-4 w-4 text-red-500" />
+                  </div>
+                )}
+                <div className="flex-1">
+                  <div className="flex items-center gap-2">
+                    <p className="font-medium text-sm">
+                      {backendStatus === "checking"
+                        ? "Checking backend..."
+                        : backendStatus === "connected"
+                          ? "Backend Connected"
+                          : "Backend Disconnected"}
+                    </p>
+                    <Badge
+                      variant={
+                        backendStatus === "connected"
+                          ? "default"
+                          : backendStatus === "checking"
+                            ? "secondary"
+                            : "destructive"
+                      }
+                      className="text-[10px]"
+                    >
+                      {backendStatus === "checking" ? "Checking" : backendStatus === "connected" ? "Online" : "Offline"}
+                    </Badge>
+                  </div>
+                  <p className="text-xs text-muted-foreground">{backendMessage || "Verifying connection..."}</p>
+                  {propertyId && (
+                    <p className="text-xs text-muted-foreground mt-0.5">Property ID: {propertyId}</p>
+                  )}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
           <Card>
             <CardHeader>
               <CardTitle>Business Information</CardTitle>
               <CardDescription>Update your business details visible to customers</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
+              {!propertyId && backendStatus === "connected" && (
+                <div className="p-4 rounded-lg bg-yellow-500/10 border border-yellow-500/30 text-sm text-yellow-800 dark:text-yellow-200">
+                  No property found for your account. Submit a property listing first, then come back here to manage settings.
+                </div>
+              )}
               <div className="grid md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="businessName">Business Name</Label>
-                  <Input id="businessName" defaultValue="Happy Paws Pet Hotel" />
+                  <Input id="businessName" value={businessName} onChange={(e) => setBusinessName(e.target.value)} placeholder="Enter business name" />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="phone">Phone Number</Label>
-                  <Input id="phone" defaultValue="(555) 123-4567" />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="email">Email</Label>
-                  <Input id="email" type="email" defaultValue="contact@happypaws.com" />
+                  <Input id="phone" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Enter phone number" />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="website">Website</Label>
-                  <Input id="website" defaultValue="www.happypaws.com" />
+                  <Input id="website" value={website} onChange={(e) => setWebsite(e.target.value)} placeholder="www.example.com" />
                 </div>
                 <div className="md:col-span-2 space-y-2">
                   <Label htmlFor="address">Address</Label>
-                  <Input id="address" defaultValue="123 Pet Street, San Francisco, CA 94102" />
+                  <Input id="address" value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Enter address" />
                 </div>
                 <div className="md:col-span-2 space-y-2">
                   <Label htmlFor="description">Description</Label>
-                  <Textarea
-                    id="description"
-                    rows={4}
-                    defaultValue="A premium pet hotel offering boarding, grooming, and daycare services with love and care."
-                  />
+                  <Textarea id="description" rows={4} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Describe your business…" />
                 </div>
               </div>
-              <Button variant="hero" onClick={handleSave}>Save Changes</Button>
+              <Button variant="hero" onClick={handleSaveBusiness} disabled={saving || !propertyId}>
+                {saving ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Saving…</> : "Save Changes"}
+              </Button>
             </CardContent>
           </Card>
         </TabsContent>
 
+        {/* ═══════════════════ NOTIFICATIONS TAB ═══════════════════ */}
         <TabsContent value="notifications">
           <Card>
             <CardHeader>
@@ -137,35 +319,38 @@ const AdminSettings = () => {
                     <p className="font-medium">New Bookings</p>
                     <p className="text-sm text-muted-foreground">Get notified when you receive a new booking</p>
                   </div>
-                  <Switch defaultChecked />
+                  <Switch checked={newBookings} onCheckedChange={setNewBookings} />
                 </div>
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="font-medium">Booking Reminders</p>
                     <p className="text-sm text-muted-foreground">Remind about upcoming check-ins and check-outs</p>
                   </div>
-                  <Switch defaultChecked />
+                  <Switch checked={bookingReminders} onCheckedChange={setBookingReminders} />
                 </div>
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="font-medium">New Reviews</p>
                     <p className="text-sm text-muted-foreground">Get notified when customers leave reviews</p>
                   </div>
-                  <Switch defaultChecked />
+                  <Switch checked={newReviews} onCheckedChange={setNewReviews} />
                 </div>
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="font-medium">Marketing Updates</p>
                     <p className="text-sm text-muted-foreground">Tips and promotions from PawStay</p>
                   </div>
-                  <Switch />
+                  <Switch checked={marketingUpdates} onCheckedChange={setMarketingUpdates} />
                 </div>
               </div>
-              <Button variant="hero" onClick={handleSave}>Save Preferences</Button>
+              <Button variant="hero" onClick={handleSaveNotifications} disabled={saving}>
+                {saving ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Saving…</> : "Save Preferences"}
+              </Button>
             </CardContent>
           </Card>
         </TabsContent>
 
+        {/* ═══════════════════ AVAILABILITY TAB ═══════════════════ */}
         <TabsContent value="availability">
           <Card>
             <CardHeader>
@@ -176,19 +361,19 @@ const AdminSettings = () => {
               <div className="grid md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Maximum Capacity</Label>
-                  <Input type="number" defaultValue="25" />
+                  <Input type="number" value={maxCapacity} onChange={(e) => setMaxCapacity(Number(e.target.value))} />
                 </div>
                 <div className="space-y-2">
                   <Label>Minimum Stay (nights)</Label>
-                  <Input type="number" defaultValue="1" />
+                  <Input type="number" value={minStay} onChange={(e) => setMinStay(Number(e.target.value))} />
                 </div>
                 <div className="space-y-2">
                   <Label>Check-in Time</Label>
-                  <Input type="time" defaultValue="09:00" />
+                  <Input type="time" value={checkInTime} onChange={(e) => setCheckInTime(e.target.value)} />
                 </div>
                 <div className="space-y-2">
                   <Label>Check-out Time</Label>
-                  <Input type="time" defaultValue="17:00" />
+                  <Input type="time" value={checkOutTime} onChange={(e) => setCheckOutTime(e.target.value)} />
                 </div>
               </div>
               <div className="flex items-center justify-between p-4 rounded-lg bg-secondary/50">
@@ -196,13 +381,16 @@ const AdminSettings = () => {
                   <p className="font-medium">Accept Same-Day Bookings</p>
                   <p className="text-sm text-muted-foreground">Allow customers to book for today</p>
                 </div>
-                <Switch defaultChecked />
+                <Switch checked={sameDayBookings} onCheckedChange={setSameDayBookings} />
               </div>
-              <Button variant="hero" onClick={handleSave}>Save Settings</Button>
+              <Button variant="hero" onClick={handleSaveAvailability} disabled={saving || !propertyId}>
+                {saving ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Saving…</> : "Save Settings"}
+              </Button>
             </CardContent>
           </Card>
         </TabsContent>
 
+        {/* ═══════════════════ PAYMENT TAB ═══════════════════ */}
         <TabsContent value="payment">
           <div className="space-y-6">
             {/* Accepted Payment Methods */}
@@ -364,41 +552,28 @@ const AdminSettings = () => {
               </CardContent>
             </Card>
 
-            <Button variant="hero" onClick={handleSavePayment} className="w-full md:w-auto">
-              Save Payment Settings
+            <Button variant="hero" onClick={handleSavePayment} disabled={saving || !propertyId} className="w-full md:w-auto">
+              {saving ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Saving…</> : "Save Payment Settings"}
             </Button>
           </div>
         </TabsContent>
 
+        {/* ═══════════════════ BILLING TAB (Coming Soon) ═══════════════════ */}
         <TabsContent value="billing">
           <Card>
             <CardHeader>
               <CardTitle>Billing & Payments</CardTitle>
               <CardDescription>Manage your payment methods and view earnings</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="p-4 rounded-lg bg-secondary/50">
-                <div className="flex items-center justify-between mb-4">
-                  <div>
-                    <p className="font-medium">Current Balance</p>
-                    <p className="text-2xl font-bold text-foreground">$3,450.00</p>
-                  </div>
-                  <Button>Withdraw</Button>
-                </div>
-                <p className="text-sm text-muted-foreground">Next automatic payout: Feb 1, 2026</p>
+            <CardContent className="flex flex-col items-center justify-center py-16 text-center">
+              <div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary/10 mb-4">
+                <CreditCard className="h-8 w-8 text-primary" />
               </div>
-              
-              <div>
-                <Label className="mb-2 block">Bank Account</Label>
-                <div className="flex items-center gap-3 p-4 rounded-lg border border-border">
-                  <CreditCard className="h-5 w-5 text-muted-foreground" />
-                  <div className="flex-1">
-                    <p className="font-medium">**** **** **** 4567</p>
-                    <p className="text-sm text-muted-foreground">Chase Bank</p>
-                  </div>
-                  <Button variant="outline" size="sm">Change</Button>
-                </div>
-              </div>
+              <h3 className="text-xl font-semibold text-foreground mb-2">Coming Soon</h3>
+              <p className="text-muted-foreground max-w-md">
+                We're working on billing and payment features. You'll be able to manage your earnings, payouts, and bank accounts here soon.
+              </p>
+              <Badge variant="secondary" className="mt-4">Under Development</Badge>
             </CardContent>
           </Card>
         </TabsContent>
