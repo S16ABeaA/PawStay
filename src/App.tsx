@@ -91,11 +91,46 @@ const App = () => (
           />
           
           {/* Admin routes */}
-          <Route path="/admin" element={<AdminDashboard />} />
-          <Route path="/admin/bookings" element={<AdminBookings />} />
-          <Route path="/admin/services" element={<AdminServices />} />
-          <Route path="/admin/reviews" element={<AdminReviews />} />
-          <Route path="/admin/settings" element={<AdminSettings />} />
+          <Route
+            path="/admin"
+            element={
+              <RequireAuth allowedRoles={["proprietor"]}>
+                <AdminDashboard />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/admin/bookings"
+            element={
+              <RequireAuth allowedRoles={["proprietor"]}>
+                <AdminBookings />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/admin/services"
+            element={
+              <RequireAuth allowedRoles={["proprietor"]}>
+                <AdminServices />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/admin/reviews"
+            element={
+              <RequireAuth allowedRoles={["proprietor"]}>
+                <AdminReviews />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/admin/settings"
+            element={
+              <RequireAuth allowedRoles={["proprietor"]}>
+                <AdminSettings />
+              </RequireAuth>
+            }
+          />
           
           {/* SuperAdmin routes */}
           <Route path="/superadmin" element={<SuperAdminDashboard />} />
