@@ -342,6 +342,106 @@ export const authController = {
     }
   },
 
+  updateProfile: async (req: Request, res: Response) => {
+    const user = (req as any).user;
+    if (!user) {
+      return res.status(401).json({ error: "User not authenticated" });
+    }
+
+    const { firstName, lastName, phone, address } = req.body;
+
+    // Build update payload – only include fields that were provided
+    const fields: Record<string, string> = {};
+    if (firstName !== undefined) fields.first_name = firstName;
+    if (lastName !== undefined) fields.last_name = lastName;
+    if (phone !== undefined) fields.phone = phone;
+    if (address !== undefined) fields.address = address;
+
+    if (Object.keys(fields).length === 0) {
+      return res.status(400).json({ error: "No fields to update." });
+    }
+
+    try {
+      const updatedProfile = await userModel.updateUser(user.id, fields);
+      return res.status(200).json({
+        message: "Profile updated successfully.",
+        user: {
+          id: updatedProfile.id,
+          first_name: updatedProfile.first_name,
+          last_name: updatedProfile.last_name,
+          role: updatedProfile.role,
+          phone: updatedProfile.phone || "",
+          address: updatedProfile.address || "",
+          avatar_url: updatedProfile.avatar_url || "",
+          email: updatedProfile.email || user.email,
+        },
+      });
+    } catch (err: any) {
+      console.error("[BACKEND] Error updating profile:", err.message);
+      return res.status(500).json({ error: "Failed to update profile." });
+    }
+  },
+
+  uploadAvatar: async (req: Request, res: Response) => {
+    const user = (req as any).user;
+    if (!user) {
+      return res.status(401).json({ error: "User not authenticated" });
+    }
+
+    const file = (req as any).file;
+    if (!file) {
+      return res.status(400).json({ error: "No file uploaded." });
+    }
+
+    // Validate file type
+    const allowedTypes = ["image/jpeg", "image/png", "image/webp"];
+    if (!allowedTypes.includes(file.mimetype)) {
+      return res.status(400).json({ error: "Invalid file type. Only JPEG, PNG and WebP are allowed." });
+    }
+
+    // Validate file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      return res.status(400).json({ error: "File too large. Maximum size is 5MB." });
+    }
+
+    try {
+      const ext = file.originalname.split(".").pop() || "jpg";
+      const filePath = `${user.id}/avatar.${ext}`;
+
+      // Upload to Supabase Storage (avatars bucket)
+      const { error: uploadError } = await supabaseAdmin.storage
+        .from("avatars")
+        .upload(filePath, file.buffer, {
+          contentType: file.mimetype,
+          upsert: true, // Overwrite existing avatar
+        });
+
+      if (uploadError) {
+        console.error("[BACKEND] Storage upload error:", uploadError.message);
+        return res.status(500).json({ error: "Failed to upload avatar." });
+      }
+
+      // Get the public URL
+      const { data: urlData } = supabaseAdmin.storage
+        .from("avatars")
+        .getPublicUrl(filePath);
+
+      // Append cache-busting timestamp so browsers always fetch the new image
+      const avatarUrl = `${urlData.publicUrl}?t=${Date.now()}`;
+
+      // Update the profile with the new avatar URL
+      await userModel.updateUser(user.id, { avatar_url: avatarUrl });
+
+      return res.status(200).json({
+        message: "Avatar uploaded successfully.",
+        avatar_url: avatarUrl,
+      });
+    } catch (err: any) {
+      console.error("[BACKEND] Error uploading avatar:", err.message);
+      return res.status(500).json({ error: "Failed to upload avatar." });
+    }
+  },
+
   listUsers: async (req: Request, res: Response) => {
     try {
       const [profilesResult, authResult] = await Promise.all([

@@ -33,6 +33,18 @@ const Header = () => {
     }
   }, [location.pathname]);
 
+  // Listen for avatar updates from Profile
+  useEffect(() => {
+    const handleAvatarUpdate = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail?.avatarUrl) {
+        setUser((prev) => ({ ...prev, avatarUrl: detail.avatarUrl }));
+      }
+    };
+    window.addEventListener("pawstay:avatar-updated", handleAvatarUpdate);
+    return () => window.removeEventListener("pawstay:avatar-updated", handleAvatarUpdate);
+  }, []);
+
   return (
     <header className="sticky top-0 z-50 w-full border-b border-border/50 bg-background/80 backdrop-blur-lg">
       <div className="container flex h-16 items-center justify-between">
