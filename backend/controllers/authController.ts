@@ -483,8 +483,10 @@ export const authController = {
     }
     const { id } = req.params;
     const { ban } = req.body; // true = suspend, false = reinstate
+    const userId = Array.isArray(id) ? id[0] : id;
+    if (!userId) return res.status(400).json({ error: "User id is required." });
     try {
-      const { error } = await supabaseAdmin.auth.admin.updateUserById(id, {
+      const { error } = await supabaseAdmin.auth.admin.updateUserById(userId, {
         ban_duration: ban ? "876000h" : "none",
       });
       if (error) return res.status(500).json({ error: error.message });
@@ -502,12 +504,14 @@ export const authController = {
       return res.status(403).json({ error: "Forbidden." });
     }
     const { id } = req.params;
-    if (id === requester.id) {
+    const userId = Array.isArray(id) ? id[0] : id;
+    if (!userId) return res.status(400).json({ error: "User id is required." });
+    if (userId === requester.id) {
       return res.status(400).json({ error: "You cannot delete your own account." });
     }
     try {
       // Delete from Supabase Auth (profiles cascade via FK if set, else clean up explicitly)
-      const { error: authError } = await supabaseAdmin.auth.admin.deleteUser(id);
+      const { error: authError } = await supabaseAdmin.auth.admin.deleteUser(userId);
       if (authError) return res.status(500).json({ error: authError.message });
       // Explicit profile cleanup in case FK cascade is not configured
       await supabaseAdmin.from("profiles").delete().eq("id", id);
