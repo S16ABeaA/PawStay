@@ -33,6 +33,7 @@ import AdminBookings from "./pages/admin/Bookings";
 import AdminServices from "./pages/admin/Services";
 import AdminReviews from "./pages/admin/Reviews";
 import AdminSettings from "./pages/admin/Settings";
+import AdminCalendar from "./pages/admin/Calendar";
 
 // SuperAdmin pages
 import SuperAdminDashboard from "./pages/superadmin/Dashboard";
@@ -100,6 +101,7 @@ const App = () => (
           <Route path="/admin/bookings" element={<AdminBookings />} />
           <Route path="/admin/services" element={<AdminServices />} />
           <Route path="/admin/reviews" element={<AdminReviews />} />
+          <Route path="/admin/calendar" element={<AdminCalendar />} />
           <Route path="/admin/settings" element={<AdminSettings />} />
           
           {/* SuperAdmin routes */}

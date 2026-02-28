@@ -2,6 +2,7 @@ import { Link, useLocation } from "react-router-dom";
 import {
   LayoutDashboard,
   Calendar,
+  CalendarDays,
   Settings,
   Star,
   Package,
@@ -17,6 +18,7 @@ import { useState } from "react";
 const navItems = [
   { icon: LayoutDashboard, label: "Dashboard", href: "/admin" },
   { icon: Calendar, label: "Bookings", href: "/admin/bookings" },
+  { icon: CalendarDays, label: "Calendar", href: "/admin/calendar" },
   { icon: Package, label: "Services", href: "/admin/services" },
   { icon: Star, label: "Reviews", href: "/admin/reviews" },
   { icon: Settings, label: "Settings", href: "/admin/settings" },
