@@ -100,6 +100,7 @@ const App = () => (
           {/* Admin routes */}
           <Route path="/admin" element={<RequireAdmin><AdminDashboard /></RequireAdmin>} />
           <Route path="/admin/bookings" element={<RequireAdmin><AdminBookings /></RequireAdmin>} />
+          <Route path="/admin/calendar" element={<RequireAdmin><AdminCalendar /></RequireAdmin>} />
           <Route path="/admin/services" element={<RequireAdmin><AdminServices /></RequireAdmin>} />
           <Route path="/admin/reviews" element={<RequireAdmin><AdminReviews /></RequireAdmin>} />
           <Route path="/admin/settings" element={<RequireAdmin><AdminSettings /></RequireAdmin>} />
