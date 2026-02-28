@@ -25,6 +25,7 @@ import MyPets from "./pages/MyPets";
 import MyBookings from "./pages/MyBookings";
 import HelpCenter from "./pages/HelpCenter";
 import RequireAuth from "./components/RequireAuth";
+import RequireAdmin from "./components/RequireAdmin";
 import RequireSuperAdmin from "./components/RequireSuperAdmin";
 
 // Admin pages
@@ -74,7 +75,7 @@ const App = () => (
               </RequireAuth>
             }
           />
-          <Route path="/favorites" element={<Favorites />} />
+          <Route path="/favorites" element={<RequireAuth><Favorites /></RequireAuth>} />
           <Route path="/booking" element={<Booking />} />
           <Route path="/search" element={<SearchResults />} />
           <Route path="/help-center" element={<HelpCenter />} />
@@ -86,7 +87,7 @@ const App = () => (
               </RequireAuth>
             }
           />
-          <Route path="/my-pets" element={<MyPets />} />
+          <Route path="/my-pets" element={<RequireAuth><MyPets /></RequireAuth>} />
           <Route
             path="/my-bookings"
             element={
@@ -97,12 +98,11 @@ const App = () => (
           />
           
           {/* Admin routes */}
-          <Route path="/admin" element={<AdminDashboard />} />
-          <Route path="/admin/bookings" element={<AdminBookings />} />
-          <Route path="/admin/services" element={<AdminServices />} />
-          <Route path="/admin/reviews" element={<AdminReviews />} />
-          <Route path="/admin/calendar" element={<AdminCalendar />} />
-          <Route path="/admin/settings" element={<AdminSettings />} />
+          <Route path="/admin" element={<RequireAdmin><AdminDashboard /></RequireAdmin>} />
+          <Route path="/admin/bookings" element={<RequireAdmin><AdminBookings /></RequireAdmin>} />
+          <Route path="/admin/services" element={<RequireAdmin><AdminServices /></RequireAdmin>} />
+          <Route path="/admin/reviews" element={<RequireAdmin><AdminReviews /></RequireAdmin>} />
+          <Route path="/admin/settings" element={<RequireAdmin><AdminSettings /></RequireAdmin>} />
           
           {/* SuperAdmin routes */}
           <Route path="/superadmin" element={<RequireSuperAdmin><SuperAdminDashboard /></RequireSuperAdmin>} />

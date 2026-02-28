@@ -122,6 +122,15 @@ export const clearAuthCookies = (res: Response) => {
   res.clearCookie("sb-refresh-token", { path: "/" });
 };
 
+//Middleware to restrict a route to admin (proprietor) users only.
+export const requireAdmin = (req: Request, res: Response, next: NextFunction) => {
+  const user = (req as any).user;
+  if (!user || (user.role !== "proprietor")) {
+    return res.status(403).json({ error: "Forbidden: admin access required." });
+  }
+  next();
+};
+
 /**
  * Middleware to restrict a route to super_admin users only.
  * Must be used AFTER authMiddleware.
