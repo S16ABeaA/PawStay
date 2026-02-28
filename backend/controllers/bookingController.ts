@@ -4,6 +4,100 @@ import { petModel } from "../models/petModel";
 import { serviceHistoryModel } from "../models/serviceHistoryModel";
 import { supabaseAdmin } from "../config/supabaseAdmin";
 
+/**
+ * GET /api/bookings/admin/calendar
+ * Returns bookings for all properties owned by the current user (proprietor / admin).
+ * Also returns the proprietor's properties and the distinct service categories.
+ * Query params:
+ *   - property_id   (optional) filter by property
+ *   - service_type  (optional) filter by service_type
+ *   - status        (optional) filter by booking status
+ */
+export const adminCalendar = async (req: Request, res: Response) => {
+  try {
+    const userId = (req as any).user?.id;
+    const userRole = (req as any).user?.role;
+    if (!userId) return res.status(401).json({ error: "Unauthorized" });
+
+    console.log("[adminCalendar] userId:", userId, "role:", userRole);
+
+    // 1. Get properties owned by this admin/proprietor (super_admin sees all)
+    let propsQuery = supabaseAdmin
+      .from("properties")
+      .select("id, name, property_type")
+      .eq("is_deleted", false);
+
+    if (userRole !== "super_admin") {
+      propsQuery = propsQuery.eq("owner_id", userId);
+    }
+
+    const { data: properties, error: propsErr } = await propsQuery.order("name");
+    if (propsErr) throw propsErr;
+
+    console.log("[adminCalendar] properties found:", (properties ?? []).length, (properties ?? []).map((p: any) => ({ id: p.id, name: p.name })));
+
+    const propertyIds = (properties ?? []).map((p: any) => p.id);
+
+    if (propertyIds.length === 0) {
+      return res.json({ bookings: [], properties: [], serviceTypes: [] });
+    }
+
+    // 2. Get distinct service categories from property_services for those properties
+    const { data: services, error: svcErr } = await supabaseAdmin
+      .from("property_services")
+      .select("category")
+      .in("property_id", propertyIds)
+      .eq("is_active", true)
+      .eq("is_deleted", false);
+
+    if (svcErr) throw svcErr;
+
+    const serviceTypes = [...new Set((services ?? []).map((s: any) => s.category))].sort();
+
+    // 3. Build bookings query
+    let bookingsQuery = supabaseAdmin
+      .from("bookings")
+      .select("*, properties:property_id(name)")
+      .in("property_id", propertyIds)
+      .eq("is_deleted", false)
+      .order("checkin", { ascending: true });
+
+    // Optional filters
+    const filterPropertyId = req.query.property_id as string | undefined;
+    const filterServiceType = req.query.service_type as string | undefined;
+    const filterStatus = req.query.status as string | undefined;
+
+    if (filterPropertyId) {
+      bookingsQuery = bookingsQuery.eq("property_id", filterPropertyId);
+    }
+    if (filterServiceType) {
+      bookingsQuery = bookingsQuery.eq("service_type", filterServiceType);
+    }
+    if (filterStatus) {
+      bookingsQuery = bookingsQuery.eq("status", filterStatus);
+    }
+
+    const { data: bookings, error: bookErr } = await bookingsQuery;
+    if (bookErr) throw bookErr;
+
+    // Flatten property name
+    const mapped = (bookings ?? []).map((b: any) => ({
+      ...b,
+      property_name: b.properties?.name ?? null,
+      properties: undefined,
+    }));
+
+    return res.json({
+      bookings: mapped,
+      properties: properties ?? [],
+      serviceTypes,
+    });
+  } catch (err: any) {
+    console.error("adminCalendar error:", err);
+    return res.status(500).json({ error: "Failed to fetch calendar data.", details: err?.message || err });
+  }
+};
+
 /** POST /api/bookings — create a new booking */
 export const createBooking = async (req: Request, res: Response) => {
   try {

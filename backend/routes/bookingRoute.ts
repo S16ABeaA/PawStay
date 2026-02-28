@@ -5,6 +5,7 @@ import {
   listBookings,
   getBooking,
   checkAvailability,
+  adminCalendar,
 } from "../controllers/bookingController";
 
 const router = Router();
@@ -14,6 +15,9 @@ router.get("/availability/:propertyId", checkAvailability);
 
 // All other booking routes require authentication
 router.use(authMiddleware);
+
+// Admin calendar — returns bookings across all proprietor's properties
+router.get("/admin/calendar", adminCalendar);
 
 router.get("/", listBookings);
 router.get("/:id", getBooking);

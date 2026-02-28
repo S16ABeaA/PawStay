@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef } from "react";
+import { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import AdminLayout from "@/components/admin/AdminLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -32,6 +32,7 @@ import {
   Trash2,
   Edit,
   ExternalLink,
+  Loader2,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -48,6 +49,12 @@ import {
   GOOGLE_CALENDAR_API_KEY,
   DEFAULT_GOOGLE_CALENDAR_IDS,
 } from "@/services/googleCalendarService";
+
+import {
+  bookingApi,
+  type AdminCalendarBooking,
+  type AdminCalendarProperty,
+} from "@/services/bookingApi";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -67,112 +74,72 @@ interface CalendarEvent {
     status?: string;
     notes?: string;
     room?: string;
+    propertyName?: string;
+    propertyId?: string;
+    totalPrice?: number | null;
+    paymentStatus?: string;
   };
 }
 
 // ---------------------------------------------------------------------------
-// Seed data (mirrors existing bookings data)
+// Colour map for service categories
 // ---------------------------------------------------------------------------
 
 const SERVICE_COLORS: Record<string, string> = {
-  Boarding: "#8B5CF6",  // violet
-  Grooming: "#F59E0B",  // amber
-  Daycare: "#10B981",   // emerald
-  Veterinary: "#EF4444", // red
-  Other: "#6B7280",     // gray
+  boarding: "#8B5CF6",    // violet
+  grooming: "#F59E0B",    // amber
+  daycare: "#10B981",     // emerald
+  veterinary: "#EF4444",  // red
+  transport: "#3B82F6",   // blue
+  other: "#6B7280",       // gray
 };
 
-const initialEvents: CalendarEvent[] = [
-  {
-    id: "BK001",
-    title: "Max – Boarding",
-    start: "2026-01-30",
-    end: "2026-02-02",
-    color: SERVICE_COLORS.Boarding,
-    extendedProps: { pet: "Max", owner: "John Smith", service: "Boarding", status: "confirmed", room: "Suite A", notes: "" },
-  },
-  {
-    id: "BK002",
-    title: "Bella – Grooming",
-    start: "2026-01-30T10:00:00",
-    end: "2026-01-30T11:30:00",
-    color: SERVICE_COLORS.Grooming,
-    extendedProps: { pet: "Bella", owner: "Sarah Johnson", service: "Grooming", status: "pending", notes: "" },
-  },
-  {
-    id: "BK003",
-    title: "Charlie – Boarding",
-    start: "2026-01-31",
-    end: "2026-02-05",
-    color: SERVICE_COLORS.Boarding,
-    extendedProps: { pet: "Charlie", owner: "Mike Brown", service: "Boarding", status: "confirmed", room: "Standard 3", notes: "" },
-  },
-  {
-    id: "BK004",
-    title: "Luna – Daycare",
-    start: "2026-01-31T08:00:00",
-    end: "2026-01-31T18:00:00",
-    color: SERVICE_COLORS.Daycare,
-    extendedProps: { pet: "Luna", owner: "Emily Davis", service: "Daycare", status: "pending", notes: "" },
-  },
-  {
-    id: "BK005",
-    title: "Cooper – Boarding",
-    start: "2026-02-01",
-    end: "2026-02-03",
-    color: SERVICE_COLORS.Boarding,
-    extendedProps: { pet: "Cooper", owner: "Alex Wilson", service: "Boarding", status: "confirmed", room: "Suite B", notes: "" },
-  },
-  {
-    id: "BK006",
-    title: "Bailey – Grooming",
-    start: "2026-02-01T14:00:00",
-    end: "2026-02-01T15:00:00",
-    color: SERVICE_COLORS.Grooming,
-    extendedProps: { pet: "Bailey", owner: "Lisa Chen", service: "Grooming", status: "cancelled", notes: "" },
-  },
-  {
-    id: "BK007",
-    title: "Rocky – Boarding",
-    start: "2026-02-02",
-    end: "2026-02-07",
-    color: SERVICE_COLORS.Boarding,
-    extendedProps: { pet: "Rocky", owner: "Tom Harris", service: "Boarding", status: "confirmed", room: "Standard 1", notes: "" },
-  },
-  // Some future events around "today" (Feb 28 2026)
-  {
-    id: "BK008",
-    title: "Buddy – Daycare",
-    start: "2026-02-28T09:00:00",
-    end: "2026-02-28T17:00:00",
-    color: SERVICE_COLORS.Daycare,
-    extendedProps: { pet: "Buddy", owner: "Rachel Green", service: "Daycare", status: "confirmed", notes: "Needs special diet" },
-  },
-  {
-    id: "BK009",
-    title: "Daisy – Grooming",
-    start: "2026-02-28T11:00:00",
-    end: "2026-02-28T12:30:00",
-    color: SERVICE_COLORS.Grooming,
-    extendedProps: { pet: "Daisy", owner: "Mark Thompson", service: "Grooming", status: "confirmed", notes: "Full groom + nail trim" },
-  },
-  {
-    id: "BK010",
-    title: "Duke – Boarding",
-    start: "2026-02-27",
-    end: "2026-03-04",
-    color: SERVICE_COLORS.Boarding,
-    extendedProps: { pet: "Duke", owner: "Jessica Lee", service: "Boarding", status: "confirmed", room: "Suite C", notes: "" },
-  },
-  {
-    id: "BK011",
-    title: "Milo – Veterinary",
-    start: "2026-03-01T10:00:00",
-    end: "2026-03-01T10:45:00",
-    color: SERVICE_COLORS.Veterinary,
-    extendedProps: { pet: "Milo", owner: "David Park", service: "Veterinary", status: "pending", notes: "Annual vaccination" },
-  },
-];
+/** Map a booking row to a FullCalendar event */
+function bookingToEvent(b: AdminCalendarBooking): CalendarEvent {
+  const svc = (b.service_type ?? "other").toLowerCase();
+  const color = SERVICE_COLORS[svc] ?? SERVICE_COLORS.other;
+  const label = b.pet_name ?? "Pet";
+  const serviceLabel = b.service_name ?? b.service_type ?? "Booking";
+
+  // Boarding → multi-day (allDay), others → timed
+  const isBoarding = !!b.checkout;
+  const start = isBoarding
+    ? b.checkin
+    : b.time_slot
+      ? `${b.checkin}T${b.time_slot}`
+      : b.checkin;
+
+  let end: string | undefined;
+  if (isBoarding) {
+    end = b.checkout ?? undefined;
+  } else if (b.time_slot) {
+    // Default 1-hour appointment
+    const [h, m] = b.time_slot.split(":").map(Number);
+    const endH = String(h + 1).padStart(2, "0");
+    end = `${b.checkin}T${endH}:${String(m ?? 0).padStart(2, "0")}:00`;
+  }
+
+  return {
+    id: b.id,
+    title: `${label} – ${serviceLabel}`,
+    start,
+    end,
+    allDay: isBoarding,
+    color,
+    extendedProps: {
+      pet: b.pet_name ?? undefined,
+      owner: b.owner_name ?? undefined,
+      service: serviceLabel,
+      status: b.status,
+      notes: b.notes ?? undefined,
+      room: b.room_name ?? undefined,
+      propertyName: b.property_name ?? undefined,
+      propertyId: b.property_id,
+      totalPrice: b.total_price,
+      paymentStatus: b.payment_status,
+    },
+  };
+}
 
 // ---------------------------------------------------------------------------
 // Component
@@ -181,7 +148,13 @@ const initialEvents: CalendarEvent[] = [
 const AdminCalendar = () => {
   const calendarRef = useRef<FullCalendar>(null);
   const { toast } = useToast();
-  const [events, setEvents] = useState<CalendarEvent[]>(initialEvents);
+
+  // Data from API
+  const [loading, setLoading] = useState(true);
+  const [events, setEvents] = useState<CalendarEvent[]>([]);
+  const [properties, setProperties] = useState<AdminCalendarProperty[]>([]);
+  const [serviceTypes, setServiceTypes] = useState<string[]>([]);
+
   const [currentView, setCurrentView] = useState("dayGridMonth");
   const [titleText, setTitleText] = useState("");
 
@@ -206,18 +179,46 @@ const AdminCalendar = () => {
   // Google Calendar toggle
   const [showGoogleCal, setShowGoogleCal] = useState(!!GOOGLE_CALENDAR_API_KEY);
 
-  // Status filter
+  // Filters
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [propertyFilter, setPropertyFilter] = useState<string>("all");
+  const [serviceTypeFilter, setServiceTypeFilter] = useState<string>("all");
 
-  // Filtered events
-  const filteredEvents = useMemo(() => {
-    if (statusFilter === "all") return events;
-    return events.filter((e) => e.extendedProps.status === statusFilter);
-  }, [events, statusFilter]);
+  // -----------------------------------------------------------------------
+  // Fetch data from API
+  // -----------------------------------------------------------------------
 
-  // FullCalendar event sources
+  const fetchCalendarData = useCallback(async () => {
+    try {
+      setLoading(true);
+      const params: Record<string, string> = {};
+      if (propertyFilter !== "all") params.property_id = propertyFilter;
+      if (serviceTypeFilter !== "all") params.service_type = serviceTypeFilter;
+      if (statusFilter !== "all") params.status = statusFilter;
+
+      const data = await bookingApi.getAdminCalendar(params);
+      setProperties(data.properties);
+      setServiceTypes(data.serviceTypes);
+      setEvents(data.bookings.map(bookingToEvent));
+    } catch (err: any) {
+      console.error("Failed to fetch calendar data:", err);
+      toast({
+        title: "Error",
+        description: "Failed to load calendar data.",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  }, [propertyFilter, serviceTypeFilter, statusFilter, toast]);
+
+  useEffect(() => {
+    fetchCalendarData();
+  }, [fetchCalendarData]);
+
+  // FullCalendar event sources (filters are server-side, so just use events directly)
   const eventSources = useMemo(() => {
-    const sources: any[] = [{ events: filteredEvents as EventInput[] }];
+    const sources: any[] = [{ events: events as EventInput[] }];
 
     if (showGoogleCal && GOOGLE_CALENDAR_API_KEY) {
       DEFAULT_GOOGLE_CALENDAR_IDS.forEach((id) => {
@@ -231,7 +232,7 @@ const AdminCalendar = () => {
     }
 
     return sources;
-  }, [filteredEvents, showGoogleCal]);
+  }, [events, showGoogleCal]);
 
   // -----------------------------------------------------------------------
   // Handlers
@@ -282,7 +283,7 @@ const AdminCalendar = () => {
 
     const id = `BK${String(events.length + 1).padStart(3, "0")}`;
     const title = `${newEvent.pet} – ${newEvent.service}`;
-    const color = SERVICE_COLORS[newEvent.service] ?? SERVICE_COLORS.Other;
+    const color = SERVICE_COLORS[newEvent.service.toLowerCase()] ?? SERVICE_COLORS.other;
 
     const created: CalendarEvent = {
       id,
@@ -440,16 +441,52 @@ const AdminCalendar = () => {
 
             {/* Right: view switch, filter, add */}
             <div className="flex flex-wrap items-center gap-2">
+              {/* Property filter */}
+              {properties.length > 0 && (
+                <Select value={propertyFilter} onValueChange={setPropertyFilter}>
+                  <SelectTrigger className="w-[160px]">
+                    <SelectValue placeholder="Property" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Properties</SelectItem>
+                    {properties.map((p) => (
+                      <SelectItem key={p.id} value={p.id}>
+                        {p.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+
+              {/* Service type filter */}
+              {serviceTypes.length > 0 && (
+                <Select value={serviceTypeFilter} onValueChange={setServiceTypeFilter}>
+                  <SelectTrigger className="w-[140px]">
+                    <SelectValue placeholder="Service" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Services</SelectItem>
+                    {serviceTypes.map((st) => (
+                      <SelectItem key={st} value={st.toLowerCase()}>
+                        {st}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+
               {/* Status filter */}
               <Select value={statusFilter} onValueChange={setStatusFilter}>
                 <SelectTrigger className="w-[130px]">
-                  <SelectValue placeholder="Filter" />
+                  <SelectValue placeholder="Status" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Statuses</SelectItem>
                   <SelectItem value="confirmed">Confirmed</SelectItem>
                   <SelectItem value="pending">Pending</SelectItem>
                   <SelectItem value="cancelled">Cancelled</SelectItem>
+                  <SelectItem value="checked_in">Checked In</SelectItem>
+                  <SelectItem value="completed">Completed</SelectItem>
                 </SelectContent>
               </Select>
 
@@ -530,7 +567,12 @@ const AdminCalendar = () => {
 
       {/* Calendar */}
       <Card>
-        <CardContent className="p-2 md:p-4">
+        <CardContent className="p-2 md:p-4 relative">
+          {loading && (
+            <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/60 rounded-lg">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            </div>
+          )}
           <FullCalendar
             ref={calendarRef}
             plugins={[
@@ -578,7 +620,7 @@ const AdminCalendar = () => {
               className="inline-block w-3 h-3 rounded-full"
               style={{ backgroundColor: color }}
             />
-            <span className="text-muted-foreground">{service}</span>
+            <span className="text-muted-foreground capitalize">{service}</span>
           </div>
         ))}
         {GOOGLE_CALENDAR_API_KEY && (
@@ -604,13 +646,19 @@ const AdminCalendar = () => {
           {selectedEvent && (
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-3">
+                {selectedEvent.extendedProps.propertyName && (
+                  <div className="col-span-2">
+                    <p className="text-xs text-muted-foreground">Property</p>
+                    <p className="font-medium">{selectedEvent.extendedProps.propertyName}</p>
+                  </div>
+                )}
                 <div>
                   <p className="text-xs text-muted-foreground">Pet</p>
-                  <p className="font-medium">{selectedEvent.extendedProps.pet}</p>
+                  <p className="font-medium">{selectedEvent.extendedProps.pet ?? "—"}</p>
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground">Owner</p>
-                  <p className="font-medium">{selectedEvent.extendedProps.owner}</p>
+                  <p className="font-medium">{selectedEvent.extendedProps.owner ?? "—"}</p>
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground">Service</p>
@@ -644,6 +692,20 @@ const AdminCalendar = () => {
                       : "—"}
                   </p>
                 </div>
+                {selectedEvent.extendedProps.totalPrice != null && (
+                  <div>
+                    <p className="text-xs text-muted-foreground">Total Price</p>
+                    <p className="font-medium">₱{Number(selectedEvent.extendedProps.totalPrice).toLocaleString()}</p>
+                  </div>
+                )}
+                {selectedEvent.extendedProps.paymentStatus && (
+                  <div>
+                    <p className="text-xs text-muted-foreground">Payment</p>
+                    <Badge variant={selectedEvent.extendedProps.paymentStatus === "paid" ? "default" : "secondary"}>
+                      {selectedEvent.extendedProps.paymentStatus}
+                    </Badge>
+                  </div>
+                )}
                 {selectedEvent.extendedProps.room && (
                   <div className="col-span-2">
                     <p className="text-xs text-muted-foreground">Room</p>

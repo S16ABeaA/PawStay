@@ -50,6 +50,52 @@ export interface HotelAvailability {
   unavailableDates: string[];
 }
 
+export interface AdminCalendarParams {
+  property_id?: string;
+  service_type?: string;
+  status?: string;
+}
+
+export interface AdminCalendarProperty {
+  id: string;
+  name: string;
+  property_type: string[];
+}
+
+export interface AdminCalendarBooking {
+  id: string;
+  property_id: string;
+  property_name: string | null;
+  user_id: string;
+  pet_id: string | null;
+  service_id: string | null;
+  checkin: string;
+  checkout: string | null;
+  time_slot: string | null;
+  pet_name: string | null;
+  pet_type: string | null;
+  pet_breed: string | null;
+  service_name: string | null;
+  service_type: string | null;
+  owner_name: string | null;
+  owner_email: string | null;
+  owner_phone: string | null;
+  special_requirements: string | null;
+  subtotal: number | null;
+  total_price: number | null;
+  payment_status: string;
+  status: string;
+  notes: string | null;
+  room_name: string | null;
+  created_at: string;
+}
+
+export interface AdminCalendarResponse {
+  bookings: AdminCalendarBooking[];
+  properties: AdminCalendarProperty[];
+  serviceTypes: string[];
+}
+
 export const bookingApi = {
   /** Create a new booking */
   create: (data: CreateBookingPayload) =>
@@ -86,5 +132,15 @@ export const bookingApi = {
     );
     if (!res.ok) throw await res.json();
     return res.json();
+  },
+
+  /** Admin calendar — get bookings for proprietor's properties with filters */
+  getAdminCalendar: (params?: AdminCalendarParams): Promise<AdminCalendarResponse> => {
+    const qs = new URLSearchParams();
+    if (params?.property_id) qs.set("property_id", params.property_id);
+    if (params?.service_type) qs.set("service_type", params.service_type);
+    if (params?.status) qs.set("status", params.status);
+    const query = qs.toString();
+    return authHelper.get(`${API_BASE_URL}/api/bookings/admin/calendar${query ? "?" + query : ""}`);
   },
 };
