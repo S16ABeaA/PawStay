@@ -23,6 +23,7 @@ import NotFound from "./pages/NotFound";
 import Profile from "./pages/Profile";
 import MyPets from "./pages/MyPets";
 import MyBookings from "./pages/MyBookings";
+import Notifications from "./pages/Notifications";
 import HelpCenter from "./pages/HelpCenter";
 import RequireAuth from "./components/RequireAuth";
 import RequireSuperAdmin from "./components/RequireSuperAdmin";
@@ -91,6 +92,14 @@ const App = () => (
             element={
               <RequireAuth>
                 <MyBookings />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/notifications"
+            element={
+              <RequireAuth>
+                <Notifications />
               </RequireAuth>
             }
           />
