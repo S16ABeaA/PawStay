@@ -101,7 +101,7 @@ const AdminDashboard = () => {
         <div onClick={() => navigate('/admin/settings')} className="cursor-pointer">
           <StatsCard
             title="Revenue"
-            value={loadingStats ? '...' : `$${Number(stats.revenue || 0).toFixed(2)}`}
+            value={loadingStats ? '...' : `₱${Number(stats.revenue || 0).toFixed(2)}`}
             change=""
             changeType="positive"
             icon={DollarSign}

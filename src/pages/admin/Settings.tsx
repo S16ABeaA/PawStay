@@ -579,7 +579,7 @@ const AdminSettings = () => {
                 <div className="flex items-center justify-between mb-4">
                   <div>
                     <p className="font-medium">Current Balance</p>
-                    <p className="text-2xl font-bold text-foreground">$3,450.00</p>
+                    <p className="text-2xl font-bold text-foreground">₱3,450.00</p>
                   </div>
                   <Button>Withdraw</Button>
                 </div>

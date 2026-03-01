@@ -66,6 +66,7 @@ const AdminServices = () => {
     description: "",
     price: "",
     category: "",
+    capacity: "",
   });
 
   // Fetch property ID and services on mount
@@ -110,6 +111,7 @@ const AdminServices = () => {
       description: "",
       price: "",
       category: "",
+      capacity: "",
     });
   };
 
@@ -131,14 +133,18 @@ const AdminServices = () => {
     if (!propertyId) return;
     try {
       setSubmitting(true);
-      const newService = await servicesApi.createService(propertyId, {
+      const payload: any = {
         name: formData.name,
         description: formData.description,
         price: parseFloat(formData.price),
         category: formData.category,
         property_id: propertyId,
         is_active: true,
-      });
+      };
+      if (formData.category === "Boarding" && formData.capacity) {
+        payload.capacity = parseInt(formData.capacity);
+      }
+      const newService = await servicesApi.createService(propertyId, payload);
       setServices([...services, newService]);
       setIsAddDialogOpen(false);
       resetForm();
@@ -156,6 +162,7 @@ const AdminServices = () => {
       description: service.description,
       price: service.price.toString(),
       category: service.category,
+      capacity: (service as any).capacity ? String((service as any).capacity) : "",
     });
     setIsEditDialogOpen(true);
   };
@@ -164,12 +171,16 @@ const AdminServices = () => {
     if (!selectedService || !propertyId) return;
     try {
       setSubmitting(true);
-      const updated = await servicesApi.updateService(propertyId, selectedService.id, {
+      const payload: any = {
         name: formData.name,
         description: formData.description,
         price: parseFloat(formData.price),
         category: formData.category,
-      });
+      };
+      if (formData.category === "Boarding" && formData.capacity) {
+        payload.capacity = parseInt(formData.capacity);
+      }
+      const updated = await servicesApi.updateService(propertyId, selectedService.id, payload);
       setServices(services.map((s) => (s.id === selectedService.id ? updated : s)));
       setIsEditDialogOpen(false);
       setSelectedService(null);
@@ -281,7 +292,7 @@ const AdminServices = () => {
 
                   <div className="flex items-center justify-between">
                     <p className="text-xl font-bold text-foreground">
-                      ${service.price}
+                      ₱{service.price}
                       <span className="text-sm font-normal text-muted-foreground">
                         /night
                       </span>
@@ -351,7 +362,7 @@ const AdminServices = () => {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="grid gap-2">
-                  <Label htmlFor="add-price">Price ($)</Label>
+                  <Label htmlFor="add-price">Price (₱)</Label>
                   <Input
                     id="add-price"
                     type="number"
@@ -381,6 +392,20 @@ const AdminServices = () => {
                   </Select>
                 </div>
               </div>
+              {formData.category === "Boarding" && (
+                <div className="grid gap-2">
+                  <Label htmlFor="add-capacity">Capacity (number of pets)</Label>
+                  <Input
+                    id="add-capacity"
+                    type="number"
+                    placeholder="e.g., 20"
+                    value={formData.capacity}
+                    onChange={(e) =>
+                      setFormData({ ...formData, capacity: e.target.value })
+                    }
+                  />
+                </div>
+              )}
             </div>
             <DialogFooter>
               <Button
@@ -397,6 +422,7 @@ const AdminServices = () => {
                   !formData.description ||
                   !formData.price ||
                   !formData.category ||
+                  (formData.category === "Boarding" && !formData.capacity) ||
                   submitting
                 }
               >
@@ -441,7 +467,7 @@ const AdminServices = () => {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="grid gap-2">
-                  <Label htmlFor="edit-price">Price ($)</Label>
+                  <Label htmlFor="edit-price">Price (₱)</Label>
                   <Input
                     id="edit-price"
                     type="number"
@@ -471,6 +497,20 @@ const AdminServices = () => {
                   </Select>
                 </div>
               </div>
+              {formData.category === "Boarding" && (
+                <div className="grid gap-2">
+                  <Label htmlFor="edit-capacity">Capacity (number of pets)</Label>
+                  <Input
+                    id="edit-capacity"
+                    type="number"
+                    placeholder="e.g., 20"
+                    value={formData.capacity}
+                    onChange={(e) =>
+                      setFormData({ ...formData, capacity: e.target.value })
+                    }
+                  />
+                </div>
+              )}
             </div>
             <DialogFooter>
               <Button
@@ -487,6 +527,7 @@ const AdminServices = () => {
                   !formData.description ||
                   !formData.price ||
                   !formData.category ||
+                  (formData.category === "Boarding" && !formData.capacity) ||
                   submitting
                 }
               >

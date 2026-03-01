@@ -95,7 +95,7 @@ const AdminBookings = () => {
           checkIn: b.checkin,
           checkOut: b.checkout || '-',
           status: b.status,
-          amount: b.total_price ? `$${Number(b.total_price).toFixed(2)}` : '-',
+          amount: b.total_price ? `₱${Number(b.total_price).toFixed(2)}` : '-',
         })));
       } catch (err) {
         console.error('Failed to load bookings', err);
