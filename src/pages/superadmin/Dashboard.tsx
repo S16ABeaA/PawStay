@@ -16,7 +16,7 @@ import { Link, useNavigate } from "react-router-dom";
 const stats = [
   { label: "Total Users", value: "52,481", change: "+12.5%", trend: "up", icon: Users, link: "/superadmin/users" },
   { label: "Active Properties", value: "2,847", change: "+8.2%", trend: "up", icon: Building2, link: "/superadmin/properties" },
-  { label: "Monthly Revenue", value: "$847,250", change: "+23.1%", trend: "up", icon: DollarSign, link: "/superadmin/revenue" },
+  { label: "Monthly Revenue", value: "₱847,250", change: "+23.1%", trend: "up", icon: DollarSign, link: "/superadmin/revenue" },
   { label: "Bookings Today", value: "1,284", change: "-2.4%", trend: "down", icon: Activity, link: "/superadmin/analytics" },
 ];
 
@@ -28,10 +28,10 @@ const recentProperties = [
 ];
 
 const topPerformers = [
-  { name: "Pawsome Pet Hotel", bookings: 342, revenue: "$28,450", rating: 4.9 },
-  { name: "The Dog House", bookings: 289, revenue: "$24,120", rating: 4.8 },
-  { name: "Feline Friends Spa", bookings: 256, revenue: "$21,890", rating: 4.9 },
-  { name: "Bark & Stay", bookings: 234, revenue: "$19,560", rating: 4.7 },
+  { name: "Pawsome Pet Hotel", bookings: 342, revenue: "₱28,450", rating: 4.9 },
+  { name: "The Dog House", bookings: 289, revenue: "₱24,120", rating: 4.8 },
+  { name: "Feline Friends Spa", bookings: 256, revenue: "₱21,890", rating: 4.9 },
+  { name: "Bark & Stay", bookings: 234, revenue: "₱19,560", rating: 4.7 },
 ];
 
 const SuperAdminDashboard = () => {
