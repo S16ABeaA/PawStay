@@ -77,6 +77,7 @@ export const notificationModel = {
       .update({ is_read: true })
       .eq("id", notificationId)
       .eq("user_id", userId)
+      .eq("is_deleted", false)
       .select()
       .single();
 
