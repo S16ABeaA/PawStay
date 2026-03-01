@@ -35,7 +35,6 @@ const SignIn = () => {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [termsChecked, setTermsChecked] = useState(false);
-
   const handleSignUp = async () => {
     if (isSignUp && !termsChecked) {
       toast({ title: "Error", description: "You must agree to the terms." });
@@ -152,15 +151,33 @@ const SignIn = () => {
       //   return;
       // }
 
+      localStorage.setItem("pawstay.authenticated", "true");
+      console.log("User role:", result.user.role);
+
+      if (result.user.role === "super_admin") {
+        toast({
+          title: "Welcome, Super Admin! 🔑",
+          description: "Redirecting to Super Admin dashboard...",
+        });
+        navigate("/superadmin", { replace: true });
+        return;
+      }
+
+      if (result.user.role === "admin") {
+        toast({
+          title: "Welcome, Admin!",
+          description: "Redirecting to Admin dashboard...",
+        });
+        navigate("/admin", { replace: true });
+        return;
+      }
+
       // Regular customers
       toast({
         title: "Welcome! 🎉",
         description: `Logged in as ${result.user.email}`,
       });
-
-      localStorage.setItem("pawstay.authenticated", "true");
-      console.log("User role:", result.user.role);
-      navigate("/", { replace: true });
+      navigate(redirectTo || "/", { replace: true });
     } catch(err) {
       toast({ title: "Error", description: err.message || "Invalid email or password" });
     }   

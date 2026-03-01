@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
@@ -10,6 +10,14 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { 
   User, 
   Mail, 
@@ -54,6 +62,40 @@ const Profile = () => {
 
   const [user, setUser] = useState<any>(null);
   const [pets, setPets] = useState<ProfilePet[]>([]);
+  const [addressParts, setAddressParts] = useState({
+    street: "",
+    barangay: "",
+    city: "",
+    province: "",
+    zip: "",
+  });
+  const [originalAddressParts, setOriginalAddressParts] = useState({
+    street: "",
+    barangay: "",
+    city: "",
+    province: "",
+    zip: "",
+  });
+
+  const parseAddress = (address: string) => {
+    // Expected format: "street | barangay | city | province | zip"
+    const parts = address.split(" | ").map((s) => s.trim());
+    return {
+      street: parts[0] || "",
+      barangay: parts[1] || "",
+      city: parts[2] || "",
+      province: parts[3] || "",
+      zip: parts[4] || "",
+    };
+  };
+
+  const combineAddress = (parts: typeof addressParts) => {
+    const filled = [parts.street, parts.barangay, parts.city, parts.province, parts.zip].filter(Boolean);
+    return filled.length > 0 ? filled.join(" | ") : "";
+  };
+
+  const [isEditing, setIsEditing] = useState(false);
+  const [originalUser, setOriginalUser] = useState<any>(null);
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -64,8 +106,7 @@ const Profile = () => {
         if (!profile?.user) {
           navigate("/signin");
         }
-
-        setUser({
+        const formatted = {
           firstName: profile.user.first_name,
           lastName: profile.user.last_name,
           email: profile.user.email,
@@ -74,7 +115,24 @@ const Profile = () => {
           avatar: profile.user.avatar_url || "",
           isAdmin: profile.user.role === "proprietor",
           isSuperAdmin: profile.user.role === "super_admin",
-        });
+        };
+        setUser(formatted);
+        setOriginalUser({ ...formatted });
+
+        const parsed = parseAddress(formatted.address);
+        setAddressParts(parsed);
+        setOriginalAddressParts({ ...parsed });
+        // setUser({
+        //   ...formatted, 
+        //   firstName: profile.user.first_name,
+        //   lastName: profile.user.last_name,
+        //   email: profile.user.email,
+        //   phone: profile.user.phone || "",
+        //   address: profile.user.address || "",
+        //   avatar: profile.user.avatar_url || "",
+        //   isAdmin: profile.user.role === "admin",
+        //   isSuperAdmin: profile.user.role === "super_admin",
+        // });
 
         // Fetch this user's pets for the profile overview
         try {
@@ -100,14 +158,92 @@ const Profile = () => {
     fetchProfile();
   }, []);
 
-  const [isEditing, setIsEditing] = useState(false);
+  const handleEdit = () => {
+    setOriginalUser({ ...user });
+    setFieldErrors({});
+    setIsEditing(true);
+  };
 
-  const handleSave = () => {
+  const handleCancel = () => {
+    if (originalUser) setUser(originalUser);
+    setAddressParts({ ...originalAddressParts });
+    setFieldErrors({});
     setIsEditing(false);
-    toast({
-      title: "Profile Updated",
-      description: "Your profile has been updated successfully.",
-    });
+  };
+
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
+  const validateFields = () => {
+    const errors: Record<string, string> = {};
+
+    if (!user.firstName.trim()) {
+      errors.firstName = "First name is required.";
+    }
+    if (!user.lastName.trim()) {
+      errors.lastName = "Last name is required.";
+    }
+
+    // Phone: optional, but if provided must be a valid PH number
+    // Accepts 09XXXXXXXXX, +639XXXXXXXXX, or 639XXXXXXXXX
+    if (user.phone && !/^(\+?63|0)9\d{9}$/.test(user.phone.trim().replace(/[\s\-]/g, ""))) {
+      errors.phone = "Enter a valid PH mobile number (e.g. 09171234567).";
+    }
+
+    // Address: optional, but if partially filled check minimum
+    const hasAnyAddress = Object.values(user.addressParts || addressParts).some((v: any) => v.trim());
+    if (hasAnyAddress) {
+      if (!addressParts.street.trim()) errors.street = "Street is required if adding an address.";
+      if (!addressParts.city.trim()) errors.city = "City is required if adding an address.";
+      if (!addressParts.province.trim()) errors.province = "Province is required if adding an address.";
+      if (addressParts.zip && !/^\d{4}$/.test(addressParts.zip.trim())) {
+        errors.zip = "Enter a valid 4-digit PH zip code.";
+      }
+    }
+
+    setFieldErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  const handleSave = async () => {
+    if (!validateFields()) return;
+
+    const combinedAddress = combineAddress(addressParts);
+
+    try {
+      const result = await authApi.updateProfile({
+        firstName: user.firstName,
+        lastName: user.lastName,
+        phone: user.phone,
+        address: combinedAddress,
+      });
+
+      if (result?.user) {
+        const newAddress = result.user.address || "";
+        const newParts = parseAddress(newAddress);
+        setUser((prev: any) => ({
+          ...prev,
+          firstName: result.user.first_name,
+          lastName: result.user.last_name,
+          phone: result.user.phone || "",
+          address: newAddress,
+        }));
+        setAddressParts(newParts);
+        setOriginalAddressParts({ ...newParts });
+      }
+
+      setIsEditing(false);
+      setOriginalUser(null);
+      toast({
+        title: "Profile Updated",
+        description: "Your profile has been updated successfully.",
+      });
+    } catch (err: any) {
+      console.error("Failed to update profile:", err);
+      toast({
+        title: "Error",
+        description: err?.error || err?.message || "Failed to update profile. Please try again.",
+      });
+    }
   };
 
   const handleLogout =  async() => {
@@ -129,8 +265,65 @@ const Profile = () => {
     }
   };
 
+  const avatarInputRef = useRef<HTMLInputElement>(null);
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  const [isAvatarDialogOpen, setIsAvatarDialogOpen] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+
+  const handleAvatarSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const allowedTypes = ["image/jpeg", "image/png", "image/webp"];
+    if (!allowedTypes.includes(file.type)) {
+      toast({ title: "Invalid file", description: "Please upload a JPEG, PNG or WebP image." });
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast({ title: "File too large", description: "Maximum file size is 5MB." });
+      return;
+    }
+
+    // Show preview
+    setAvatarFile(file);
+    setAvatarPreview(URL.createObjectURL(file));
+    setIsAvatarDialogOpen(true);
+
+    // Reset input so the same file can be re-selected
+    if (avatarInputRef.current) avatarInputRef.current.value = "";
+  };
+
+  const handleAvatarConfirm = async () => {
+    if (!avatarFile) return;
+    setIsUploading(true);
+    try {
+      const result = await authApi.uploadAvatar(avatarFile);
+      setUser((prev: any) => ({ ...prev, avatar: result.avatar_url }));
+      window.dispatchEvent(new CustomEvent("pawstay:avatar-updated", { detail: { avatarUrl: result.avatar_url } }));
+      toast({ title: "Avatar Updated", description: "Your profile picture has been updated." });
+      setIsAvatarDialogOpen(false);
+    } catch (err: any) {
+      console.error("Failed to upload avatar:", err);
+      toast({ title: "Error", description: err?.error || "Failed to upload avatar. Please try again." });
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleAvatarCancel = () => {
+    if (avatarPreview) URL.revokeObjectURL(avatarPreview);
+    setAvatarPreview(null);
+    setAvatarFile(null);
+    setIsAvatarDialogOpen(false);
+  };
+
   const handleSwitchToAdmin = () => {
-    navigate("/admin");
+    if (user?.isSuperAdmin) {
+      navigate("/superadmin");
+    } else {
+      navigate("/admin");
+    }
   };
   if(!user){
     return (
@@ -153,7 +346,17 @@ const Profile = () => {
                   {user.firstName[0]}{user.lastName[0]}
                 </AvatarFallback>
               </Avatar>
-              <button className="absolute bottom-0 right-0 h-8 w-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-soft hover:bg-primary/90 transition-colors">
+              <input
+                ref={avatarInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                className="hidden"
+                onChange={handleAvatarSelect}
+              />
+              <button
+                onClick={() => avatarInputRef.current?.click()}
+                className="absolute bottom-0 right-0 h-8 w-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-soft hover:bg-primary/90 transition-colors"
+              >
                 <Camera className="h-4 w-4" />
               </button>
             </div>
@@ -162,7 +365,13 @@ const Profile = () => {
                 <h1 className="text-2xl md:text-3xl font-display font-bold text-foreground">
                   {user.firstName} {user.lastName}
                 </h1>
-                {user.isAdmin && (
+                {user.isSuperAdmin && (
+                  <Badge variant="secondary" className="bg-violet-100 text-violet-700 dark:bg-violet-600/20 dark:text-violet-400">
+                    <Shield className="h-3 w-3 mr-1" />
+                    Super Admin
+                  </Badge>
+                )}
+                {user.isAdmin && !user.isSuperAdmin && (
                   <Badge variant="secondary" className="bg-primary/10 text-primary">
                     <Shield className="h-3 w-3 mr-1" />
                     Admin
@@ -174,7 +383,7 @@ const Profile = () => {
             <div className="flex gap-2">
               {isEditing ? (
                 <>
-                  <Button variant="outline" onClick={() => setIsEditing(false)}>
+                  <Button variant="outline" onClick={handleCancel}>
                     Cancel
                   </Button>
                   <Button variant="hero" onClick={handleSave}>
@@ -182,7 +391,7 @@ const Profile = () => {
                   </Button>
                 </>
               ) : (
-                <Button variant="outline" onClick={() => setIsEditing(true)}>
+                <Button variant="outline" onClick={handleEdit}>
                   <Settings className="h-4 w-4 mr-2" />
                   Edit Profile
                 </Button>
@@ -212,7 +421,11 @@ const Profile = () => {
                         value={user.firstName}
                         onChange={(e) => setUser({ ...user, firstName: e.target.value })}
                         disabled={!isEditing}
+                        className={fieldErrors.firstName ? "border-destructive" : ""}
                       />
+                      {fieldErrors.firstName && (
+                        <p className="text-xs text-destructive">{fieldErrors.firstName}</p>
+                      )}
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="lastName">Last Name</Label>
@@ -221,7 +434,11 @@ const Profile = () => {
                         value={user.lastName}
                         onChange={(e) => setUser({ ...user, lastName: e.target.value })}
                         disabled={!isEditing}
+                        className={fieldErrors.lastName ? "border-destructive" : ""}
                       />
+                      {fieldErrors.lastName && (
+                        <p className="text-xs text-destructive">{fieldErrors.lastName}</p>
+                      )}
                     </div>
                   </div>
                   <div className="space-y-2">
@@ -233,7 +450,8 @@ const Profile = () => {
                         type="email"
                         value={user.email}
                         onChange={(e) => setUser({ ...user, email: e.target.value })}
-                        disabled={!isEditing}
+                        disabled
+                        // ={!isEditing}
                         className="pl-10"
                       />
                     </div>
@@ -242,28 +460,118 @@ const Profile = () => {
                     <Label htmlFor="phone">Phone Number</Label>
                     <div className="relative">
                       <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                      <Input
-                        id="phone"
-                        type="tel"
-                        value={user.phone}
-                        onChange={(e) => setUser({ ...user, phone: e.target.value })}
-                        disabled={!isEditing}
-                        className="pl-10"
-                      />
+                      {!isEditing && !user.phone ? (
+                        <div
+                          onClick={handleEdit}
+                          className="flex items-center h-10 w-full rounded-md border border-dashed border-muted-foreground/30 bg-muted/20 pl-10 pr-3 text-sm text-muted-foreground cursor-pointer hover:border-primary/50 hover:bg-muted/30 transition-colors"
+                        >
+                          + Add phone number
+                        </div>
+                      ) : (
+                        <Input
+                          id="phone"
+                          type="tel"
+                          value={user.phone}
+                          placeholder="e.g. 09171234567"
+                          onChange={(e) => setUser({ ...user, phone: e.target.value })}
+                          disabled={!isEditing}
+                          className={`pl-10${fieldErrors.phone ? " border-destructive" : ""}`}
+                        />
+                      )}
                     </div>
+                    {fieldErrors.phone && (
+                      <p className="text-xs text-destructive">{fieldErrors.phone}</p>
+                    )}
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="address">Address</Label>
-                    <div className="relative">
-                      <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                      <Input
-                        id="address"
-                        value={user.address}
-                        onChange={(e) => setUser({ ...user, address: e.target.value })}
-                        disabled={!isEditing}
-                        className="pl-10"
-                      />
-                    </div>
+                    <Label>Address</Label>
+                    {!isEditing && !user.address ? (
+                      <div className="relative">
+                        <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <div
+                          onClick={handleEdit}
+                          className="flex items-center h-10 w-full rounded-md border border-dashed border-muted-foreground/30 bg-muted/20 pl-10 pr-3 text-sm text-muted-foreground cursor-pointer hover:border-primary/50 hover:bg-muted/30 transition-colors"
+                        >
+                          + Add address
+                        </div>
+                      </div>
+                    ) : isEditing ? (
+                      <div className="space-y-3 rounded-lg border border-border p-4 bg-muted/10">
+                        <div className="space-y-1">
+                          <Label htmlFor="street" className="text-xs text-muted-foreground">Street / House No.</Label>
+                          <Input
+                            id="street"
+                            value={addressParts.street}
+                            placeholder="e.g. 123 Rizal Street"
+                            onChange={(e) => setAddressParts({ ...addressParts, street: e.target.value })}
+                            className={fieldErrors.street ? "border-destructive" : ""}
+                          />
+                          {fieldErrors.street && <p className="text-xs text-destructive">{fieldErrors.street}</p>}
+                        </div>
+                        <div className="space-y-1">
+                          <Label htmlFor="barangay" className="text-xs text-muted-foreground">Barangay</Label>
+                          <Input
+                            id="barangay"
+                            value={addressParts.barangay}
+                            placeholder="e.g. Brgy. San Antonio"
+                            onChange={(e) => setAddressParts({ ...addressParts, barangay: e.target.value })}
+                          />
+                        </div>
+                        <div className="grid sm:grid-cols-2 gap-3">
+                          <div className="space-y-1">
+                            <Label htmlFor="city" className="text-xs text-muted-foreground">City / Municipality</Label>
+                            <Input
+                              id="city"
+                              value={addressParts.city}
+                              placeholder="e.g. Makati City"
+                              onChange={(e) => setAddressParts({ ...addressParts, city: e.target.value })}
+                              className={fieldErrors.city ? "border-destructive" : ""}
+                            />
+                            {fieldErrors.city && <p className="text-xs text-destructive">{fieldErrors.city}</p>}
+                          </div>
+                          <div className="space-y-1">
+                            <Label htmlFor="province" className="text-xs text-muted-foreground">Province</Label>
+                            <Input
+                              id="province"
+                              value={addressParts.province}
+                              placeholder="e.g. Metro Manila"
+                              onChange={(e) => setAddressParts({ ...addressParts, province: e.target.value })}
+                              className={fieldErrors.province ? "border-destructive" : ""}
+                            />
+                            {fieldErrors.province && <p className="text-xs text-destructive">{fieldErrors.province}</p>}
+                          </div>
+                        </div>
+                        <div className="w-1/3">
+                          <div className="space-y-1">
+                            <Label htmlFor="zip" className="text-xs text-muted-foreground">Zip Code</Label>
+                            <Input
+                              id="zip"
+                              value={addressParts.zip}
+                              placeholder="e.g. 1200"
+                              maxLength={4}
+                              onChange={(e) => setAddressParts({ ...addressParts, zip: e.target.value.replace(/\D/g, "") })}
+                              className={fieldErrors.zip ? "border-destructive" : ""}
+                            />
+                            {fieldErrors.zip && <p className="text-xs text-destructive">{fieldErrors.zip}</p>}
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="relative">
+                        <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <Input
+                          value={[
+                            addressParts.street,
+                            addressParts.barangay,
+                            addressParts.city,
+                            addressParts.province,
+                            addressParts.zip,
+                          ].filter(Boolean).join(", ")}
+                          disabled
+                          className="pl-10"
+                        />
+                      </div>
+                    )}
                   </div>
                 </CardContent>
               </Card>
@@ -321,8 +629,32 @@ const Profile = () => {
 
             {/* Sidebar */}
             <div className="space-y-6">
+              {/* Super Admin Switch Card */}
+              {user.isSuperAdmin && (
+                <Card className="border-violet-500/30 bg-violet-500/5">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <Shield className="h-5 w-5 text-violet-600 dark:text-violet-400" />
+                      Super Admin Access
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-sm text-muted-foreground mb-4">
+                      You have full platform control. Access the Super Admin dashboard to manage users, properties, analytics, and platform settings.
+                    </p>
+                    <Button
+                      className="w-full bg-violet-600 hover:bg-violet-700 text-white"
+                      onClick={handleSwitchToAdmin}
+                    >
+                      Go to Super Admin Panel
+                      <ChevronRight className="h-4 w-4 ml-1" />
+                    </Button>
+                  </CardContent>
+                </Card>
+              )}
+
               {/* Admin Switch Card */}
-              {user.isAdmin && (
+              {user.isAdmin && !user.isSuperAdmin && (
                 <Card className="border-primary/20 bg-primary/5">
                   <CardHeader className="pb-3">
                     <CardTitle className="text-base flex items-center gap-2">
@@ -410,6 +742,34 @@ const Profile = () => {
         </div>
       </main>
       <Footer />
+
+      {/* Avatar Preview Dialog */}
+      <Dialog open={isAvatarDialogOpen} onOpenChange={(open) => { if (!open) handleAvatarCancel(); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Update Profile Picture</DialogTitle>
+            <DialogDescription>
+              Preview your new profile picture before saving.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex justify-center py-4">
+            <Avatar className="h-32 w-32 border-4 border-background shadow-elevated">
+              {avatarPreview && <AvatarImage src={avatarPreview} className="object-cover" />}
+              <AvatarFallback className="bg-gradient-hero text-3xl text-white">
+                {user?.firstName?.[0]}{user?.lastName?.[0]}
+              </AvatarFallback>
+            </Avatar>
+          </div>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={handleAvatarCancel} disabled={isUploading}>
+              Cancel
+            </Button>
+            <Button variant="hero" onClick={handleAvatarConfirm} disabled={isUploading}>
+              {isUploading ? "Uploading..." : "Save"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

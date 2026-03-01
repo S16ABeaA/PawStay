@@ -24,7 +24,9 @@ import Profile from "./pages/Profile";
 import MyPets from "./pages/MyPets";
 import MyBookings from "./pages/MyBookings";
 import Notifications from "./pages/Notifications";
+import HelpCenter from "./pages/HelpCenter";
 import RequireAuth from "./components/RequireAuth";
+import RequireSuperAdmin from "./components/RequireSuperAdmin";
 
 // Admin pages
 import AdminDashboard from "./pages/admin/Dashboard";
@@ -75,6 +77,7 @@ const App = () => (
           <Route path="/favorites" element={<Favorites />} />
           <Route path="/booking" element={<Booking />} />
           <Route path="/search" element={<SearchResults />} />
+          <Route path="/help-center" element={<HelpCenter />} />
           <Route
             path="/profile"
             element={
@@ -109,13 +112,13 @@ const App = () => (
           <Route path="/admin/settings" element={<AdminSettings />} />
           
           {/* SuperAdmin routes */}
-          <Route path="/superadmin" element={<SuperAdminDashboard />} />
-          <Route path="/superadmin/users" element={<SuperAdminUsers />} />
-          <Route path="/superadmin/properties" element={<SuperAdminProperties />} />
-          <Route path="/superadmin/analytics" element={<SuperAdminAnalytics />} />
-          <Route path="/superadmin/revenue" element={<SuperAdminRevenue />} />
-          <Route path="/superadmin/support" element={<SuperAdminSupport />} />
-          <Route path="/superadmin/settings" element={<SuperAdminSettings />} />
+          <Route path="/superadmin" element={<RequireSuperAdmin><SuperAdminDashboard /></RequireSuperAdmin>} />
+          <Route path="/superadmin/users" element={<RequireSuperAdmin><SuperAdminUsers /></RequireSuperAdmin>} />
+          <Route path="/superadmin/properties" element={<RequireSuperAdmin><SuperAdminProperties /></RequireSuperAdmin>} />
+          <Route path="/superadmin/analytics" element={<RequireSuperAdmin><SuperAdminAnalytics /></RequireSuperAdmin>} />
+          <Route path="/superadmin/revenue" element={<RequireSuperAdmin><SuperAdminRevenue /></RequireSuperAdmin>} />
+          <Route path="/superadmin/support" element={<RequireSuperAdmin><SuperAdminSupport /></RequireSuperAdmin>} />
+          <Route path="/superadmin/settings" element={<RequireSuperAdmin><SuperAdminSettings /></RequireSuperAdmin>} />
           
           <Route path="*" element={<NotFound />} />
         </Routes>

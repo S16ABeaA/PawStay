@@ -11,7 +11,8 @@
     "dotenv": "^17.3.1",
     "express": "^4.22.1",
     "express-rate-limit": "^7.5.1",
-    "helmet": "^7.2.0"
+    "helmet": "^7.2.0",
+    "multer": "^2.0.2"
   },
   "scripts": {
     "predev": "node scripts/free-port.js 5001",
@@ -24,6 +25,7 @@
     "@types/cookie-parser": "^1.4.10",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
+    "@types/multer": "^2.0.0",
     "@types/node": "^25.2.2",
     "nodemon": "^3.1.11",
     "ts-node": "^10.9.2",

@@ -39,4 +39,18 @@ export const userModel = {
     return data;
   },
 
+  updateUser: async (
+    id: string,
+    fields: { first_name?: string; last_name?: string; phone?: string; address?: string; avatar_url?: string }
+  ) => {
+    const { data, error } = await supabaseAdmin
+      .from("profiles")
+      .update(fields)
+      .eq("id", id)
+      .select("id, first_name, last_name, email, role, phone, address, avatar_url")
+      .single();
+    if (error) throw error;
+    return data;
+  },
+
 };
