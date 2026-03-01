@@ -103,7 +103,7 @@ const Profile = () => {
           phone: profile.user.phone || "",
           address: profile.user.address || "",
           avatar: profile.user.avatar_url || "",
-          isAdmin: profile.user.role === "admin",
+          isAdmin: profile.user.role === "proprietor",
           isSuperAdmin: profile.user.role === "super_admin",
         });
 

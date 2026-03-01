@@ -1,4 +1,4 @@
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, useNavigate } from "react-router-dom";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { Button } from "@/components/ui/button";
@@ -8,7 +8,8 @@ import {
   ArrowLeft, Share2, Check,
   Phone, Mail, Clock, Award, Users
 } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { favoritesApi } from "../services/favoritesApi";
 
 const groomingData: Record<number, {
   id: number;
@@ -106,8 +107,29 @@ const defaultData = {
 
 const GroomingDetail = () => {
   const { id } = useParams();
+  const navigate = useNavigate();
   const [isLiked, setIsLiked] = useState(false);
   const data = groomingData[Number(id)] || defaultData;
+  const isAuthenticated =
+    typeof window !== "undefined" &&
+    localStorage.getItem("pawstay.authenticated") === "true";
+
+  const propertyId = (data as any).propertyId ?? id;
+
+  useEffect(() => {
+    let mounted = true;
+    if (!isAuthenticated || !propertyId) return;
+    const load = async () => {
+      try {
+        const fav = await favoritesApi.checkFavorite(propertyId as any);
+        if (mounted) setIsLiked(Boolean(fav));
+      } catch (err) {
+        console.error("checkFavorite failed", err);
+      }
+    };
+    load();
+    return () => { mounted = false; };
+  }, [propertyId, isAuthenticated]);
   const [selectedService, setSelectedService] = useState(data.services[1]);
 
   const serviceFee = Math.round(selectedService.price * 0.10 * 100) / 100;
@@ -164,7 +186,28 @@ const GroomingDetail = () => {
                   </div>
                 </div>
                 <div className="flex gap-2">
-                  <Button variant="outline" size="icon" onClick={() => setIsLiked(!isLiked)}>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={async () => {
+                      if (!isAuthenticated) {
+                        navigate(`/signin?redirect=${encodeURIComponent(`/grooming/${id}`)}`);
+                        return;
+                      }
+                      const previous = isLiked;
+                      setIsLiked(!previous);
+                      try {
+                        if (previous) {
+                          await favoritesApi.removeFavorite(propertyId as any);
+                        } else {
+                          await favoritesApi.addFavorite(propertyId as any);
+                        }
+                      } catch (err) {
+                        console.error("favorite toggle failed", err);
+                        setIsLiked(previous);
+                      }
+                    }}
+                  >
                     <Heart className={`h-5 w-5 ${isLiked ? "fill-primary text-primary" : ""}`} />
                   </Button>
                   <Button variant="outline" size="icon">

@@ -2,13 +2,15 @@ import { ReactNode, useEffect, useState } from "react";
 import { Navigate, useLocation } from "react-router-dom";
 import { authApi } from "@/services/authApi";
 
-type RequireAuthProps = {
+export type RequireAuthProps = {
   children: ReactNode;
   /** When true, redirect unauthenticated users to the sign-up form instead of sign-in */
   signUpFirst?: boolean;
+  /** Optional list of allowed roles (e.g. ["proprietor"]) */
+  allowedRoles?: string[];
 };
 
-const RequireAuth = ({ children, signUpFirst = false }: RequireAuthProps) => {
+const RequireAuth = ({ children, signUpFirst = false, allowedRoles: _allowedRoles }: RequireAuthProps) => {
   const location = useLocation();
   const [isLoading, setIsLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);

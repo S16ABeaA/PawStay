@@ -454,7 +454,7 @@ const Booking = () => {
         toast({ title: "Required Fields", description: !paymentScreenshot ? "Please upload a payment screenshot to continue." : "Please enter your payment reference number and amount paid.", variant: "destructive" });
         return false;
       }
-      if (Number(amountPaid) !== total) {
+      if (Math.round(Number(amountPaid) * 100) !== Math.round(total * 100)) {
         setError(["amountPaid"]);
         toast({ title: "Amount Mismatch", description: `The amount paid must be exactly ₱${total.toFixed(2)}.`, variant: "destructive" });
         return false;
@@ -466,7 +466,7 @@ const Booking = () => {
         toast({ title: "Required Fields", description: "Please enter the amount to be paid.", variant: "destructive" });
         return false;
       }
-      if (Number(cashAmountPaid) !== total) {
+      if (Math.round(Number(cashAmountPaid) * 100) !== Math.round(total * 100)) {
         setError(["cashAmountPaid"]);
         toast({ title: "Amount Mismatch", description: `The amount to pay must be exactly ₱${total.toFixed(2)}.`, variant: "destructive" });
         return false;

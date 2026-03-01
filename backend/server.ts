@@ -12,6 +12,8 @@ import locationRoutes from "./routes/locationRoute";
 import authRoute from './routes/authRoute';
 import petRoutes from './routes/petRoute';
 import bookingRoutes from './routes/bookingRoute';
+import favoritesRoutes from './routes/favoritesRoute';
+import reviewsRoutes from './routes/reviewsRoute';
 import settingsRoutes from './routes/settingsRoute';
  
 dotenv.config({ path: '../.env' });
@@ -80,6 +82,8 @@ app.use("/api/amenities", amenitiesRoutes);
 app.use("/api/location", locationRoutes);
 app.use("/api/pets", petRoutes);
 app.use("/api/bookings", bookingRoutes);
+app.use('/api/favorites', favoritesRoutes);
+app.use('/api/reviews', reviewsRoutes);
 app.use("/api/settings", settingsRoutes);
 
 // Simple health/root route

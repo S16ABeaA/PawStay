@@ -180,7 +180,7 @@ export const authController = {
         phone: userProfile.phone || "",
         address: userProfile.address || "",
         avatar_url: userProfile.avatar_url || "",
-        email: signInData.user?.email,
+        email: userProfile.email || signInData.user?.email,
       };
       return res.json({ user });
     } catch (err: any) {
@@ -190,9 +190,90 @@ export const authController = {
 
   signInWithGoogle: async (req: Request, res: Response) => {
     try {
-      
-    } catch (err: any){
+      const { data, error } = await supabaseClient.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          redirectTo: `${process.env.BACKEND_URL}/api/auth/oauth/callback`,
+          queryParams: {
+            access_type: 'offline',
+            prompt: 'consent',
+          },
+        }
+      });
 
+      if (error) {
+        return res.status(400).json({ message: error.message });
+      }
+
+      return res.json({ url: data.url });
+
+    } catch (err: any) {
+      return res.status(500).json({ message: err.message });
+    }
+  },
+
+  oauthCallback: async (req: Request, res: Response) => {
+    try {
+      const { code } = req.query;
+      
+      if (!code) {
+        return res.redirect(`${process.env.FRONTEND_URL}/signin?error=missing_code`);
+      }
+
+      const { data, error } = await supabaseClient.auth.exchangeCodeForSession(
+        code as string
+      );
+
+      if (error) {
+        return res.redirect(`${process.env.FRONTEND_URL}/signin?error=auth_failed`);
+      }
+
+      if (!data.session) {
+        return res.redirect(`${process.env.FRONTEND_URL}/signin?error=session_failed`);
+      }
+
+      // Set cookies
+      res.cookie("sb-access-token", data.session.access_token, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax",
+        maxAge: 7 * 24 * 60 * 60 * 1000,
+        path: "/",
+      });
+
+      res.cookie("sb-refresh-token", data.session.refresh_token, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax",
+        maxAge: 7 * 24 * 60 * 60 * 1000,
+        path: "/",
+      });
+      
+      // Get user info for welcome message
+      const user = data.session.user;
+      const userEmail = user.email || "";
+
+      // Set user info
+      if (data.session.user) {
+        res.cookie("sb-user", JSON.stringify({
+          id: data.session.user.id,
+          email: data.session.user.email,
+          name: data.session.user.user_metadata?.full_name || data.session.user.email,
+          avatar: data.session.user.user_metadata?.avatar_url,
+        }), {
+          httpOnly: false,
+          secure: process.env.NODE_ENV === "production",
+          sameSite: "lax",
+          maxAge: 7 * 24 * 60 * 60 * 1000,
+          path: "/",
+        });
+      }
+      
+      return res.redirect(`${process.env.FRONTEND_URL || "http://localhost:8080"}/signin?` +
+      `oauth_success=true&email=${encodeURIComponent(userEmail)}`);
+
+    } catch (err: any) {
+      return res.redirect(`${process.env.FRONTEND_URL}/signin?error=server_error`);
     }
   },
 
@@ -221,7 +302,7 @@ export const authController = {
           phone: userProfile.phone || "",
           address: userProfile.address || "",
           avatar_url: userProfile.avatar_url || "",
-          email: user.email, // Get email from token
+          email: userProfile.email || user.email, // Get email from DB or token
         }
       });
     }catch(err: any){
@@ -299,19 +380,4 @@ export const authController = {
       return res.status(500).json({ error: "Internal server error." });
     }
   },
-
-  // signInWithGoogle: async (req: Request, res: Response) => {
-  //   try{
-  //     const { data, error } = await supabase.auth.signInWithOAuth({
-  //       provider: "google",
-  //       options: {
-  //         redirectTo: "http://localhost:8080/profile", //test
-  //       },
-  //     });
-  //     if (error) throw error;
-  //     res.status(200).json({ url: data.url });
-  //   }catch (err: any) {
-  //     res.status(500).json({ error: err.message });
-  //   }
-  // },
 };

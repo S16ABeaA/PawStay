@@ -4,6 +4,206 @@ import { petModel } from "../models/petModel";
 import { serviceHistoryModel } from "../models/serviceHistoryModel";
 import { supabaseAdmin } from "../config/supabaseAdmin";
 
+/** GET /api/bookings/mine/today — proprietor's today's check-ins */
+export const getTodayCheckInsForOwner = async (req: any, res: any) => {
+  try {
+    const userId = (req as any).user?.id;
+    if (!userId) return res.status(401).json({ error: "Unauthorized" });
+
+    // Get properties owned by user
+    const { data: props, error: propsErr } = await supabaseAdmin
+      .from('properties')
+      .select('id, name')
+      .eq('owner_id', userId)
+      .eq('is_deleted', false);
+
+    if (propsErr) throw propsErr;
+    const propertyIds = (props ?? []).map((p: any) => p.id);
+    if (!propertyIds.length) return res.json({ checkIns: [] });
+
+    const today = new Date().toISOString().slice(0, 10);
+
+    const { data: bookings, error: bookErr } = await supabaseAdmin
+      .from('bookings')
+      .select('id, pet_name, owner_name, time_slot, room_name, service_name, property_id, status')
+      .in('property_id', propertyIds)
+      .eq('is_deleted', false)
+      .eq('checkin', today)
+      .in('status', ['pending', 'confirmed', 'checked_in'])
+      .order('time_slot', { ascending: true });
+
+    if (bookErr) throw bookErr;
+
+    const propMap = new Map((props ?? []).map((p: any) => [p.id, p.name]));
+
+    const checkIns = (bookings ?? []).map((b: any) => ({
+      id: b.id,
+      pet: b.pet_name || 'Unknown',
+      owner: b.owner_name || '',
+      time: b.time_slot ? b.time_slot.slice(0,5) : '',
+      room: b.room_name || propMap.get(b.property_id) || '',
+      service: b.service_name || '',
+      propertyId: b.property_id,
+      status: b.status,
+    }));
+
+    return res.json({ checkIns });
+  } catch (err: any) {
+    console.error('getTodayCheckInsForOwner error:', err);
+    return res.status(500).json({ error: 'Failed to fetch today\'s check-ins.' });
+  }
+};
+
+/** GET /api/bookings/mine/recent — recent bookings for proprietor's properties */
+export const getRecentBookingsForOwner = async (req: any, res: any) => {
+  try {
+    const userId = (req as any).user?.id;
+    if (!userId) return res.status(401).json({ error: "Unauthorized" });
+
+    const { data: props, error: propsErr } = await supabaseAdmin
+      .from('properties')
+      .select('id')
+      .eq('owner_id', userId)
+      .eq('is_deleted', false);
+
+    if (propsErr) throw propsErr;
+    const propertyIds = (props ?? []).map((p: any) => p.id);
+    if (!propertyIds.length) return res.json({ bookings: [] });
+
+    const { data: bookings, error: bookErr } = await supabaseAdmin
+      .from('bookings')
+      .select('id, pet_name, owner_name, service_name, checkin, created_at, status, total_price')
+      .in('property_id', propertyIds)
+      .eq('is_deleted', false)
+      .order('created_at', { ascending: false })
+      .limit(6);
+
+    if (bookErr) throw bookErr;
+
+    const out = (bookings ?? []).map((b: any) => ({
+      id: b.id,
+      pet: b.pet_name || 'Unknown',
+      owner: b.owner_name || '',
+      service: b.service_name || '',
+      date: b.checkin || (b.created_at ? b.created_at.slice(0,10) : ''),
+      status: b.status || '',
+      total_price: b.total_price ?? null,
+    }));
+
+    return res.json({ bookings: out });
+  } catch (err: any) {
+    console.error('getRecentBookingsForOwner error:', err);
+    return res.status(500).json({ error: 'Failed to fetch recent bookings.' });
+  }
+};
+
+/** GET /api/bookings/mine/list — paginated bookings for proprietor's properties */
+export const listBookingsForOwner = async (req: any, res: any) => {
+  try {
+    const userId = (req as any).user?.id;
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+
+    const status = req.query.status as string | undefined;
+    const service = req.query.service as string | undefined;
+    const page = Number(req.query.page) || 1;
+    const limit = Number(req.query.limit) || 50;
+
+    const { data: props, error: propsErr } = await supabaseAdmin
+      .from('properties')
+      .select('id')
+      .eq('owner_id', userId)
+      .eq('is_deleted', false);
+    if (propsErr) throw propsErr;
+    const propertyIds = (props ?? []).map((p: any) => p.id);
+    if (!propertyIds.length) return res.json({ bookings: [], total: 0 });
+
+    // Build a count-aware query
+    let query = supabaseAdmin
+      .from('bookings')
+      .select('id, pet_name, owner_name, service_name, service_type, checkin, checkout, created_at, status, total_price, property_id', { count: 'exact' })
+      .in('property_id', propertyIds)
+      .eq('is_deleted', false)
+      .order('created_at', { ascending: false });
+
+    if (status) query = query.eq('status', status);
+    if (service) query = query.eq('service_type', service);
+
+    const offset = (page - 1) * limit;
+    const { data, error, count } = await query.range(offset, offset + limit - 1);
+    if (error) throw error;
+
+    // Normalize fields to match frontend expectations
+    const normalized = (data ?? []).map((b: any) => ({
+      id: b.id,
+      pet_name: b.pet_name,
+      owner_name: b.owner_name,
+      service_name: b.service_name,
+      service_type: b.service_type,
+      checkin: b.checkin,
+      checkout: b.checkout,
+      created_at: b.created_at,
+      status: b.status,
+      total_price: b.total_price,
+      property_id: b.property_id,
+    }));
+
+    return res.json({ bookings: normalized, total: Number(count ?? normalized.length) });
+  } catch (err: any) {
+    console.error('listBookingsForOwner error:', err);
+    return res.status(500).json({ error: 'Failed to list bookings.' });
+  }
+};
+
+/** POST /api/bookings/:id/status — owner can change booking status (confirm/cancel) */
+export const updateBookingStatusForOwner = async (req: any, res: any) => {
+  try {
+    const userId = (req as any).user?.id;
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+
+    const bookingId = req.params.id as string;
+    const newStatus = req.body?.status as string;
+    if (!bookingId || !newStatus) return res.status(400).json({ error: 'Missing parameters' });
+
+    // Fetch booking and property owner
+    const { data: booking, error: bookErr } = await supabaseAdmin
+      .from('bookings')
+      .select('id, property_id, status')
+      .eq('id', bookingId)
+      .eq('is_deleted', false)
+      .single();
+    if (bookErr) throw bookErr;
+
+    const { data: prop, error: propErr } = await supabaseAdmin
+      .from('properties')
+      .select('id, owner_id')
+      .eq('id', booking.property_id)
+      .single();
+    if (propErr) throw propErr;
+
+    if (String(prop.owner_id) !== String(userId)) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    // Only allow certain transitions
+    const allowed = ['confirmed', 'cancelled'];
+    if (!allowed.includes(newStatus)) return res.status(400).json({ error: 'Invalid status' });
+
+    const { data: updated, error: updErr } = await supabaseAdmin
+      .from('bookings')
+      .update({ status: newStatus })
+      .eq('id', bookingId)
+      .select()
+      .single();
+
+    if (updErr) throw updErr;
+
+    return res.json({ booking: updated });
+  } catch (err: any) {
+    console.error('updateBookingStatusForOwner error:', err);
+    return res.status(500).json({ error: 'Failed to update booking status.' });
+  }
+};
+
 /** POST /api/bookings — create a new booking */
 export const createBooking = async (req: Request, res: Response) => {
   try {
@@ -67,7 +267,7 @@ export const createBooking = async (req: Request, res: Response) => {
 
     // ── Validate amount_paid must exactly equal total_price ──
     const parsedAmountPaid = amount_paid != null ? Number(amount_paid) : null;
-    if (parsedAmountPaid != null && parsedTotalPrice != null && parsedAmountPaid !== parsedTotalPrice) {
+    if (parsedAmountPaid != null && parsedTotalPrice != null && Math.round(parsedAmountPaid * 100) !== Math.round(parsedTotalPrice * 100)) {
       return res.status(400).json({ error: `Amount paid (₱${parsedAmountPaid.toFixed(2)}) must exactly match the total price (₱${parsedTotalPrice.toFixed(2)}).` });
     }
 
@@ -205,10 +405,8 @@ export const createBooking = async (req: Request, res: Response) => {
       const expectedServiceFee = Math.round(expectedSubtotal * 0.10 * 100) / 100;
       const expectedTotal = Math.round((expectedSubtotal + expectedServiceFee) * 100) / 100;
 
-      // Allow a small tolerance (₱0.02) for floating-point rounding
-      const tolerance = 0.02;
-
-      if (parsedTotalPrice != null && Math.abs(parsedTotalPrice - expectedTotal) > tolerance) {
+      // Compare using integer cents to avoid floating-point drift
+      if (parsedTotalPrice != null && Math.round(parsedTotalPrice * 100) !== Math.round(expectedTotal * 100)) {
         return res.status(400).json({
           error: "Price mismatch: the total price you submitted does not match the expected price. Please refresh and try again.",
           expected_total: expectedTotal,
@@ -216,7 +414,7 @@ export const createBooking = async (req: Request, res: Response) => {
         });
       }
 
-      if (parsedSubtotal != null && Math.abs(parsedSubtotal - expectedSubtotal) > tolerance) {
+      if (parsedSubtotal != null && Math.round(parsedSubtotal * 100) !== Math.round(expectedSubtotal * 100)) {
         return res.status(400).json({
           error: "Price mismatch: the subtotal you submitted does not match the expected subtotal. Please refresh and try again.",
           expected_subtotal: expectedSubtotal,
@@ -227,7 +425,7 @@ export const createBooking = async (req: Request, res: Response) => {
 
     // Compute final price fields (use server-computed values when possible)
     const finalSubtotal = parsedSubtotal;
-    const finalServiceFee = parsedServiceFee ?? (parsedSubtotal != null ? Math.round(parsedSubtotal * 0.10 * 100) / 100 : null);
+    const finalServiceFee = parsedServiceFee ?? (finalSubtotal != null ? Math.round(finalSubtotal * 0.10 * 100) / 100 : null);
     const finalTotalPrice = parsedTotalPrice ?? (finalSubtotal != null && finalServiceFee != null ? Math.round((finalSubtotal + finalServiceFee) * 100) / 100 : null);
 
     let resolvedPetId = pet_id || null;
