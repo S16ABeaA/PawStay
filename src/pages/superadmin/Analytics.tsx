@@ -97,7 +97,7 @@ const SuperAdminAnalytics = () => {
               </div>
               <div>
                 <p className="text-sm text-slate-400">Avg. User Spend</p>
-                <p className="text-xl font-bold text-white">$127</p>
+                <p className="text-xl font-bold text-white">₱127</p>
               </div>
             </div>
           </CardContent>

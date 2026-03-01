@@ -142,7 +142,7 @@ const SuperAdminSettings = () => {
                 <div>
                   <p className="font-medium text-white">High-Value Bookings</p>
                   <p className="text-sm text-slate-400">
-                    Alert for bookings over $500
+                    Alert for bookings over ₱500
                   </p>
                 </div>
                 <Switch defaultChecked />

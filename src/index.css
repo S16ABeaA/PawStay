@@ -1,5 +1,4 @@
 @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&family=Fredoka:wght@500;600;700&display=swap');
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -107,6 +106,20 @@
     --sidebar-border: 25 15% 20%;
     --sidebar-ring: 16 80% 55%;
   }
+}
+
+@keyframes move-right {
+  0% { left: 0; }
+  50% { left: 80px; }
+  100% { left: 0; }
+}
+
+.animate-move-right {
+  animation: move-right 2s ease-in-out infinite;
+}
+
+.animation-delay-500 {
+  animation-delay: 0.5s;
 }
 
 @layer base {
