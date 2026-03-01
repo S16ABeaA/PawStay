@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { favoritesApi } from "../services/favoritesApi";
+import ReviewList from "@/components/ReviewList";
 
 const hotelData = {
   id: 1,
@@ -215,6 +216,12 @@ const HotelDetail = () => {
                     </div>
                   ))}
                 </div>
+              </div>
+
+              {/* Reviews */}
+              <div className="mb-8">
+                <h2 className="font-semibold text-xl mb-4">Guest Reviews</h2>
+                <ReviewList propertyId={hotelData.propertyId} />
               </div>
             </div>
 

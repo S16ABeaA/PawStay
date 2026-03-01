@@ -15,8 +15,12 @@ import {
   ArrowLeft,
   Loader2,
   CalendarX2,
+  Star,
+  CheckCircle2,
 } from "lucide-react";
 import { bookingApi } from "@/services/bookingApi";
+import { reviewsApi } from "@/services/reviewsApi";
+import ReviewDialog from "@/components/ReviewDialog";
 import { useToast } from "@/hooks/use-toast";
 
 interface Booking {
@@ -87,21 +91,59 @@ const MyBookings = () => {
   const { toast } = useToast();
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
+  const [reviewedBookings, setReviewedBookings] = useState<Set<string>>(new Set());
+  const [reviewDialogOpen, setReviewDialogOpen] = useState(false);
+  const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
+
+  const fetchBookings = async () => {
+    try {
+      const res = await bookingApi.list();
+      setBookings(res.bookings ?? []);
+    } catch (err: any) {
+      console.error("Failed to load bookings:", err);
+      toast({ title: "Error", description: "Failed to load bookings." });
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const fetchBookings = async () => {
-      try {
-        const res = await bookingApi.list();
-        setBookings(res.bookings ?? []);
-      } catch (err: any) {
-        console.error("Failed to load bookings:", err);
-        toast({ title: "Error", description: "Failed to load bookings." });
-      } finally {
-        setLoading(false);
-      }
-    };
     fetchBookings();
   }, []);
+
+  // Check which past bookings already have reviews
+  useEffect(() => {
+    const pastBookings = bookings.filter((b) => !isUpcoming(b) && ["completed", "checked_out"].includes(b.status));
+    if (!pastBookings.length) return;
+
+    const checkReviews = async () => {
+      const reviewed = new Set<string>();
+      await Promise.all(
+        pastBookings.map(async (b) => {
+          try {
+            const res = await reviewsApi.checkReview(b.id);
+            if (res.hasReview) reviewed.add(b.id);
+          } catch {
+            // ignore check errors
+          }
+        })
+      );
+      setReviewedBookings(reviewed);
+    };
+    checkReviews();
+  }, [bookings]);
+
+  const handleOpenReview = (booking: Booking) => {
+    setSelectedBooking(booking);
+    setReviewDialogOpen(true);
+  };
+
+  const handleReviewSubmitted = () => {
+    if (selectedBooking) {
+      setReviewedBookings((prev) => new Set(prev).add(selectedBooking.id));
+    }
+    setSelectedBooking(null);
+  };
 
   const upcoming = bookings.filter(isUpcoming);
   const past = bookings.filter((b) => !isUpcoming(b));
@@ -177,7 +219,14 @@ const MyBookings = () => {
                 {past.length === 0 ? (
                   <EmptyState message="No past bookings" />
                 ) : (
-                  past.map((b) => <BookingCard key={b.id} booking={b} />)
+                  past.map((b) => (
+                    <BookingCard
+                      key={b.id}
+                      booking={b}
+                      isReviewed={reviewedBookings.has(b.id)}
+                      onWriteReview={() => handleOpenReview(b)}
+                    />
+                  ))
                 )}
               </TabsContent>
             </Tabs>
@@ -185,6 +234,17 @@ const MyBookings = () => {
         </div>
       </main>
       <Footer />
+
+      {/* Review Dialog */}
+      {selectedBooking && (
+        <ReviewDialog
+          open={reviewDialogOpen}
+          onOpenChange={setReviewDialogOpen}
+          bookingId={selectedBooking.id}
+          propertyName={selectedBooking.property_name ?? "this place"}
+          onReviewSubmitted={handleReviewSubmitted}
+        />
+      )}
     </div>
   );
 };
@@ -202,7 +262,15 @@ function EmptyState({ message }: { message: string }) {
   );
 }
 
-function BookingCard({ booking }: { booking: Booking }) {
+function BookingCard({
+  booking,
+  isReviewed,
+  onWriteReview,
+}: {
+  booking: Booking;
+  isReviewed?: boolean;
+  onWriteReview?: () => void;
+}) {
   const b = booking;
   const { label: statusLabel, variant: statusVariant } =
     statusConfig[b.status] ?? { label: b.status, variant: "secondary" as const };
@@ -210,6 +278,8 @@ function BookingCard({ booking }: { booking: Booking }) {
   const dateRange = b.checkout
     ? `${formatDate(b.checkin)} – ${formatDate(b.checkout)}`
     : formatDate(b.checkin);
+
+  const canReview = ["completed", "checked_out"].includes(b.status) && !isReviewed;
 
   return (
     <Card className="overflow-hidden hover:shadow-elevated transition-shadow">
@@ -300,6 +370,27 @@ function BookingCard({ booking }: { booking: Booking }) {
               {formatCurrency(b.total_price)}
             </span>
           </div>
+
+          {/* Review button for completed bookings */}
+          {canReview && (
+            <div className="mt-3 pt-3 border-t border-border/50">
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full gap-2"
+                onClick={onWriteReview}
+              >
+                <Star className="h-4 w-4" />
+                Write a Review
+              </Button>
+            </div>
+          )}
+          {isReviewed && (
+            <div className="mt-3 pt-3 border-t border-border/50 flex items-center justify-center gap-2 text-sm text-green-600">
+              <CheckCircle2 className="h-4 w-4" />
+              <span>Reviewed</span>
+            </div>
+          )}
         </CardContent>
       </div>
     </Card>

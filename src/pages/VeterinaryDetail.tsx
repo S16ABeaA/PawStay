@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { favoritesApi } from "../services/favoritesApi";
+import ReviewList from "@/components/ReviewList";
 
 const veterinaryData: Record<number, {
   id: number;
@@ -314,6 +315,12 @@ const VeterinaryDetail = () => {
                     </div>
                   ))}
                 </div>
+              </div>
+
+              {/* Reviews */}
+              <div className="mb-8">
+                <h2 className="font-semibold text-xl mb-4">Patient Reviews</h2>
+                <ReviewList propertyId={propertyId as string} />
               </div>
             </div>
 
