@@ -94,11 +94,8 @@ function isPastDate(b: Booking): boolean {
 
 /** Whether a past booking qualifies for writing a review */
 function canWriteReview(b: Booking): boolean {
-  const validStatuses = ["completed", "checked_out", "confirmed", "checked_in"];
-  return (
-    validStatuses.includes(b.status) &&
-    (["completed", "checked_out"].includes(b.status) || isPastDate(b))
-  );
+  const reviewableStatuses = ["confirmed", "completed", "checked_out", "checked_in"];
+  return reviewableStatuses.includes(b.status);
 }
 
 function formatDate(dateStr: string): string {

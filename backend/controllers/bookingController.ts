@@ -120,7 +120,7 @@ export const listBookingsForOwner = async (req: any, res: any) => {
     // Build a count-aware query
     let query = supabaseAdmin
       .from('bookings')
-      .select('id, pet_name, owner_name, service_name, service_type, checkin, checkout, created_at, status, total_price, property_id', { count: 'exact' })
+      .select('id, user_id, pet_name, owner_name, owner_email, owner_phone, service_name, service_type, checkin, checkout, created_at, status, total_price, property_id', { count: 'exact' })
       .in('property_id', propertyIds)
       .eq('is_deleted', false)
       .order('created_at', { ascending: false });
@@ -132,20 +132,44 @@ export const listBookingsForOwner = async (req: any, res: any) => {
     const { data, error, count } = await query.range(offset, offset + limit - 1);
     if (error) throw error;
 
+    // Collect user IDs from bookings that are missing email/phone so we can fill from profiles
+    const missingInfoUserIds = Array.from(new Set(
+      (data ?? [])
+        .filter((b: any) => !b.owner_email || !b.owner_phone)
+        .map((b: any) => b.user_id)
+        .filter(Boolean)
+    ));
+
+    const profileMap = new Map<string, { email: string; phone: string }>();
+    if (missingInfoUserIds.length) {
+      const { data: profiles } = await supabaseAdmin
+        .from('profiles')
+        .select('id, email, phone')
+        .in('id', missingInfoUserIds);
+      for (const p of profiles ?? []) {
+        profileMap.set(String(p.id), { email: p.email || '', phone: p.phone || '' });
+      }
+    }
+
     // Normalize fields to match frontend expectations
-    const normalized = (data ?? []).map((b: any) => ({
-      id: b.id,
-      pet_name: b.pet_name,
-      owner_name: b.owner_name,
-      service_name: b.service_name,
-      service_type: b.service_type,
-      checkin: b.checkin,
-      checkout: b.checkout,
-      created_at: b.created_at,
-      status: b.status,
-      total_price: b.total_price,
-      property_id: b.property_id,
-    }));
+    const normalized = (data ?? []).map((b: any) => {
+      const profile = profileMap.get(String(b.user_id));
+      return {
+        id: b.id,
+        pet_name: b.pet_name,
+        owner_name: b.owner_name,
+        owner_email: b.owner_email || profile?.email || '',
+        owner_phone: b.owner_phone || profile?.phone || '',
+        service_name: b.service_name,
+        service_type: b.service_type,
+        checkin: b.checkin,
+        checkout: b.checkout,
+        created_at: b.created_at,
+        status: b.status,
+        total_price: b.total_price,
+        property_id: b.property_id,
+      };
+    });
 
     return res.json({ bookings: normalized, total: Number(count ?? normalized.length) });
   } catch (err: any) {

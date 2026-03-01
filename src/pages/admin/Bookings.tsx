@@ -56,7 +56,7 @@ const AdminBookings = () => {
     try {
       await authHelper.post(`${API_BASE_URL}/api/bookings/${id}/status`, { status: 'cancelled' });
       setBookings((prev) => prev.map(b => b.id === id ? { ...b, status: 'cancelled' } : b));
-      toast({ title: 'Booking Cancelled', description: `Booking ${id} has been cancelled.`, variant: 'destructive' });
+      toast({ title: 'Booking Cancelled', description: `Booking has been cancelled.`, variant: 'destructive' });
     } catch (err: any) {
       console.error('Cancel failed', err);
       toast({ title: 'Error', description: err?.message || 'Failed to cancel booking', variant: 'destructive' });
@@ -90,7 +90,8 @@ const AdminBookings = () => {
           id: b.id,
           pet: b.pet_name,
           owner: b.owner_name,
-          email: '',
+          email: b.owner_email || '',
+          phone: b.owner_phone || '',
           service: b.service_type,
           checkIn: b.checkin,
           checkOut: b.checkout || '-',
@@ -153,6 +154,7 @@ const AdminBookings = () => {
             <TableRow>
               <TableHead>Booking ID</TableHead>
               <TableHead>Pet / Owner</TableHead>
+              <TableHead>Phone</TableHead>
               <TableHead>Service</TableHead>
               <TableHead>Check-in</TableHead>
               <TableHead>Check-out</TableHead>
@@ -171,6 +173,7 @@ const AdminBookings = () => {
                     <p className="text-xs text-muted-foreground">{booking.owner}</p>
                   </div>
                 </TableCell>
+                <TableCell className="text-sm">{booking.phone || '—'}</TableCell>
                 <TableCell>{booking.service}</TableCell>
                 <TableCell>{booking.checkIn}</TableCell>
                 <TableCell>{booking.checkOut}</TableCell>
@@ -195,13 +198,18 @@ const AdminBookings = () => {
                     </Button>
                     {booking.status === "pending" && (
                       <>
-                        <Button variant="ghost" size="icon" className="h-8 w-8 text-success" onClick={() => handleConfirm(booking.id)}>
+                        <Button variant="ghost" size="icon" className="h-8 w-8 text-success" title="Confirm" onClick={() => handleConfirm(booking.id)}>
                           <CheckCircle className="h-4 w-4" />
                         </Button>
-                        <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => handleCancel(booking.id)}>
+                        <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" title="Cancel" onClick={() => handleCancel(booking.id)}>
                           <XCircle className="h-4 w-4" />
                         </Button>
                       </>
+                    )}
+                    {booking.status === "confirmed" && (
+                      <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" title="Cancel" onClick={() => handleCancel(booking.id)}>
+                        <XCircle className="h-4 w-4" />
+                      </Button>
                     )}
                   </div>
                 </TableCell>
@@ -240,7 +248,11 @@ const AdminBookings = () => {
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Email</p>
-                  <p className="font-medium">{selectedBooking.email}</p>
+                  <p className="font-medium">{selectedBooking.email || '—'}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Phone</p>
+                  <p className="font-medium">{selectedBooking.phone || '—'}</p>
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Service</p>
@@ -275,6 +287,11 @@ const AdminBookings = () => {
                       Cancel
                     </Button>
                   </>
+                )}
+                {selectedBooking.status === "confirmed" && (
+                  <Button variant="destructive" onClick={() => { handleCancel(selectedBooking.id); setViewDialogOpen(false); }}>
+                    Cancel Booking
+                  </Button>
                 )}
                 <Button variant="outline" onClick={() => setViewDialogOpen(false)}>Close</Button>
               </div>
