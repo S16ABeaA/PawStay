@@ -29,8 +29,11 @@ export interface BookingRow {
   payment_method: string | null;
   payment_status: string;
   payment_screenshot_url: string | null;
+  room_name: string | null;
   status: string;
   notes: string | null;
+  source: string;
+  created_by: string | null;
   is_deleted: boolean;
   created_at: string;
   updated_at: string;
@@ -248,5 +251,29 @@ export const bookingModel = {
     if (error) throw error;
 
     return { capacity, booked: (bookings ?? []).length };
+  },
+
+  /** Update a booking's status (admin action) */
+  async updateStatus(bookingId: string, status: string): Promise<BookingRow> {
+    const { data, error } = await supabaseAdmin
+      .from("bookings")
+      .update({ status })
+      .eq("id", bookingId)
+      .eq("is_deleted", false)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
+
+  /** Soft-delete a booking */
+  async softDelete(bookingId: string): Promise<void> {
+    const { error } = await supabaseAdmin
+      .from("bookings")
+      .update({ is_deleted: true })
+      .eq("id", bookingId);
+
+    if (error) throw error;
   },
 };
