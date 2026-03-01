@@ -7,6 +7,12 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   Calendar,
   Clock,
   MapPin,
@@ -17,6 +23,10 @@ import {
   CalendarX2,
   Star,
   CheckCircle2,
+  User,
+  Phone,
+  FileText,
+  Eye,
 } from "lucide-react";
 import { bookingApi } from "@/services/bookingApi";
 import { reviewsApi } from "@/services/reviewsApi";
@@ -74,6 +84,23 @@ function isUpcoming(b: Booking): boolean {
   );
 }
 
+/** True when the booking's end date is strictly in the past */
+function isPastDate(b: Booking): boolean {
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
+  const end = b.checkout ? new Date(b.checkout) : new Date(b.checkin);
+  return end < now;
+}
+
+/** Whether a past booking qualifies for writing a review */
+function canWriteReview(b: Booking): boolean {
+  const validStatuses = ["completed", "checked_out", "confirmed", "checked_in"];
+  return (
+    validStatuses.includes(b.status) &&
+    (["completed", "checked_out"].includes(b.status) || isPastDate(b))
+  );
+}
+
 function formatDate(dateStr: string): string {
   return new Date(dateStr).toLocaleDateString("en-US", {
     month: "short",
@@ -94,6 +121,7 @@ const MyBookings = () => {
   const [reviewedBookings, setReviewedBookings] = useState<Set<string>>(new Set());
   const [reviewDialogOpen, setReviewDialogOpen] = useState(false);
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
+  const [detailBooking, setDetailBooking] = useState<Booking | null>(null);
 
   const fetchBookings = async () => {
     try {
@@ -113,7 +141,7 @@ const MyBookings = () => {
 
   // Check which past bookings already have reviews
   useEffect(() => {
-    const pastBookings = bookings.filter((b) => !isUpcoming(b) && ["completed", "checked_out"].includes(b.status));
+    const pastBookings = bookings.filter((b) => !isUpcoming(b) && canWriteReview(b));
     if (!pastBookings.length) return;
 
     const checkReviews = async () => {
@@ -136,6 +164,10 @@ const MyBookings = () => {
   const handleOpenReview = (booking: Booking) => {
     setSelectedBooking(booking);
     setReviewDialogOpen(true);
+  };
+
+  const handleOpenDetail = (booking: Booking) => {
+    setDetailBooking(booking);
   };
 
   const handleReviewSubmitted = () => {
@@ -223,8 +255,10 @@ const MyBookings = () => {
                     <BookingCard
                       key={b.id}
                       booking={b}
+                      isPast
                       isReviewed={reviewedBookings.has(b.id)}
                       onWriteReview={() => handleOpenReview(b)}
+                      onViewDetail={() => handleOpenDetail(b)}
                     />
                   ))
                 )}
@@ -243,6 +277,20 @@ const MyBookings = () => {
           bookingId={selectedBooking.id}
           propertyName={selectedBooking.property_name ?? "this place"}
           onReviewSubmitted={handleReviewSubmitted}
+        />
+      )}
+
+      {/* Past Booking Detail Dialog */}
+      {detailBooking && (
+        <PastBookingDetailDialog
+          booking={detailBooking}
+          open={!!detailBooking}
+          onOpenChange={(open) => { if (!open) setDetailBooking(null); }}
+          isReviewed={reviewedBookings.has(detailBooking.id)}
+          onWriteReview={() => {
+            setDetailBooking(null);
+            handleOpenReview(detailBooking);
+          }}
         />
       )}
     </div>
@@ -264,12 +312,16 @@ function EmptyState({ message }: { message: string }) {
 
 function BookingCard({
   booking,
+  isPast,
   isReviewed,
   onWriteReview,
+  onViewDetail,
 }: {
   booking: Booking;
+  isPast?: boolean;
   isReviewed?: boolean;
   onWriteReview?: () => void;
+  onViewDetail?: () => void;
 }) {
   const b = booking;
   const { label: statusLabel, variant: statusVariant } =
@@ -279,7 +331,7 @@ function BookingCard({
     ? `${formatDate(b.checkin)} – ${formatDate(b.checkout)}`
     : formatDate(b.checkin);
 
-  const canReview = ["completed", "checked_out"].includes(b.status) && !isReviewed;
+  const canReview = canWriteReview(b) && !isReviewed;
 
   return (
     <Card className="overflow-hidden hover:shadow-elevated transition-shadow">
@@ -371,8 +423,40 @@ function BookingCard({
             </span>
           </div>
 
-          {/* Review button for completed bookings */}
-          {canReview && (
+          {/* Past booking actions */}
+          {isPast && (
+            <div className="mt-3 pt-3 border-t border-border/50 flex flex-col sm:flex-row gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="flex-1 gap-2"
+                onClick={onViewDetail}
+              >
+                <Eye className="h-4 w-4" />
+                View Details
+              </Button>
+              {canReview && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="flex-1 gap-2"
+                  onClick={onWriteReview}
+                >
+                  <Star className="h-4 w-4" />
+                  Write a Review
+                </Button>
+              )}
+              {isReviewed && (
+                <div className="flex-1 flex items-center justify-center gap-2 text-sm text-green-600">
+                  <CheckCircle2 className="h-4 w-4" />
+                  <span>Reviewed</span>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Review button for non-past completed bookings (fallback) */}
+          {!isPast && canReview && (
             <div className="mt-3 pt-3 border-t border-border/50">
               <Button
                 variant="outline"
@@ -385,7 +469,7 @@ function BookingCard({
               </Button>
             </div>
           )}
-          {isReviewed && (
+          {!isPast && isReviewed && (
             <div className="mt-3 pt-3 border-t border-border/50 flex items-center justify-center gap-2 text-sm text-green-600">
               <CheckCircle2 className="h-4 w-4" />
               <span>Reviewed</span>
@@ -394,6 +478,157 @@ function BookingCard({
         </CardContent>
       </div>
     </Card>
+  );
+}
+
+/* ────────────── Past Booking Detail Dialog ────────────── */
+
+function PastBookingDetailDialog({
+  booking,
+  open,
+  onOpenChange,
+  isReviewed,
+  onWriteReview,
+}: {
+  booking: Booking;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  isReviewed: boolean;
+  onWriteReview: () => void;
+}) {
+  const b = booking;
+  const { label: statusLabel, variant: statusVariant } =
+    statusConfig[b.status] ?? { label: b.status, variant: "secondary" as const };
+
+  const dateRange = b.checkout
+    ? `${formatDate(b.checkin)} – ${formatDate(b.checkout)}`
+    : formatDate(b.checkin);
+
+  const canReview = canWriteReview(b) && !isReviewed;
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="text-xl">Booking Details</DialogTitle>
+        </DialogHeader>
+
+        {/* Property image + name */}
+        <div className="space-y-4">
+          {b.property_image && (
+            <div className="rounded-lg overflow-hidden h-48 bg-muted">
+              <img
+                src={b.property_image}
+                alt={b.property_name ?? "Property"}
+                className="w-full h-full object-cover"
+              />
+            </div>
+          )}
+
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-lg font-semibold">{b.property_name ?? "Booking"}</h3>
+              {b.service_type && (
+                <p className="text-sm text-muted-foreground">
+                  {serviceTypeLabel[b.service_type] ?? b.service_type}
+                </p>
+              )}
+            </div>
+            <Badge variant={statusVariant}>{statusLabel}</Badge>
+          </div>
+
+          {/* Full info grid */}
+          <div className="space-y-3 text-sm">
+            <DetailRow icon={<Calendar className="h-4 w-4" />} label="Date" value={dateRange} />
+            {b.time_slot && (
+              <DetailRow icon={<Clock className="h-4 w-4" />} label="Time Slot" value={b.time_slot} />
+            )}
+            {b.pet_name && (
+              <DetailRow
+                icon={<PawPrint className="h-4 w-4" />}
+                label="Pet"
+                value={`${b.pet_name}${b.pet_breed ? ` (${b.pet_breed})` : ""}${b.pet_type ? ` · ${b.pet_type}` : ""}`}
+              />
+            )}
+            {b.service_name && (
+              <DetailRow icon={<FileText className="h-4 w-4" />} label="Service" value={b.service_name} />
+            )}
+            {b.owner_name && (
+              <DetailRow icon={<User className="h-4 w-4" />} label="Booked By" value={b.owner_name} />
+            )}
+          </div>
+
+          {/* Payment section */}
+          <div className="rounded-lg bg-muted/50 p-4 space-y-2">
+            <h4 className="font-medium text-sm">Payment Summary</h4>
+            {b.subtotal != null && (
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Subtotal</span>
+                <span>{formatCurrency(b.subtotal)}</span>
+              </div>
+            )}
+            {b.service_fee != null && (
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Service Fee</span>
+                <span>{formatCurrency(b.service_fee)}</span>
+              </div>
+            )}
+            <div className="flex justify-between text-sm font-semibold border-t pt-2">
+              <span>Total</span>
+              <span>{formatCurrency(b.total_price)}</span>
+            </div>
+            <div className="flex items-center gap-2 text-sm pt-1">
+              <CreditCard className="h-4 w-4 text-muted-foreground" />
+              <span className="capitalize text-muted-foreground">
+                {b.payment_method?.replace("_", " ") ?? "—"}
+              </span>
+              <Badge
+                variant={b.payment_status === "paid" ? "default" : "secondary"}
+                className="text-[10px] px-1.5 py-0"
+              >
+                {b.payment_status}
+              </Badge>
+            </div>
+          </div>
+
+          {/* Booked on */}
+          <p className="text-xs text-muted-foreground">
+            Booked on {formatDate(b.created_at)}
+          </p>
+
+          {/* Review section */}
+          {canReview && (
+            <Button className="w-full gap-2" onClick={onWriteReview}>
+              <Star className="h-4 w-4" />
+              Write a Review
+            </Button>
+          )}
+          {isReviewed && (
+            <div className="flex items-center justify-center gap-2 text-sm text-green-600 py-2">
+              <CheckCircle2 className="h-4 w-4" />
+              <span>You have already reviewed this booking</span>
+            </div>
+          )}
+          {!canReview && !isReviewed && (
+            <p className="text-xs text-center text-muted-foreground">
+              Reviews are not available for this booking status.
+            </p>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function DetailRow({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
+  return (
+    <div className="flex items-start gap-3">
+      <div className="text-muted-foreground mt-0.5 flex-shrink-0">{icon}</div>
+      <div>
+        <p className="text-xs text-muted-foreground">{label}</p>
+        <p className="font-medium">{value}</p>
+      </div>
+    </div>
   );
 }
 
