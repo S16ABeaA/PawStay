@@ -531,7 +531,7 @@ const Booking = () => {
         subtotal,
         service_fee: serviceFee,
         total_price: total,
-        payment_method: paymentMethod === "gcash" ? "gcash" : paymentMethod === "paymaya" ? "gcash" : paymentMethod === "cash" ? "cash" : "card",
+        payment_method: paymentMethod === "gcash" ? "gcash" : paymentMethod === "paymaya" ? "paymaya" : paymentMethod === "cash" ? "cash" : "card",
         reference_number: paymentMethod === "cash" ? undefined : referenceNumber,
         amount_paid: paymentMethod === "cash" ? cashAmountPaid : amountPaid,
         payment_screenshot_url: paymentScreenshot || undefined,
