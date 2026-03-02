@@ -9,6 +9,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Slider } from "@/components/ui/slider";
 import { Badge } from "@/components/ui/badge";
 import { fetchProperties } from "@/services/propertyApi";
+import { fetchAmenities } from "@/services/amenitiesApi";
 
 const Hotels = () => {
   const [hotels, setHotels] = useState<any[]>([]);
@@ -16,6 +17,8 @@ const Hotels = () => {
   const [priceRange, setPriceRange] = useState([0, 5000]);
   const [showFilters, setShowFilters] = useState(false);
   const [location, setLocation] = useState("");
+  const [amenitiesList, setAmenitiesList] = useState<any[]>([]);
+  const [selectedAmenities, setSelectedAmenities] = useState<string[]>([]);
 
   const loadHotels = async () => {
     setLoading(true);
@@ -27,6 +30,7 @@ const Hotels = () => {
         location: location.trim() || undefined,
         minPrice: priceRange[0],
         maxPrice: priceRange[1],
+        amenities: selectedAmenities.length > 0 ? selectedAmenities : undefined,
       });
       setHotels(data || []);
     } catch (err) {
@@ -41,6 +45,19 @@ const Hotels = () => {
   useEffect(() => {
     loadHotels();
   }, []);
+
+  // Load amenities for hotel service type
+  useEffect(() => {
+    fetchAmenities("hotel")
+      .then((data) => setAmenitiesList(data || []))
+      .catch((err) => console.error("Failed to load amenities:", err));
+  }, []);
+
+  const toggleAmenity = (amenity: string) => {
+    setSelectedAmenities((prev) =>
+      prev.includes(amenity) ? prev.filter((a) => a !== amenity) : [...prev, amenity]
+    );
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -87,6 +104,27 @@ const Hotels = () => {
                   </label>
                   <Slider value={priceRange} onValueChange={setPriceRange} max={10000} step={100} />
                 </div>
+
+                {/* Amenities */}
+                {amenitiesList.length > 0 && (
+                  <div className="mb-6">
+                    <label className="text-sm font-medium text-foreground mb-3 block">Amenities</label>
+                    <div className="space-y-3 max-h-48 overflow-y-auto">
+                      {amenitiesList.map((item: any) => (
+                        <div key={item.id} className="flex items-center gap-2">
+                          <Checkbox
+                            id={`amenity-${item.id}`}
+                            checked={selectedAmenities.includes(item.amenity)}
+                            onCheckedChange={() => toggleAmenity(item.amenity)}
+                          />
+                          <label htmlFor={`amenity-${item.id}`} className="text-sm text-muted-foreground cursor-pointer">
+                            {item.amenity}
+                          </label>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 
                 <Button variant="hero" className="w-full" onClick={loadHotels}>Apply Filters</Button>
               </div>

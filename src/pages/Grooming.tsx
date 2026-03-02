@@ -10,6 +10,7 @@ import { Slider } from "@/components/ui/slider";
 import { Badge } from "@/components/ui/badge";
 import { Link } from "react-router-dom";
 import { fetchProperties } from "@/services/propertyApi";
+import { fetchAmenities } from "@/services/amenitiesApi";
 
 const Grooming = () => {
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
@@ -20,6 +21,8 @@ const Grooming = () => {
   // Dynamic Data States
   const [shops, setShops] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [amenitiesList, setAmenitiesList] = useState<any[]>([]);
+  const [selectedAmenities, setSelectedAmenities] = useState<string[]>([]);
 
   const loadGrooming = async () => {
     setLoading(true);
@@ -30,6 +33,7 @@ const Grooming = () => {
         location: location.trim() || undefined,
         minPrice: priceRange[0],
         maxPrice: priceRange[1],
+        amenities: selectedAmenities.length > 0 ? selectedAmenities : undefined,
       });
       setShops(data || []);
     } catch (err) {
@@ -44,6 +48,19 @@ const Grooming = () => {
   useEffect(() => {
     loadGrooming();
   }, []);
+
+  // Load amenities for grooming service type
+  useEffect(() => {
+    fetchAmenities("grooming")
+      .then((data) => setAmenitiesList(data || []))
+      .catch((err) => console.error("Failed to load amenities:", err));
+  }, []);
+
+  const toggleAmenity = (amenity: string) => {
+    setSelectedAmenities((prev) =>
+      prev.includes(amenity) ? prev.filter((a) => a !== amenity) : [...prev, amenity]
+    );
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -188,20 +205,26 @@ const Grooming = () => {
                   </div>
                 </div>
 
-                {/* Services */}
-                <div className="mb-6">
-                  <label className="text-sm font-medium text-foreground mb-3 block">Services</label>
-                  <div className="space-y-3">
-                    {["Full Grooming", "Bath & Dry", "Nail Trim", "De-shedding", "Teeth Cleaning"].map((service) => (
-                      <div key={service} className="flex items-center gap-2">
-                        <Checkbox id={service} />
-                        <label htmlFor={service} className="text-sm text-muted-foreground cursor-pointer">
-                          {service}
-                        </label>
-                      </div>
-                    ))}
+                {/* Amenities */}
+                {amenitiesList.length > 0 && (
+                  <div className="mb-6">
+                    <label className="text-sm font-medium text-foreground mb-3 block">Amenities</label>
+                    <div className="space-y-3 max-h-48 overflow-y-auto">
+                      {amenitiesList.map((item: any) => (
+                        <div key={item.id} className="flex items-center gap-2">
+                          <Checkbox
+                            id={`amenity-${item.id}`}
+                            checked={selectedAmenities.includes(item.amenity)}
+                            onCheckedChange={() => toggleAmenity(item.amenity)}
+                          />
+                          <label htmlFor={`amenity-${item.id}`} className="text-sm text-muted-foreground cursor-pointer">
+                            {item.amenity}
+                          </label>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                </div>
+                )}
 
                 <Button variant="hero" className="w-full" onClick={loadGrooming}>Apply Filters</Button>
               </div>

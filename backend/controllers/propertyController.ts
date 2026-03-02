@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import { getProperties, getPropertyById, HotelFilters } from "../services/property.service";
+import { supabaseAdmin } from "../config/supabaseAdmin";
 
 export const propertyController = {
   searchProperties: async (req: Request, res: Response) => {
@@ -90,6 +91,40 @@ export const propertyController = {
       res.status(200).json({ property });
     } catch (err: any) {
       res.status(500).json({ message: err.message || "Failed to fetch property" });
+    }
+  },
+
+  getReviews: async (req: Request, res: Response) => {
+    try {
+      const id = req.params.id as string;
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!id || !uuidRegex.test(id)) {
+        return res.status(400).json({ message: "Invalid Property ID format" });
+      }
+
+      const { data, error } = await supabaseAdmin
+        .from("reviews")
+        .select(`
+          id,
+          rating,
+          comment,
+          service_type,
+          pet_name,
+          created_at,
+          reply,
+          replied_at,
+          profiles(first_name, last_name, avatar_url)
+        `)
+        .eq("property_id", id)
+        .eq("is_deleted", false)
+        .order("created_at", { ascending: false })
+        .limit(20);
+
+      if (error) throw error;
+
+      res.status(200).json({ reviews: data ?? [] });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message || "Failed to fetch reviews" });
     }
   },
 };

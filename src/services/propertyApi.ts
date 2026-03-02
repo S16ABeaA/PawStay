@@ -41,3 +41,15 @@ export async function fetchPropertyById(id: string) {
   const data = await res.json();
   return data.property;
 }
+
+export async function fetchPropertyReviews(propertyId: string) {
+  const res = await fetch(`/api/properties/${propertyId}/reviews`, {
+    method: "GET",
+    headers: { "Content-Type": "application/json" },
+  });
+
+  if (!res.ok) return [];
+
+  const data = await res.json();
+  return data.reviews ?? [];
+}

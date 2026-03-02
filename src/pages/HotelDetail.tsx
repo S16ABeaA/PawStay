@@ -10,7 +10,7 @@ import {
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { favoritesApi } from "../services/favoritesApi";
-import { fetchPropertyById } from "../services/propertyApi";
+import { fetchPropertyById, fetchPropertyReviews } from "../services/propertyApi";
 
 const HotelDetail = () => {
   const { id } = useParams();
@@ -19,6 +19,7 @@ const HotelDetail = () => {
   const [loading, setLoading] = useState(true);
   const [isLiked, setIsLiked] = useState(false);
   const [selectedRoom, setSelectedRoom] = useState<any>(null);
+  const [reviews, setReviews] = useState<any[]>([]);
 
   const isAuthenticated =
     typeof window !== "undefined" &&
@@ -42,6 +43,8 @@ const HotelDetail = () => {
             // fallback if no boarding services exist
             setSelectedRoom({ name: "Standard Room", price: data.cheapest_service_price || 0, description: "Cozy space for your pet" });
           }
+          // Load reviews in parallel
+          fetchPropertyReviews(data.id).then(setReviews).catch(() => {});
         }
       } catch (err) {
         console.error("Failed to fetch property", err);
@@ -237,7 +240,7 @@ const HotelDetail = () => {
               )}
 
               {/* Room Types — filtered by Boarding category */}
-              <div>
+              <div className="mb-8">
                 <h2 className="font-semibold text-xl mb-4">Choose Your Room</h2>
                 {boardingServices.length > 0 ? (
                   <div className="space-y-3">
@@ -266,6 +269,69 @@ const HotelDetail = () => {
                   </div>
                 ) : (
                   <p className="text-muted-foreground">No boarding services available for this property.</p>
+                )}
+              </div>
+
+              {/* Reviews Section */}
+              <div className="mb-8">
+                <div className="flex items-center gap-3 mb-6">
+                  <h2 className="font-semibold text-xl">Guest Reviews</h2>
+                  {reviews.length > 0 && (
+                    <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-rating/10">
+                      <Star className="h-4 w-4 fill-rating text-rating" />
+                      <span className="font-bold text-sm">{property.rating || 0}</span>
+                      <span className="text-sm text-muted-foreground">· {reviews.length} review{reviews.length !== 1 ? "s" : ""}</span>
+                    </div>
+                  )}
+                </div>
+                {reviews.length === 0 ? (
+                  <div className="text-center py-10 border border-dashed rounded-xl text-muted-foreground">
+                    No reviews yet. Be the first to share your experience!
+                  </div>
+                ) : (
+                  <div className="space-y-5">
+                    {reviews.map((review: any) => {
+                      const name = review.profiles
+                        ? `${review.profiles.first_name || ""} ${review.profiles.last_name || ""}`.trim() || "Guest"
+                        : "Guest";
+                      const avatar = review.profiles?.avatar_url;
+                      const date = new Date(review.created_at).toLocaleDateString("en-PH", { year: "numeric", month: "long", day: "numeric" });
+                      return (
+                        <div key={review.id} className="p-5 rounded-xl border border-border bg-card">
+                          <div className="flex items-start justify-between mb-3">
+                            <div className="flex items-center gap-3">
+                              {avatar ? (
+                                <img src={avatar} alt={name} className="w-10 h-10 rounded-full object-cover" />
+                              ) : (
+                                <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center font-semibold text-primary text-sm">
+                                  {name.charAt(0).toUpperCase()}
+                                </div>
+                              )}
+                              <div>
+                                <p className="font-semibold text-sm text-foreground">{name}</p>
+                                <p className="text-xs text-muted-foreground">{date}</p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              {Array.from({ length: 5 }).map((_, i) => (
+                                <Star key={i} className={`h-3.5 w-3.5 ${i < review.rating ? "fill-rating text-rating" : "text-muted-foreground/30"}`} />
+                              ))}
+                            </div>
+                          </div>
+                          {review.pet_name && (
+                            <p className="text-xs text-muted-foreground mb-2">🐾 Pet: {review.pet_name}</p>
+                          )}
+                          <p className="text-sm text-muted-foreground leading-relaxed">{review.comment}</p>
+                          {review.reply && (
+                            <div className="mt-3 pl-4 border-l-2 border-primary/30">
+                              <p className="text-xs font-semibold text-primary mb-1">Owner's Reply</p>
+                              <p className="text-xs text-muted-foreground">{review.reply}</p>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
                 )}
               </div>
             </div>

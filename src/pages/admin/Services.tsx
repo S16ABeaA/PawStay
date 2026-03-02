@@ -65,7 +65,7 @@ const AdminServices = () => {
 
               <div className="flex items-center justify-between">
                 <p className="text-xl font-bold text-foreground">
-                  ${service.price}
+                  ₱{service.price}
                   <span className="text-sm font-normal text-muted-foreground">/night</span>
                 </p>
                 <div className="flex gap-1">

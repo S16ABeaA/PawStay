@@ -3,11 +3,13 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import VeterinaryCard from "@/components/VeterinaryCard";
 import { fetchProperties } from "@/services/propertyApi";
+import { fetchAmenities } from "@/services/amenitiesApi";
 import { Loader2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Slider } from "@/components/ui/slider";
+import { Checkbox } from "@/components/ui/checkbox";
 
 const Veterinary = () => {
   const [clinics, setClinics] = useState<any[]>([]);
@@ -15,6 +17,8 @@ const Veterinary = () => {
   const [priceRange, setPriceRange] = useState([0, 5000]);
   const [location, setLocation] = useState("");
   const [showFilters, setShowFilters] = useState(false);
+  const [amenitiesList, setAmenitiesList] = useState<any[]>([]);
+  const [selectedAmenities, setSelectedAmenities] = useState<string[]>([]);
 
   const loadClinics = async () => {
     setLoading(true);
@@ -26,6 +30,7 @@ const Veterinary = () => {
         location: location.trim() || undefined,
         minPrice: priceRange[0],
         maxPrice: priceRange[1],
+        amenities: selectedAmenities.length > 0 ? selectedAmenities : undefined,
       });
       setClinics(data || []);
     } catch (err) {
@@ -40,6 +45,19 @@ const Veterinary = () => {
   useEffect(() => {
     loadClinics();
   }, []);
+
+  // Load amenities for veterinary service type
+  useEffect(() => {
+    fetchAmenities("veterinary")
+      .then((data) => setAmenitiesList(data || []))
+      .catch((err) => console.error("Failed to load amenities:", err));
+  }, []);
+
+  const toggleAmenity = (amenity: string) => {
+    setSelectedAmenities((prev) =>
+      prev.includes(amenity) ? prev.filter((a) => a !== amenity) : [...prev, amenity]
+    );
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -88,6 +106,27 @@ const Veterinary = () => {
                   </label>
                   <Slider value={priceRange} onValueChange={setPriceRange} max={10000} step={100} />
                 </div>
+
+                {/* Amenities */}
+                {amenitiesList.length > 0 && (
+                  <div className="mb-6">
+                    <label className="text-sm font-medium text-foreground mb-3 block">Amenities</label>
+                    <div className="space-y-3 max-h-48 overflow-y-auto">
+                      {amenitiesList.map((item: any) => (
+                        <div key={item.id} className="flex items-center gap-2">
+                          <Checkbox
+                            id={`amenity-${item.id}`}
+                            checked={selectedAmenities.includes(item.amenity)}
+                            onCheckedChange={() => toggleAmenity(item.amenity)}
+                          />
+                          <label htmlFor={`amenity-${item.id}`} className="text-sm text-muted-foreground cursor-pointer">
+                            {item.amenity}
+                          </label>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 
                 <Button variant="hero" className="w-full" onClick={loadClinics}>Apply Filters</Button>
               </div>
