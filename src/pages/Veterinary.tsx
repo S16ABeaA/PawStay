@@ -22,6 +22,8 @@ const Veterinary = () => {
   const [minRating, setMinRating] = useState<number | null>(null);
   const [petType, setPetType] = useState<string | null>(null);
   const [dogSize, setDogSize] = useState<string | null>(null);
+  const [appointmentDate, setAppointmentDate] = useState("");
+  const [timeSlot, setTimeSlot] = useState<string | null>(null);
 
   const loadClinics = async () => {
     setLoading(true);
@@ -37,6 +39,8 @@ const Veterinary = () => {
         rating: minRating || undefined,
         petType: petType || undefined,
         dogSize: petType === "dog" && dogSize ? dogSize : undefined,
+        checkIn: appointmentDate || undefined,
+        timeSlot: timeSlot || undefined,
       });
       setClinics(data || []);
     } catch (err) {
@@ -146,8 +150,37 @@ const Veterinary = () => {
                     </div>
                   </div>
                 )}
-                
-                {/* Price Slider */}
+
+                {/* Appointment Date */}
+                <div className="mb-6">
+                  <label className="text-sm font-medium text-foreground mb-2 block">Appointment Date</label>
+                  <Input
+                    type="date"
+                    value={appointmentDate}
+                    onChange={(e) => setAppointmentDate(e.target.value)}
+                    min={new Date().toISOString().slice(0, 10)}
+                  />
+                </div>
+
+                {/* Time Slot */}
+                <div className="mb-6">
+                  <label className="text-sm font-medium text-foreground mb-3 block">Time Slot</label>
+                  <div className="flex flex-wrap gap-2">
+                    {["Morning", "Afternoon", "Evening"].map((slot) => (
+                      <button
+                        key={slot}
+                        onClick={() => setTimeSlot(timeSlot === slot ? null : slot)}
+                        className={`px-3 py-1.5 rounded-lg text-sm transition-colors ${
+                          timeSlot === slot
+                            ? "bg-primary text-primary-foreground"
+                            : "bg-secondary hover:bg-secondary/80"
+                        }`}
+                      >
+                        {slot}
+                      </button>
+                    ))}
+                  </div>
+                </div>
                 <div className="mb-6">
                   <label className="text-sm font-medium text-foreground mb-4 block">
                     Price: ₱{priceRange[0]} - ₱{priceRange[1]}

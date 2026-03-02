@@ -3,7 +3,7 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import HotelCard from "@/components/HotelCard";
 import { Button } from "@/components/ui/button";
-import { SlidersHorizontal, MapPin, Star, Loader2 } from "lucide-react";
+import { SlidersHorizontal, MapPin, Star, Loader2, CalendarDays } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Slider } from "@/components/ui/slider";
@@ -22,6 +22,8 @@ const Hotels = () => {
   const [minRating, setMinRating] = useState<number | null>(null);
   const [petType, setPetType] = useState<string | null>(null);
   const [dogSize, setDogSize] = useState<string | null>(null);
+  const [checkIn, setCheckIn] = useState("");
+  const [checkOut, setCheckOut] = useState("");
 
   const loadHotels = async () => {
     setLoading(true);
@@ -37,6 +39,8 @@ const Hotels = () => {
         rating: minRating || undefined,
         petType: petType || undefined,
         dogSize: petType === "dog" && dogSize ? dogSize : undefined,
+        checkIn: checkIn || undefined,
+        checkOut: checkOut || undefined,
       });
       setHotels(data || []);
     } catch (err) {
@@ -144,6 +148,26 @@ const Hotels = () => {
                     </div>
                   </div>
                 )}
+
+                {/* Check-in / Check-out Dates */}
+                <div className="mb-6">
+                  <label className="text-sm font-medium text-foreground mb-2 block">Check-in</label>
+                  <Input
+                    type="date"
+                    value={checkIn}
+                    onChange={(e) => setCheckIn(e.target.value)}
+                    min={new Date().toISOString().slice(0, 10)}
+                  />
+                </div>
+                <div className="mb-6">
+                  <label className="text-sm font-medium text-foreground mb-2 block">Check-out</label>
+                  <Input
+                    type="date"
+                    value={checkOut}
+                    onChange={(e) => setCheckOut(e.target.value)}
+                    min={checkIn || new Date().toISOString().slice(0, 10)}
+                  />
+                </div>
                 
                 {/* Price Slider */}
                 <div className="mb-6">
