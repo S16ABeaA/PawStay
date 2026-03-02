@@ -3,7 +3,7 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import HotelCard from "@/components/HotelCard";
 import { Button } from "@/components/ui/button";
-import { SlidersHorizontal, MapPin, Star, Loader2, CalendarDays } from "lucide-react";
+import { Star, Loader2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Slider } from "@/components/ui/slider";
@@ -14,16 +14,53 @@ import { fetchAmenities } from "@/services/amenitiesApi";
 const Hotels = () => {
   const [hotels, setHotels] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [priceRange, setPriceRange] = useState([0, 5000]);
+  const [priceRange, setPriceRange] = useState([0, 3000]);
   const [showFilters, setShowFilters] = useState(false);
   const [location, setLocation] = useState("");
   const [selectedAmenities, setSelectedAmenities] = useState<string[]>([]);
   const [amenitiesList, setAmenitiesList] = useState<any[]>([]);
   const [minRating, setMinRating] = useState<number | null>(null);
-  const [petType, setPetType] = useState<string | null>(null);
-  const [dogSize, setDogSize] = useState<string | null>(null);
+  const [petType, setPetType] = useState<string>("Dog");
+  const [dogSize, setDogSize] = useState<string>("Small");
   const [checkIn, setCheckIn] = useState("");
   const [checkOut, setCheckOut] = useState("");
+  const [dateError, setDateError] = useState<string | null>(null);
+
+  const today = new Date();
+  const todayISO = today.toISOString().split("T")[0];
+  const maxDateISO = "2100-12-31";
+
+  const isValidISODate = (value: string) => {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+    const [y, m, d] = value.split("-").map(Number);
+    if (y < 1900 || y > 2100) return false;
+    if (m < 1 || m > 12) return false;
+    if (d < 1 || d > 31) return false;
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return false;
+    return date.toISOString().split("T")[0] === value;
+  };
+
+  const validateDates = (ci: string, co: string) => {
+    if (ci && !isValidISODate(ci)) { setDateError("Invalid check-in date."); return; }
+    if (co && !isValidISODate(co)) { setDateError("Invalid check-out date."); return; }
+    if (ci && ci < todayISO) { setDateError("Check-in date cannot be in the past."); return; }
+    if (co && co < todayISO) { setDateError("Check-out date cannot be in the past."); return; }
+    if (ci && co && co <= ci) { setDateError("Check-out must be after check-in."); return; }
+    setDateError(null);
+  };
+
+  const handleResetAll = () => {
+    setLocation("");
+    setPetType("Dog");
+    setDogSize("Small");
+    setPriceRange([0, 3000]);
+    setMinRating(null);
+    setSelectedAmenities([]);
+    setCheckIn("");
+    setCheckOut("");
+    setDateError(null);
+  };
 
   const loadHotels = async () => {
     setLoading(true);
@@ -33,12 +70,12 @@ const Hotels = () => {
         propertyType: "hotel",
         serviceCategory: "Boarding",
         location: location.trim() || undefined,
-        minPrice: priceRange[0],
+        minPrice: priceRange[0] > 0 ? priceRange[0] : undefined,
         maxPrice: priceRange[1],
         amenities: selectedAmenities.length > 0 ? selectedAmenities : undefined,
-        rating: minRating || undefined,
-        petType: petType || undefined,
-        dogSize: petType === "dog" && dogSize ? dogSize : undefined,
+        rating: minRating ?? undefined,
+        petType: petType?.toLowerCase(),
+        dogSize: petType === "Dog" && dogSize ? dogSize : undefined,
         checkIn: checkIn || undefined,
         checkOut: checkOut || undefined,
       });
@@ -62,12 +99,6 @@ const Hotels = () => {
       .then((data) => setAmenitiesList(data || []))
       .catch((err) => console.error("Failed to load amenities:", err));
   }, []);
-
-  const toggleAmenity = (amenity: string) => {
-    setSelectedAmenities((prev) =>
-      prev.includes(amenity) ? prev.filter((a) => a !== amenity) : [...prev, amenity]
-    );
-  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -94,11 +125,66 @@ const Hotels = () => {
           <div className="flex flex-col lg:flex-row gap-8">
             <aside className={`lg:w-72 shrink-0 ${showFilters ? 'block' : 'hidden lg:block'}`}>
               <div className="bg-card rounded-2xl p-6 shadow-soft sticky top-24 border">
-                <h3 className="font-semibold text-lg mb-6">Filters</h3>
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="font-semibold text-lg">Filters</h3>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 px-2 text-xs hover:bg-destructive/10 hover:text-destructive"
+                    onClick={handleResetAll}
+                  >
+                    Reset All
+                  </Button>
+                </div>
                 
-                {/* Location Input */}
-                <div className="mb-6">
-                  <label className="text-sm font-medium text-foreground mb-2 block">Location</label>
+                {/* Pet Type */}
+                <div className="pb-6 border-b border-border/50">
+                  <label className="text-sm font-semibold text-foreground mb-3 block">Pet Type</label>
+                  <div className="flex gap-2">
+                    {["Dog", "Cat", "Others"].map((pet) => (
+                      <button
+                        key={pet}
+                        onClick={() => {
+                          setPetType(pet);
+                          if (pet !== "Dog") setDogSize("Small");
+                        }}
+                        className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium border transition-all duration-200 active:scale-95 ${
+                          petType === pet
+                            ? "bg-primary text-primary-foreground border-primary shadow-sm"
+                            : "bg-background text-foreground border-border hover:border-foreground/40 hover:bg-muted"
+                        }`}
+                      >
+                        {pet}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Dog Size */}
+                {petType === "Dog" && (
+                  <div className="pb-6 border-b border-border/50">
+                    <label className="text-sm font-semibold text-foreground mb-3 block">Dog Size</label>
+                    <div className="flex flex-wrap gap-2">
+                      {["Small", "Medium", "Large", "Giant"].map((size) => (
+                        <button
+                          key={size}
+                          onClick={() => setDogSize(size)}
+                          className={`flex-1 px-4 py-2 rounded-lg text-sm font-medium border transition-all duration-200 active:scale-95 ${
+                            dogSize === size
+                              ? "bg-primary text-primary-foreground border-primary shadow-sm"
+                              : "bg-background text-foreground border-border hover:border-foreground/40 hover:bg-muted"
+                          }`}
+                        >
+                          {size}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Location */}
+                <div className="pb-6 border-b border-border/50">
+                  <label className="text-sm font-semibold text-foreground mb-3 block">Location</label>
                   <Input 
                     value={location} 
                     onChange={(e) => setLocation(e.target.value)} 
@@ -107,79 +193,60 @@ const Hotels = () => {
                   />
                 </div>
 
-                {/* Pet Type */}
-                <div className="mb-6">
-                  <label className="text-sm font-medium text-foreground mb-3 block">Pet Type</label>
-                  <div className="flex gap-2">
-                    {(["dog", "cat", "others"] as const).map((type) => (
-                      <button
-                        key={type}
-                        onClick={() => { setPetType(petType === type ? null : type); if (type !== "dog") setDogSize(null); }}
-                        className={`px-3 py-1.5 rounded-lg text-sm capitalize transition-colors ${
-                          petType === type
-                            ? "bg-primary text-primary-foreground"
-                            : "bg-secondary hover:bg-secondary/80"
-                        }`}
-                      >
-                        {type === "others" ? "Others" : type.charAt(0).toUpperCase() + type.slice(1)}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Dog Size — only when Dog is selected */}
-                {petType === "dog" && (
-                  <div className="mb-6">
-                    <label className="text-sm font-medium text-foreground mb-3 block">Dog Size</label>
-                    <div className="flex flex-wrap gap-2">
-                      {["small", "medium", "large", "giant"].map((size) => (
-                        <button
-                          key={size}
-                          onClick={() => setDogSize(dogSize === size ? null : size)}
-                          className={`px-3 py-1.5 rounded-lg text-sm capitalize transition-colors ${
-                            dogSize === size
-                              ? "bg-primary text-primary-foreground"
-                              : "bg-secondary hover:bg-secondary/80"
-                          }`}
-                        >
-                          {size.charAt(0).toUpperCase() + size.slice(1)}
-                        </button>
-                      ))}
+                {/* Dates */}
+                <div className="pb-6 border-b border-border/50">
+                  <label className="text-sm font-semibold text-foreground mb-3 block">Dates</label>
+                  <div className="space-y-3">
+                    <div>
+                      <label className="text-xs text-muted-foreground mb-1 block">Check-in</label>
+                      <Input
+                        type="date"
+                        value={checkIn}
+                        min={todayISO}
+                        max={maxDateISO}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setCheckIn(val);
+                          validateDates(val, checkOut);
+                        }}
+                        className="w-full"
+                      />
                     </div>
+                    <div>
+                      <label className="text-xs text-muted-foreground mb-1 block">Check-out</label>
+                      <Input
+                        type="date"
+                        value={checkOut}
+                        min={checkIn || todayISO}
+                        max={maxDateISO}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setCheckOut(val);
+                          validateDates(checkIn, val);
+                        }}
+                        className="w-full"
+                      />
+                    </div>
+                    {dateError && (
+                      <div className="text-xs text-destructive">{dateError}</div>
+                    )}
                   </div>
-                )}
+                </div>
 
-                {/* Check-in / Check-out Dates */}
+                {/* Price Range */}
                 <div className="mb-6">
-                  <label className="text-sm font-medium text-foreground mb-2 block">Check-in</label>
-                  <Input
-                    type="date"
-                    value={checkIn}
-                    onChange={(e) => setCheckIn(e.target.value)}
-                    min={new Date().toISOString().slice(0, 10)}
-                  />
-                </div>
-                <div className="mb-6">
-                  <label className="text-sm font-medium text-foreground mb-2 block">Check-out</label>
-                  <Input
-                    type="date"
-                    value={checkOut}
-                    onChange={(e) => setCheckOut(e.target.value)}
-                    min={checkIn || new Date().toISOString().slice(0, 10)}
-                  />
-                </div>
-                
-                {/* Price Slider */}
-                <div className="mb-6">
-                  <label className="text-sm font-medium text-foreground mb-4 block">
-                    Price: ₱{priceRange[0]} - ₱{priceRange[1]}
+                  <label className="text-sm font-semibold text-foreground mb-4 block">
+                    Price Range:{" "}
+                    <span className="text-primary">
+                      ₱{priceRange[0]} - {priceRange[1] === 3000 ? "₱3000+" : `₱${priceRange[1]}`}
+                    </span>
                   </label>
-                  <Slider value={priceRange} onValueChange={setPriceRange} max={10000} step={100} />
+                  <Slider value={priceRange} onValueChange={setPriceRange} min={0} max={3000} step={50} className="w-full" />
                 </div>
 
                 {/* Rating */}
-                <div className="mb-6">
-                  <label className="text-sm font-medium text-foreground mb-3 block">Minimum Rating</label>
+                <div className="py-6 border-b border-border/50">
+                  <label className="text-sm font-semibold text-foreground mb-3 block">Rating</label>
                   <div className="flex gap-2">
                     {[3, 4, 4.5].map((r) => (
                       <button
@@ -188,7 +255,7 @@ const Hotels = () => {
                         className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm transition-colors ${
                           minRating === r
                             ? "bg-primary text-primary-foreground"
-                            : "bg-secondary hover:bg-secondary/80"
+                            : "bg-muted/50 text-muted-foreground hover:bg-muted"
                         }`}
                       >
                         <Star className="h-3.5 w-3.5 fill-rating text-rating" />
@@ -199,27 +266,42 @@ const Hotels = () => {
                 </div>
 
                 {/* Amenities */}
-                {amenitiesList.length > 0 && (
-                  <div className="mb-6">
-                    <label className="text-sm font-medium text-foreground mb-3 block">Amenities</label>
-                    <div className="space-y-3 max-h-48 overflow-y-auto">
-                      {amenitiesList.map((item: any) => (
-                        <div key={item.id} className="flex items-center gap-2">
+                <div className="py-6">
+                  <label className="text-sm font-semibold text-foreground mb-3 block">Amenities</label>
+                  <div className="space-y-3">
+                    {amenitiesList.length === 0 ? (
+                      <div className="text-sm text-muted-foreground">No amenities available.</div>
+                    ) : (
+                      amenitiesList.map((item: any) => (
+                        <div key={item.id} className="flex items-center gap-3">
                           <Checkbox
                             id={`amenity-${item.id}`}
                             checked={selectedAmenities.includes(item.amenity)}
-                            onCheckedChange={() => toggleAmenity(item.amenity)}
+                            onCheckedChange={(checked) => {
+                              if (checked) setSelectedAmenities([...selectedAmenities, item.amenity]);
+                              else setSelectedAmenities(selectedAmenities.filter((a) => a !== item.amenity));
+                            }}
                           />
-                          <label htmlFor={`amenity-${item.id}`} className="text-sm text-muted-foreground cursor-pointer">
+                          <label
+                            htmlFor={`amenity-${item.id}`}
+                            className="text-sm text-foreground cursor-pointer hover:text-primary transition-colors"
+                          >
                             {item.amenity}
                           </label>
                         </div>
-                      ))}
-                    </div>
+                      ))
+                    )}
                   </div>
-                )}
+                </div>
                 
-                <Button variant="hero" className="w-full" onClick={loadHotels}>Apply Filters</Button>
+                <Button
+                  variant="hero"
+                  className="w-full mt-6"
+                  onClick={loadHotels}
+                  disabled={Boolean(dateError)}
+                >
+                  Apply Filters
+                </Button>
               </div>
             </aside>
 
