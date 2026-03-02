@@ -54,6 +54,13 @@ interface PetProfile {
 
 const isHotel = (shop?: BookingLocationState["shop"]) => shop?.type === "hotel";
 
+const formatPhoneInput = (value: string) => value.replace(/[^\d\s\-+()]/g, "");
+const isValidPhoneNumber = (phone: string) => {
+  if (!phone) return false;
+  const digitsOnly = phone.replace(/\D/g, "");
+  return digitsOnly.length >= 7 && digitsOnly.length <= 15;
+};
+
 // Calculate age string from birthday
 const calculateAgeStr = (birthday: string): string => {
   const birthDate = new Date(birthday);
@@ -126,6 +133,23 @@ const Booking = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const shop = (location.state as BookingLocationState | null)?.shop;
+
+  // ── Price calculation helper (reused for display + submission) ──
+  const calculatePrices = useCallback(() => {
+    const basePrice = shop?.price ?? 0;
+    const nights = isHotel(shop) && checkInDate && checkOutDate
+      ? Math.max(1, Math.ceil((checkOutDate.getTime() - checkInDate.getTime()) / (1000 * 60 * 60 * 24)))
+      : 1;
+    const isGrooming = shop?.type === "grooming";
+    const dogSizeMultiplier = isGrooming && petType === "dog" && dogSize
+      ? ({ small: 1.0, medium: 1.15, large: 1.30, giant: 1.50 }[dogSize] || 1.0)
+      : 1.0;
+    const priceWithDogSize = basePrice * dogSizeMultiplier;
+    const subtotal = isHotel(shop) ? priceWithDogSize * nights : priceWithDogSize;
+    const serviceFee = Math.round(subtotal * 0.10 * 100) / 100;
+    const total = Math.round((subtotal + serviceFee) * 100) / 100;
+    return { basePrice, nights, dogSizeMultiplier, priceWithDogSize, subtotal, serviceFee, total };
+  }, [shop, checkInDate, checkOutDate, petType, dogSize]);
 
   const shopQRCodes = {
     gcash: shop?.qrCodeGCash || null,
@@ -292,6 +316,14 @@ const Booking = () => {
     if (pet) autoFillFromPet(pet);
   };
 
+  // Auto-derive dog size from weight (kg) for grooming pricing
+  const deriveDogSizeFromWeight = (weightKg: number) => {
+    if (weightKg >= 45) return "giant";
+    if (weightKg >= 23) return "large";
+    if (weightKg >= 11) return "medium";
+    return "small";
+  };
+
   // Handle "Add New Pet" selection
   const handleNewPet = () => {
     setSelectedPetId(null);
@@ -372,11 +404,10 @@ const Booking = () => {
     if (!breed.trim()) missing.push("breed");
     if (!age.trim()) missing.push("age");
     if (!weight.trim()) missing.push("weight");
-    if (shop?.type === "grooming" && petType === "dog" && !dogSize) missing.push("dogSize");
     if (!vaccineRecord) missing.push("vaccineRecord");
     if (missing.length > 0) {
       setError(missing);
-      toast({ title: "Required Fields", description: !vaccineRecord ? "Please upload the vaccine record to continue." : petType === "dog" ? "Please fill in all required pet details including dog size." : "Please fill in all required pet details.", variant: "destructive" });
+      toast({ title: "Required Fields", description: !vaccineRecord ? "Please upload the vaccine record to continue." : "Please fill in all required pet details.", variant: "destructive" });
       return false;
     }
     clearErrors();
@@ -394,6 +425,16 @@ const Booking = () => {
       toast({ title: "Required Fields", description: "Please fill in all your information.", variant: "destructive" });
       return false;
     }
+    if (!isValidPhoneNumber(phone)) {
+      setError(["phone"]);
+      toast({ title: "Invalid Phone Number", description: "Please enter a valid phone number (at least 7 digits).", variant: "destructive" });
+      return false;
+    }
+    if (emergencyContact.trim() && !isValidPhoneNumber(emergencyContact)) {
+      setError(["emergency"]);
+      toast({ title: "Invalid Emergency Contact", description: "Emergency contact must be a valid phone number (at least 7 digits).", variant: "destructive" });
+      return false;
+    }
     clearErrors();
     return true;
   };
@@ -401,6 +442,8 @@ const Booking = () => {
   const validateStep5 = (): boolean => {
     if (paymentMethod === "creditcard") return false;
     const missing: string[] = [];
+
+    const { total } = calculatePrices();
 
     if (paymentMethod === "gcash" || paymentMethod === "paymaya") {
       if (!referenceNumber.trim()) missing.push("referenceNumber");
@@ -411,11 +454,21 @@ const Booking = () => {
         toast({ title: "Required Fields", description: !paymentScreenshot ? "Please upload a payment screenshot to continue." : "Please enter your payment reference number and amount paid.", variant: "destructive" });
         return false;
       }
+      if (Math.round(Number(amountPaid) * 100) !== Math.round(total * 100)) {
+        setError(["amountPaid"]);
+        toast({ title: "Amount Mismatch", description: `The amount paid must be exactly ₱${total.toFixed(2)}.`, variant: "destructive" });
+        return false;
+      }
     } else if (paymentMethod === "cash") {
       if (!cashAmountPaid.trim() || Number(cashAmountPaid) <= 0) missing.push("cashAmountPaid");
       if (missing.length > 0) {
         setError(missing);
         toast({ title: "Required Fields", description: "Please enter the amount to be paid.", variant: "destructive" });
+        return false;
+      }
+      if (Math.round(Number(cashAmountPaid) * 100) !== Math.round(total * 100)) {
+        setError(["cashAmountPaid"]);
+        toast({ title: "Amount Mismatch", description: `The amount to pay must be exactly ₱${total.toFixed(2)}.`, variant: "destructive" });
         return false;
       }
     }
@@ -442,6 +495,19 @@ const Booking = () => {
       : null;
 
     try {
+      // Calculate prices for the payload
+      const { subtotal, serviceFee, total } = calculatePrices();
+
+      // Validate prices before submitting
+      if (!subtotal || subtotal <= 0 || !total || total <= 0) {
+        toast({
+          title: "Price Error",
+          description: "Unable to calculate booking price. Please go back and verify your booking details.",
+          variant: "destructive",
+        });
+        return;
+      }
+
       await bookingApi.create({
         property_id: shop?.propertyId || "",
         pet_id: selectedPetId,
@@ -462,7 +528,10 @@ const Booking = () => {
         owner_email: email,
         owner_phone: phone,
         emergency_contact: emergencyContact,
-        payment_method: paymentMethod === "gcash" ? "gcash" : paymentMethod === "paymaya" ? "gcash" : paymentMethod === "cash" ? "cash" : "card",
+        subtotal,
+        service_fee: serviceFee,
+        total_price: total,
+        payment_method: paymentMethod === "gcash" ? "gcash" : paymentMethod === "paymaya" ? "paymaya" : paymentMethod === "cash" ? "cash" : "card",
         reference_number: paymentMethod === "cash" ? undefined : referenceNumber,
         amount_paid: paymentMethod === "cash" ? cashAmountPaid : amountPaid,
         payment_screenshot_url: paymentScreenshot || undefined,
@@ -855,7 +924,7 @@ const Booking = () => {
                       <Label className="mb-3 block">Pet Type</Label>
                       <RadioGroup
                         value={petType}
-                        onValueChange={(val) => { setPetType(val); if (val !== "dog") setDogSize(""); }}
+                        onValueChange={(val) => { setPetType(val); if (val !== "dog") setDogSize(""); else if (weight) setDogSize(deriveDogSizeFromWeight(Number(weight))); }}
                         className="flex gap-4"
                         disabled={petSelectionMode === "existing"}
                       >
@@ -876,18 +945,29 @@ const Booking = () => {
 
                     {shop?.type === "grooming" && petType === "dog" && (
                       <div className="space-y-2">
-                        <Label>Dog Size *</Label>
-                        <Select value={dogSize} onValueChange={setDogSize} disabled={petSelectionMode === "existing"}>
-                          <SelectTrigger className={errorClass("dogSize")}>
-                            <SelectValue placeholder="Select dog size" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="small">Small (under 11 kg) - Base Price</SelectItem>
-                            <SelectItem value="medium">Medium (11-23 kg) - +15%</SelectItem>
-                            <SelectItem value="large">Large (23-45 kg) - +30%</SelectItem>
-                            <SelectItem value="giant">Giant (45+ kg) - +50%</SelectItem>
-                          </SelectContent>
-                        </Select>
+                        <Label>Dog Size (auto-determined from weight)</Label>
+                        <div className="grid grid-cols-2 gap-2">
+                          {[
+                            { value: "small", label: "Small", desc: "Under 11 kg", extra: "Base Price" },
+                            { value: "medium", label: "Medium", desc: "11–23 kg", extra: "+15%" },
+                            { value: "large", label: "Large", desc: "23–45 kg", extra: "+30%" },
+                            { value: "giant", label: "Giant", desc: "45+ kg", extra: "+50%" },
+                          ].map((tier) => (
+                            <div
+                              key={tier.value}
+                              className={`rounded-lg border p-3 text-sm transition-colors ${
+                                dogSize === tier.value
+                                  ? "border-primary bg-primary/5 ring-1 ring-primary"
+                                  : "border-border bg-muted/30 opacity-60"
+                              }`}
+                            >
+                              <span className="font-medium">{tier.label}</span>
+                              <span className="text-muted-foreground ml-1">({tier.desc})</span>
+                              <span className="block text-xs text-muted-foreground mt-0.5">{tier.extra}</span>
+                            </div>
+                          ))}
+                        </div>
+                        {!dogSize && <p className="text-xs text-muted-foreground">Enter your pet's weight below to auto-select the size tier.</p>}
                       </div>
                     )}
 
@@ -905,8 +985,16 @@ const Booking = () => {
                         <Input id="age" placeholder="e.g., 3 years" value={age} onChange={(e) => setAge(e.target.value)} className={errorClass("age")} readOnly={petSelectionMode === "existing"} />
                       </div>
                       <div className="space-y-2">
-                        <Label htmlFor="weight">Weight *</Label>
-                        <Input id="weight" placeholder="e.g., 25 lbs" value={weight} onChange={(e) => setWeight(e.target.value)} className={errorClass("weight")} readOnly={petSelectionMode === "existing"} />
+                        <Label htmlFor="weight">Weight (kg) *</Label>
+                        <Input id="weight" type="number" min="0" placeholder="e.g., 25" value={weight} onChange={(e) => {
+                          const val = e.target.value;
+                          setWeight(val);
+                          if (petType === "dog" && val) {
+                            setDogSize(deriveDogSizeFromWeight(Number(val)));
+                          } else if (petType === "dog") {
+                            setDogSize("");
+                          }
+                        }} className={errorClass("weight")} readOnly={petSelectionMode === "existing"} />
                       </div>
                     </div>
 
@@ -1020,7 +1108,7 @@ const Booking = () => {
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor="phone">Phone *</Label>
-                        <Input id="phone" type="tel" placeholder="(555) 123-4567" value={phone} onChange={(e) => setPhone(e.target.value)} className={errorClass("phone")} readOnly={!!profileFields.phone} tabIndex={profileFields.phone ? -1 : undefined} />
+                        <Input id="phone" type="tel" placeholder="(555) 123-4567" value={phone} onChange={(e) => setPhone(formatPhoneInput(e.target.value))} className={errorClass("phone")} readOnly={!!profileFields.phone} tabIndex={profileFields.phone ? -1 : undefined} />
                       </div>
                     </div>
 
@@ -1029,7 +1117,7 @@ const Booking = () => {
                         Emergency Contact
                         <span className="text-xs text-muted-foreground font-normal ml-1">(Optional)</span>
                       </Label>
-                      <Input id="emergency" placeholder="Name and phone number" value={emergencyContact} onChange={(e) => setEmergencyContact(e.target.value)} />
+                      <Input id="emergency" placeholder="Name and phone number" value={emergencyContact} onChange={(e) => setEmergencyContact(formatPhoneInput(e.target.value))} className={errorClass("emergency")} />
                     </div>
 
                     <div className="flex gap-3">
@@ -1162,8 +1250,8 @@ const Booking = () => {
 
                         <div className="space-y-2">
                           <Label htmlFor="amountPaid">Amount Paid (₱) *</Label>
-                          <Input id="amountPaid" type="number" step="0.01" placeholder="0.00" value={amountPaid} onChange={(e) => setAmountPaid(e.target.value)} className={errorClass("amountPaid")} required />
-                          <p className="text-xs text-muted-foreground">Confirm the exact amount you transferred</p>
+                          <Input id="amountPaid" type="number" step="0.01" min="0" placeholder="0.00" value={amountPaid} onChange={(e) => setAmountPaid(e.target.value)} className={errorClass("amountPaid")} required />
+                          <p className="text-xs text-muted-foreground">Enter the exact total amount: <span className="font-semibold text-foreground">₱{calculatePrices().total.toFixed(2)}</span></p>
                         </div>
 
                         <div className="space-y-2">
@@ -1191,8 +1279,8 @@ const Booking = () => {
                         </div>
                         <div className="space-y-2">
                           <Label htmlFor="cashAmountPaid">Amount to Pay (₱) *</Label>
-                          <Input id="cashAmountPaid" type="number" step="0.01" placeholder="0.00" value={cashAmountPaid} onChange={(e) => setCashAmountPaid(e.target.value)} className={errorClass("cashAmountPaid")} required />
-                          <p className="text-xs text-muted-foreground">Enter the amount you will pay at the establishment</p>
+                          <Input id="cashAmountPaid" type="number" step="0.01" min="0" placeholder="0.00" value={cashAmountPaid} onChange={(e) => setCashAmountPaid(e.target.value)} className={errorClass("cashAmountPaid")} required />
+                          <p className="text-xs text-muted-foreground">Enter the exact total amount: <span className="font-semibold text-foreground">₱{calculatePrices().total.toFixed(2)}</span></p>
                         </div>
                         <div className="flex items-center gap-2 p-4 rounded-xl bg-amber-500/10 text-amber-700">
                           <Clock className="h-5 w-5 shrink-0" />
@@ -1306,39 +1394,30 @@ const Booking = () => {
                 </div>
 
                 {(() => {
-                  const basePrice = shop?.price ?? 0;
-                  const nights = isHotel(shop) && checkInDate && checkOutDate
-                    ? Math.max(1, Math.ceil((checkOutDate.getTime() - checkInDate.getTime()) / (1000 * 60 * 60 * 24)))
-                    : 1;
-                  const isGrooming = shop?.type === "grooming";
-                  const dogSizeMultiplier = isGrooming && petType === "dog" && dogSize ? { small: 1.0, medium: 1.15, large: 1.30, giant: 1.50 }[dogSize] || 1.0 : 1.0;
-                  const priceWithDogSize = basePrice * dogSizeMultiplier;
-                  const subtotal = isHotel(shop) ? priceWithDogSize * nights : priceWithDogSize;
-                  const serviceFee = Math.round(subtotal * 0.10 * 100) / 100;
-                  const total = subtotal + serviceFee;
+                  const { basePrice, nights, dogSizeMultiplier, priceWithDogSize, subtotal, serviceFee, total } = calculatePrices();
 
                   return (
                     <>
                       <div className="space-y-2 py-4">
                         <div className="flex justify-between text-sm">
-                          <span className="text-muted-foreground">{isHotel(shop) ? `$${basePrice} x ${nights} night(s)` : (shop?.serviceName ?? "Service")}</span>
-                          <span>${isHotel(shop) ? basePrice * nights : basePrice}</span>
+                          <span className="text-muted-foreground">{isHotel(shop) ? `₱${basePrice} x ${nights} night(s)` : (shop?.serviceName ?? "Service")}</span>
+                          <span>₱{isHotel(shop) ? basePrice * nights : basePrice}</span>
                         </div>
                         {shop?.type === "grooming" && petType === "dog" && dogSize && dogSize !== "small" && (
                           <div className="flex justify-between text-sm">
                             <span className="text-muted-foreground">Dog size ({dogSize}) +{dogSizeMultiplier === 1.15 ? "15" : dogSizeMultiplier === 1.30 ? "30" : "50"}%</span>
-                            <span>+${Math.round((priceWithDogSize - basePrice) * (isHotel(shop) ? nights : 1) * 100) / 100}</span>
+                            <span>+₱{Math.round((priceWithDogSize - basePrice) * (isHotel(shop) ? nights : 1) * 100) / 100}</span>
                           </div>
                         )}
                         <div className="flex justify-between text-sm">
                           <span className="text-muted-foreground">Service fee (10%)</span>
-                          <span>${serviceFee}</span>
+                          <span>₱{serviceFee}</span>
                         </div>
                       </div>
                       <Separator />
                       <div className="flex justify-between py-4 font-semibold">
                         <span>Total</span>
-                        <span>${total}</span>
+                        <span>₱{total}</span>
                       </div>
                     </>
                   );

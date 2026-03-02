@@ -1,5 +1,4 @@
-import { PawPrint, Facebook, Twitter, Instagram, Youtube, Mail } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { PawPrint, Facebook, Twitter, Instagram, Youtube } from "lucide-react";
 
 const Footer = () => {
   const footerLinks = {
@@ -30,31 +29,6 @@ const Footer = () => {
 
   return (
     <footer className="bg-foreground text-background">
-      {/* Newsletter */}
-      <div className="border-b border-background/10">
-        <div className="container py-12">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-            <div>
-              <h3 className="text-xl font-semibold mb-1">Stay in the loop</h3>
-              <p className="text-background/70">Get the latest pet care tips and exclusive deals</p>
-            </div>
-            <div className="flex gap-2 max-w-md w-full md:w-auto">
-              <div className="flex-1 flex items-center gap-2 px-4 py-2 rounded-lg bg-background/10">
-                <Mail className="h-5 w-5 text-background/50" />
-                <input
-                  type="email"
-                  placeholder="Enter your email"
-                  className="flex-1 bg-transparent text-background placeholder:text-background/50 focus:outline-none"
-                />
-              </div>
-              <Button variant="hero" className="shrink-0">
-                Subscribe
-              </Button>
-            </div>
-          </div>
-        </div>
-      </div>
-
       {/* Main Footer */}
       <div className="container py-12 md:py-16">
         <div className="grid grid-cols-2 md:grid-cols-6 gap-8">
@@ -150,9 +124,7 @@ const Footer = () => {
           <p className="text-sm text-background/50">
             © 2025 PawStay. All rights reserved.
           </p>
-          <div className="flex items-center gap-4">
-            <span className="text-sm text-background/50">Made with ❤️ for pets everywhere</span>
-          </div>
+
         </div>
       </div>
     </footer>

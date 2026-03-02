@@ -226,7 +226,7 @@ const Grooming = () => {
                 {/* Price Range */}
                 <div className="mb-6">
                   <label className="text-sm font-medium text-foreground mb-4 block">
-                    Price Range: ${priceRange[0]} - ${priceRange[1]}
+                    Price Range: ₱{priceRange[0]} - ₱{priceRange[1]}
                   </label>
                   <Slider
                     value={priceRange}

@@ -9,6 +9,10 @@ import {
   adminCreateWalkin,
   adminUpdateBookingStatus,
   adminDeleteBooking,
+  getTodayCheckInsForOwner,
+  getRecentBookingsForOwner,
+  listBookingsForOwner,
+  updateBookingStatusForOwner,
 } from "../controllers/bookingController";
 
 const router = Router();
@@ -30,6 +34,16 @@ router.patch("/admin/:id/status", adminUpdateBookingStatus);
 
 // Admin soft-delete a booking
 router.delete("/admin/:id", adminDeleteBooking);
+// Proprietor: today's check-ins for their properties
+router.get('/mine/today', getTodayCheckInsForOwner);
+// Proprietor: recent bookings for their properties
+router.get('/mine/recent', getRecentBookingsForOwner);
+// Proprietor: list bookings (paginated)
+router.get('/mine/list', listBookingsForOwner);
+// Compatibility: accept /mine as alias for /mine/list
+router.get('/mine', listBookingsForOwner);
+// Proprietor: update booking status
+router.post('/:id/status', updateBookingStatusForOwner);
 
 router.get("/", listBookings);
 router.get("/:id", getBooking);

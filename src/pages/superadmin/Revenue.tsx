@@ -21,28 +21,28 @@ import {
 import { DollarSign, TrendingUp, CreditCard, ArrowUpRight, ArrowDownRight, Download, Filter, Building2 } from "lucide-react";
 
 const revenueStats = [
-  { label: "Total Revenue", value: "$284,520", change: "+18.2%", trend: "up", icon: DollarSign },
-  { label: "Platform Fees", value: "$28,452", change: "+15.8%", trend: "up", icon: TrendingUp },
-  { label: "Pending Payouts", value: "$12,340", change: "-5.2%", trend: "down", icon: CreditCard },
+  { label: "Total Revenue", value: "₱284,520", change: "+18.2%", trend: "up", icon: DollarSign },
+  { label: "Platform Fees", value: "₱28,452", change: "+15.8%", trend: "up", icon: TrendingUp },
+  { label: "Pending Payouts", value: "₱12,340", change: "-5.2%", trend: "down", icon: CreditCard },
   { label: "Active Properties", value: "156", change: "+8", trend: "up", icon: Building2 },
 ];
 
 const transactions = [
-  { id: "TXN-001", property: "Paws Paradise Hotel", type: "Booking", amount: 450, fee: 45, date: "2024-01-15", status: "Completed" },
-  { id: "TXN-002", property: "Happy Tails Resort", type: "Booking", amount: 320, fee: 32, date: "2024-01-15", status: "Completed" },
-  { id: "TXN-003", property: "Pet Haven Grooming", type: "Service", amount: 85, fee: 8.50, date: "2024-01-14", status: "Completed" },
-  { id: "TXN-004", property: "VetCare Plus", type: "Service", amount: 150, fee: 15, date: "2024-01-14", status: "Pending" },
-  { id: "TXN-005", property: "Luxury Pet Suites", type: "Booking", amount: 890, fee: 89, date: "2024-01-13", status: "Completed" },
-  { id: "TXN-006", property: "City Paws Hotel", type: "Booking", amount: 275, fee: 27.50, date: "2024-01-13", status: "Refunded" },
-  { id: "TXN-007", property: "Pampered Pets Spa", type: "Service", amount: 120, fee: 12, date: "2024-01-12", status: "Completed" },
-  { id: "TXN-008", property: "Cozy Kennels", type: "Booking", amount: 180, fee: 18, date: "2024-01-12", status: "Completed" },
+  { id: "TXN-001", property: "Paws Paradise Hotel", type: "Booking", amount: 450, fee: 45, date: "2024-01-15", status: "Completed", amountDisplay: "₱450", feeDisplay: "₱45" },
+  { id: "TXN-002", property: "Happy Tails Resort", type: "Booking", amount: 320, fee: 32, date: "2024-01-15", status: "Completed", amountDisplay: "₱320", feeDisplay: "₱32" },
+  { id: "TXN-003", property: "Pet Haven Grooming", type: "Service", amount: 85, fee: 8.50, date: "2024-01-14", status: "Completed", amountDisplay: "₱85", feeDisplay: "₱8.50" },
+  { id: "TXN-004", property: "VetCare Plus", type: "Service", amount: 150, fee: 15, date: "2024-01-14", status: "Pending", amountDisplay: "₱150", feeDisplay: "₱15" },
+  { id: "TXN-005", property: "Luxury Pet Suites", type: "Booking", amount: 890, fee: 89, date: "2024-01-13", status: "Completed", amountDisplay: "₱890", feeDisplay: "₱89" },
+  { id: "TXN-006", property: "City Paws Hotel", type: "Booking", amount: 275, fee: 27.50, date: "2024-01-13", status: "Refunded", amountDisplay: "₱275", feeDisplay: "₱27.50" },
+  { id: "TXN-007", property: "Pampered Pets Spa", type: "Service", amount: 120, fee: 12, date: "2024-01-12", status: "Completed", amountDisplay: "₱120", feeDisplay: "₱12" },
+  { id: "TXN-008", property: "Cozy Kennels", type: "Booking", amount: 180, fee: 18, date: "2024-01-12", status: "Completed", amountDisplay: "₱180", feeDisplay: "₱18" },
 ];
 
 const payouts = [
-  { id: "PAY-001", property: "Paws Paradise Hotel", amount: 4250, status: "Processing", date: "2024-01-16" },
-  { id: "PAY-002", property: "Happy Tails Resort", amount: 3180, status: "Scheduled", date: "2024-01-17" },
-  { id: "PAY-003", property: "Luxury Pet Suites", amount: 8920, status: "Scheduled", date: "2024-01-17" },
-  { id: "PAY-004", property: "Pet Haven Grooming", amount: 1560, status: "Processing", date: "2024-01-16" },
+  { id: "PAY-001", property: "Paws Paradise Hotel", amount: 4250, amountDisplay: "₱4,250", status: "Processing", date: "2024-01-16" },
+  { id: "PAY-002", property: "Happy Tails Resort", amount: 3180, amountDisplay: "₱3,180", status: "Scheduled", date: "2024-01-17" },
+  { id: "PAY-003", property: "Luxury Pet Suites", amount: 8920, amountDisplay: "₱8,920", status: "Scheduled", date: "2024-01-17" },
+  { id: "PAY-004", property: "Pet Haven Grooming", amount: 1560, amountDisplay: "₱1,560", status: "Processing", date: "2024-01-16" },
 ];
 
 const SuperAdminRevenue = () => {
@@ -130,8 +130,8 @@ const SuperAdminRevenue = () => {
                         <p className="text-xs text-[#808080]">{txn.type}</p>
                       </div>
                     </TableCell>
-                    <TableCell className="text-white font-medium">${txn.amount}</TableCell>
-                    <TableCell className="text-emerald-400">${txn.fee}</TableCell>
+                    <TableCell className="text-white font-medium">{txn.amountDisplay || `₱${txn.amount}`}</TableCell>
+                    <TableCell className="text-emerald-400">{txn.feeDisplay || `₱${txn.fee}`}</TableCell>
                     <TableCell>
                       <Badge 
                         variant="outline"
@@ -172,8 +172,8 @@ const SuperAdminRevenue = () => {
                   </Badge>
                 </div>
                 <div className="flex items-center justify-between">
-                  <p className="text-xl font-bold text-white">${payout.amount.toLocaleString()}</p>
-                  <p className="text-sm text-[#808080]">{payout.date}</p>
+                  <p className="text-xl font-bold text-white">{payout.amountDisplay || `₱${payout.amount.toLocaleString()}`}</p>
+                  <p className="text-sm text-slate-400">{payout.date}</p>
                 </div>
                 <div className="flex gap-2 mt-3">
                   <Button size="sm" className="flex-1 bg-[#ffa31a] hover:bg-[#ffa31a]/90 text-[#1b1b1b]">

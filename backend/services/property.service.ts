@@ -469,9 +469,12 @@ export async function getRandomProperties(limit: number = 6) {
 
   if (!allIds || allIds.length === 0) return [];
 
-  // Shuffle and pick `limit` random IDs
-  const shuffled = allIds.sort(() => Math.random() - 0.5);
-  const selected = shuffled.slice(0, Math.min(limit, shuffled.length));
+  // Fisher-Yates shuffle for unbiased randomness
+  for (let i = allIds.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [allIds[i], allIds[j]] = [allIds[j], allIds[i]];
+  }
+  const selected = allIds.slice(0, Math.min(limit, allIds.length));
   const selectedIds = selected.map((row) => row.id);
 
   // Fetch full property data for selected IDs

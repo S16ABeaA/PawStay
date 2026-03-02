@@ -12,66 +12,10 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Star, MessageSquare, ThumbsUp, Flag, Send } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 
-const initialReviews = [
-  {
-    id: 1,
-    author: "John Smith",
-    pet: "Max",
-    rating: 5,
-    date: "2026-01-28",
-    text: "Absolutely amazing service! Max had the best time and came back so happy. The staff was incredibly attentive and sent daily updates.",
-    replied: true,
-    reply: "Thank you so much, John! We loved having Max with us!",
-    service: "Boarding",
-  },
-  {
-    id: 2,
-    author: "Sarah Johnson",
-    pet: "Bella",
-    rating: 4,
-    date: "2026-01-27",
-    text: "Great grooming service. Bella looks beautiful! Only giving 4 stars because the wait was a bit long.",
-    replied: false,
-    reply: "",
-    service: "Grooming",
-  },
-  {
-    id: 3,
-    author: "Mike Brown",
-    pet: "Charlie",
-    rating: 5,
-    date: "2026-01-25",
-    text: "This is our go-to place for Charlie. The luxury suite is worth every penny. Love the webcam feature!",
-    replied: true,
-    reply: "Charlie is always welcome! Thank you for your loyalty!",
-    service: "Boarding",
-  },
-  {
-    id: 4,
-    author: "Emily Davis",
-    pet: "Luna",
-    rating: 3,
-    date: "2026-01-24",
-    text: "Service was okay. Luna seemed a bit stressed when we picked her up. Would appreciate more communication.",
-    replied: false,
-    reply: "",
-    service: "Daycare",
-  },
-  {
-    id: 5,
-    author: "Alex Wilson",
-    pet: "Cooper",
-    rating: 5,
-    date: "2026-01-22",
-    text: "Outstanding care for Cooper! The team went above and beyond. Will definitely be back!",
-    replied: true,
-    reply: "We adore Cooper! See you again soon!",
-    service: "Boarding",
-  },
-];
+const initialReviews: any[] = [];
 
 const AdminReviews = () => {
   const [reviews, setReviews] = useState(initialReviews);
@@ -80,8 +24,27 @@ const AdminReviews = () => {
   const [replyText, setReplyText] = useState("");
   const { toast } = useToast();
 
-  const averageRating = (reviews.reduce((acc, r) => acc + r.rating, 0) / reviews.length).toFixed(1);
-  const pendingReplies = reviews.filter(r => !r.replied).length;
+  const averageRating = reviews.length ? (reviews.reduce((acc, r) => acc + Number(r.rating || 0), 0) / reviews.length).toFixed(1) : "0.0";
+  const pendingReplies = reviews.filter((r) => !r.replied).length;
+
+  const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5001';
+
+  // Fetch reviews from backend for owner's properties
+  useEffect(() => {
+    const fetchReviews = async () => {
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/reviews/mine`, { credentials: 'include' });
+        const contentType = res.headers.get('content-type') || '';
+        const data = contentType.includes('application/json') ? await res.json() : await res.text();
+        if (!res.ok) throw data;
+        setReviews((data && (data as any).reviews) ? (data as any).reviews : []);
+      } catch (err) {
+        console.error('Failed to load reviews', err);
+      }
+    };
+
+    fetchReviews();
+  }, []);
 
   const handleReply = (review: typeof initialReviews[0]) => {
     setSelectedReview(review);
@@ -91,11 +54,25 @@ const AdminReviews = () => {
 
   const submitReply = () => {
     if (selectedReview && replyText.trim()) {
-      setReviews(reviews.map(r => 
-        r.id === selectedReview.id ? { ...r, replied: true, reply: replyText } : r
-      ));
-      toast({ title: "Reply Sent", description: "Your reply has been posted." });
-      setReplyDialogOpen(false);
+      (async () => {
+        try {
+          const res = await fetch(`${API_BASE_URL}/api/reviews/${selectedReview.id}/reply`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ reply: replyText }),
+          });
+          const contentType = res.headers.get('content-type') || '';
+          const data = contentType.includes('application/json') ? await res.json() : await res.text();
+          if (!res.ok) throw data;
+          setReviews((prev) => prev.map((r) => (r.id === selectedReview.id ? { ...r, replied: true, reply: replyText } : r)));
+          toast({ title: 'Reply Sent', description: 'Your reply has been posted.' });
+          setReplyDialogOpen(false);
+        } catch (err: any) {
+          console.error('Reply failed', err);
+          toast({ title: 'Error', description: err?.message || 'Failed to send reply', variant: 'destructive' });
+        }
+      })();
     }
   };
 
