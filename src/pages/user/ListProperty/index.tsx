@@ -8,382 +8,91 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import PropertyTypeCard from "@/components/property-listing/PropertyTypeCard";
-import StepIndicator from "@/components/property-listing/StepIndicator";
-import {
-  MapContainer,
-  Marker,
-  TileLayer,
-  useMapEvents,
-  type MapContainerProps,
-  type MarkerProps,
-  type TileLayerProps,
-} from "react-leaflet";
-import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import {
-  Building2,
-  Scissors,
-  Stethoscope,
   ArrowRight,
   ArrowLeft,
-  Star,
-  Users,
-  TrendingUp,
-  Shield,
   CheckCircle2,
-  Clock,
-  MapPin,
-  Phone,
-  Mail,
   Upload,
   FileText,
   X,
-  Image,
 } from "lucide-react";
-import type { LucideIcon } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { PropertyService, PropertySubmissionData } from "@/utils/propertyService";
+import { PropertyService } from "@/utils/propertyService";
 
-const steps = [
-  { number: 1, title: "Establishment Info" },
-  { number: 2, title: "Property Setup" },
-  { number: 3, title: "Photos" },
-  { number: 4, title: "Pricing and Calendar" },
-  { number: 5, title: "Legal Info" },
-  { number: 6, title: "Review and Complete" },
-];
+// Components
+import ListPropertyHero from "./components/listPropertyHero";
+import StepIndicator from "./components/listPropertyStepIndicator";
 
-const countryCodes = [
-  { code: "+63", country: "Philippines", flag: "🇵🇭" },
-  { code: "+1", country: "United States", flag: "🇺🇸" },
-  { code: "+1", country: "Canada", flag: "🇨🇦" },
-  { code: "+44", country: "United Kingdom", flag: "🇬🇧" },
-  { code: "+61", country: "Australia", flag: "🇦🇺" },
-  { code: "+65", country: "Singapore", flag: "🇸🇬" },
-  { code: "+60", country: "Malaysia", flag: "🇲🇾" },
-  { code: "+62", country: "Indonesia", flag: "🇮🇩" },
-  { code: "+66", country: "Thailand", flag: "🇹🇭" },
-  { code: "+84", country: "Vietnam", flag: "🇻🇳" },
-  { code: "+81", country: "Japan", flag: "🇯🇵" },
-  { code: "+82", country: "South Korea", flag: "🇰🇷" },
-  { code: "+86", country: "China", flag: "🇨🇳" },
-  { code: "+852", country: "Hong Kong", flag: "🇭🇰" },
-  { code: "+886", country: "Taiwan", flag: "🇹🇼" },
-];
+// Constants
+import { PropertyTypeId } from "./static/propertyTypeIDs";
+import { INITIAL_FORM_DATA } from "./static/initialFormData";
+import { LIST_PROPERTY_STEPS } from "./static/listPropertySteps";
+import { COUNTRY_CODES } from "./static/countryCodes";
+import { AMENITY_OPTIONS } from "./static/amenityOptions";
+import { BOOKING_RULE_OPTIONS } from "./static/bookingRuleOptions";
+import { ADD_ON_OPTIONS } from "./static/addOnOptions";
+import { PRICING_DISCLAIMER_OPTIONS } from "./static/priceDisclaimerOptions";
 
-type PropertyTypeId = "hotel" | "grooming" | "veterinary";
+// Types
+import { PropertyInitalData } from "./types/initial_types/propertyInitialData";
+import { PropertySubmissionData } from "./types/submission_types/propertySubmissionData";
 
-const propertyTypes: Array<{
-  id: PropertyTypeId;
-  icon: LucideIcon;
-  title: string;
-  description: string;
-}> = [
-  {
-    id: "hotel",
-    icon: Building2,
-    title: "Pet Hotel / Boarding",
-    description: "Overnight stays and daycare for pets",
-  },
-  {
-    id: "grooming",
-    icon: Scissors,
-    title: "Grooming Salon",
-    description: "Bathing, haircuts, and spa services",
-  },
-  {
-    id: "veterinary",
-    icon: Stethoscope,
-    title: "Veterinary Clinic",
-    description: "Medical care and wellness services",
-  },
-];
-const amenityOptions: Array<{ name: string; icon: string; types?: PropertyTypeId[] }> = [
-  // Boarding (hotel)
-  { name: "Individual kennel / private room", icon: "🧺", types: ["hotel"] },
-  { name: "Shared room", icon: "🛏️", types: ["hotel"] },
-  { name: "Luxury suite", icon: "🛋️", types: ["hotel"] },
-  { name: "Size-based enclosures (small / medium / large pets)", icon: "📏", types: ["hotel"] },
-  { name: "Indoor boarding", icon: "🏠", types: ["hotel"] },
-  { name: "Outdoor access", icon: "🌿", types: ["hotel"] },
-  { name: "Air-conditioned rooms", icon: "❄️", types: ["hotel"] },
-  { name: "Heated rooms", icon: "🔥", types: ["hotel"] },
-  { name: "Natural ventilation", icon: "🍃", types: ["hotel"] },
-  { name: "Comfortable bedding provided", icon: "🧸", types: ["hotel"] },
-  { name: "Owner-provided bedding allowed", icon: "🧺", types: ["hotel"] },
-  { name: "Soundproof / quiet areas", icon: "🔇", types: ["hotel"] },
-  { name: "24/7 staff supervision", icon: "👁️", types: ["hotel"] },
-  { name: "Scheduled feeding", icon: "🍽️", types: ["hotel"] },
-  { name: "Custom diet accommodation", icon: "🥣", types: ["hotel"] },
-  { name: "Medication administration", icon: "💊", types: ["hotel"] },
-  { name: "Vet-supervised boarding", icon: "⚕️", types: ["hotel"] },
-  { name: "Special needs care", icon: "🫶", types: ["hotel"] },
-  { name: "Daily walks", icon: "🚶", types: ["hotel"] },
-  { name: "Group playtime", icon: "🐕", types: ["hotel"] },
-  { name: "Solo playtime", icon: "🎾", types: ["hotel"] },
-  { name: "Outdoor play yard", icon: "🏕️", types: ["hotel"] },
-  { name: "Enrichment toys & activities", icon: "🧩", types: ["hotel"] },
-  { name: "Secure fencing", icon: "🛡️", types: ["hotel"] },
-  { name: "CCTV monitoring", icon: "📹", types: ["hotel"] },
-  { name: "Regular sanitation", icon: "🧼", types: ["hotel"] },
-  { name: "Vaccination required", icon: "✅", types: ["hotel"] },
-  { name: "Separate cat and dog areas", icon: "🐶", types: ["hotel"] },
-  { name: "Photo / video updates", icon: "📷", types: ["hotel"] },
-  { name: "Live pet cam", icon: "📡", types: ["hotel"] },
-  { name: "Emergency contact support", icon: "🆘", types: ["hotel"] },
-  { name: "Long-stay discounts", icon: "🏷️", types: ["hotel"] },
-
-  // Veterinary
-  { name: "Consultation / exam rooms", icon: "🩺", types: ["veterinary"] },
-  { name: "Diagnostic laboratory", icon: "🧪", types: ["veterinary"] },
-  { name: "X-ray services", icon: "🦴", types: ["veterinary"] },
-  { name: "Ultrasound services", icon: "📡", types: ["veterinary"] },
-  { name: "Surgical suite", icon: "🏥", types: ["veterinary"] },
-  { name: "Recovery / observation area", icon: "🛏️", types: ["veterinary"] },
-  { name: "Isolation ward", icon: "🚪", types: ["veterinary"] },
-  { name: "General check-ups", icon: "✅", types: ["veterinary"] },
-  { name: "Vaccinations", icon: "💉", types: ["veterinary"] },
-  { name: "Emergency care", icon: "🚑", types: ["veterinary"] },
-  { name: "Dental services", icon: "🦷", types: ["veterinary"] },
-  { name: "Minor procedures", icon: "🩹", types: ["veterinary"] },
-  { name: "Major surgery", icon: "⚕️", types: ["veterinary"] },
-  { name: "Chronic illness management", icon: "📋", types: ["veterinary"] },
-  { name: "Licensed veterinarian on-site", icon: "👩‍⚕️", types: ["veterinary"] },
-  { name: "Veterinary technicians", icon: "🧑‍⚕️", types: ["veterinary"] },
-  { name: "24/7 emergency availability", icon: "🕐", types: ["veterinary"] },
-  { name: "Appointment booking", icon: "📅", types: ["veterinary"] },
-  { name: "Walk-in accepted", icon: "🚶", types: ["veterinary"] },
-  { name: "Digital medical records", icon: "💾", types: ["veterinary"] },
-  { name: "Online prescription refills", icon: "💊", types: ["veterinary"] },
-  { name: "Health reminders", icon: "🔔", types: ["veterinary"] },
-  { name: "Post-treatment follow-ups", icon: "☎️", types: ["veterinary"] },
-
-  // Grooming
-  { name: "Bath & blow-dry", icon: "🛁", types: ["grooming"] },
-  { name: "Haircut / trimming", icon: "✂️", types: ["grooming"] },
-  { name: "Breed-specific styling", icon: "🐩", types: ["grooming"] },
-  { name: "Nail trimming", icon: "🧷", types: ["grooming"] },
-  { name: "Ear cleaning", icon: "👂", types: ["grooming"] },
-  { name: "Eye cleaning", icon: "👁️", types: ["grooming"] },
-  { name: "De-shedding treatment", icon: "🧽", types: ["grooming"] },
-  { name: "Medicated baths", icon: "🧴", types: ["grooming"] },
-  { name: "Flea & tick treatment", icon: "🪲", types: ["grooming"] },
-  { name: "Anal gland expression", icon: "🧼", types: ["grooming"] },
-  { name: "Teeth brushing", icon: "🦷", types: ["grooming"] },
-  { name: "Professional grooming tables", icon: "🪑", types: ["grooming"] },
-  { name: "Dedicated bathing stations", icon: "🚿", types: ["grooming"] },
-  { name: "Cage-free grooming", icon: "🐾", types: ["grooming"] },
-  { name: "Low-stress handling", icon: "🌿", types: ["grooming"] },
-  { name: "Separate drying area", icon: "💨", types: ["grooming"] },
-  { name: "Hypoallergenic products", icon: "🧴", types: ["grooming"] },
-  { name: "Sensitive-skin products", icon: "🌼", types: ["grooming"] },
-  { name: "One-pet-at-a-time grooming", icon: "🐶", types: ["grooming"] },
-  { name: "Vet-on-call for grooming", icon: "☎️", types: ["grooming"] },
-  { name: "Same-day service", icon: "⚡", types: ["grooming"] },
-  { name: "Appointment scheduling", icon: "📅", types: ["grooming"] },
-  { name: "Grooming packages", icon: "🎁", types: ["grooming"] },
-  { name: "Add-on spa services", icon: "🫧", types: ["grooming"] },
-];
-
-const bookingRuleOptions: Array<{ name: string; description: string; types?: PropertyTypeId[] }> = [
-  { name: "Advance booking required", description: "Set minimum notice period" },
-  { name: "Same-day booking allowed", description: "Accept last-minute bookings" },
-  { name: "Minimum stay requirements", description: "Set minimum nights/days", types: ["hotel"] },
-  { name: "Maximum stay limits", description: "Set maximum stay duration", types: ["hotel"] },
-  { name: "Deposit required", description: "Require payment to secure booking" },
-  { name: "Full payment upfront", description: "Require full payment at booking" },
-];
-
-const addOnOptions: Array<{ name: string; types?: PropertyTypeId[] }> = [
-  { name: "Flea & tick treatment", types: ["grooming", "hotel"] },
-  { name: "De-shedding", types: ["grooming", "hotel"] },
-  { name: "Nail grinding", types: ["grooming"] },
-  { name: "Teeth brushing", types: ["grooming"] },
-  { name: "Medication administration", types: ["hotel"] },
-  { name: "Extra playtime", types: ["hotel"] },
-  { name: "Special diet handling", types: ["hotel"] },
-];
-
-const pricingDisclaimerOptions: Array<{ name: string; types?: PropertyTypeId[] }> = [
-  { name: "Prices may vary based on pet condition" },
-  { name: "Final price confirmed after inspection" },
-  { name: "Vet procedures require assessment first", types: ["veterinary"] },
-  { name: "Emergency fees apply for after-hours service", types: ["veterinary", "grooming"] },
-  { name: "Holiday surcharges apply during peak seasons" },
-  { name: "Multi-pet discounts available" },
-  { name: "Deposit required to secure booking" },
-  { name: "Cancellation fees apply as per policy" },
-];
-
-const groomingServicesList = [
-  "Bath & blow dry",
-  "Haircut / trimming",
-  "Nail clipping",
-  "Ear cleaning",
-  "Teeth brushing",
-  "De-shedding",
-  "Breed-specific grooming",
-  "Add-ons (flea treatment, spa packages)",
-];
-
-const vetServicesList = [
-  "General consultation",
-  "Vaccination",
-  "Deworming",
-  "Minor / major surgery",
-  "Laboratory tests",
-  "Emergency care",
-  "Pharmacy / pet meds",
-  "Home visits",
-];
-
-const boardingServicesList = [
-  "Daycare",
-  "Overnight / long-term boarding",
-  "Cage-free boarding",
-  "Private rooms / suites",
-  "Playtime & socialization",
-  "Special care (senior pets, medication)",
-];
-
-const petTypesList = [
-  "Dogs (small / medium / large)",
-  "Cats",
-  "Exotic pets (birds, rabbits, reptiles)",
-];
-
-const facilitiesAmenitiesList = [
-  "Air-conditioned facilities",
-  "CCTV / pet cams",
-  "Indoor & outdoor play areas",
-  "Separate areas for dogs & cats",
-  "Isolation room (vet / boarding)",
-  "Grooming equipment quality",
-  "Medical equipment (for vets)",
-  "Feeding bowls / bedding provided",
-  "24/7 supervision (boarding)",
-];
-
-const bookingRulesList = [
-  "Advance booking required",
-  "Same-day booking allowed",
-  "Cancellation & rescheduling policy",
-  "Vaccination requirements",
-  "Health declaration required",
-  "Liability waiver",
-  "Aggressive behavior policy",
-];
-
-const healthSafetyList = [
-  "Required vaccination records",
-  "Parasite prevention requirement",
-  "Emergency protocol",
-  "Vet on-call (for grooming/boarding)",
-  "Isolation procedure for sick pets",
-  "Cleaning & sanitation routine",
-];
+// Sections
+import EstablishmentInfo01 from "./sections/EstablishmentInfo01";
+import EstablishmentInfo02 from "./sections/EstablishmentInfo02";
+import PropertySetup01 from "./sections/PropertySetup01";
+import PropertySetup02 from "./sections/PropertySetup02";
+import PropertySetup03 from "./sections/PropertySetup03";
+import PropertySetup04 from "./sections/PropertySetup04";
+import PropertySetup05 from "./sections/PropertySetup05";
+import Photos from "./sections/Photos";
 
 const ListProperty = () => {
   const { toast } = useToast();
   const navigate = useNavigate();
+
   const [currentStep, setCurrentStep] = useState(1);
   const [establishmentStep, setEstablishmentStep] = useState(1);
   const [propertySetupStep, setPropertySetupStep] = useState(1);
-  const [propertySetupCompleted, setPropertySetupCompleted] = useState(0);
   const [pricingCalendarStep, setPricingCalendarStep] = useState(1);
-  const [pricingCalendarCompleted, setPricingCalendarCompleted] = useState(0);
+
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedTypes, setSelectedTypes] = useState<PropertyTypeId[]>([]);
-  const [formData, setFormData] = useState({
-            propertyName: "",
-            addressSearch: "",
-            addressLine2: "",
-            country: "",
-            city: "",
-            zipCode: "",
-            latitude: 14.5995,
-            longitude: 120.9842,
-            phone: "",
-            ownerName: "",
-            email: "",
-            password: "",
-            confirmPassword: "",
-            description: "",
-            isPinAccurate: true,
-            services: [] as string[],
-            petTypesAccepted: [] as string[],
-            dogSizes: [] as string[],
-            exoticPetTypes: "",
-            breedRestrictions: false,
-            breedRestrictionDetails: "",
-            aggressivePolicy: false,
-            aggressivePolicyDetails: "",
-            unvaccinatedPolicy: false,
-            unvaccinatedPolicyDetails: "",
-            facilitiesAmenities: [] as string[],
-            sameHoursEveryDay: false,
-            dailyOpenTime: "",
-            dailyCloseTime: "",
-            weeklyHours: {} as Record<string, { open: string; close: string }>,
-            weekendAvailability: false,
-            holidayAvailability: false,
-            emergencyServices: false,
-            checkInCutoff: "",
-            pickupStart: "",
-            pickupEnd: "",
-            appointmentOnly: "",
-            bookingRules: [] as string[],
-            cancellationPolicy: { freeCancellation: "24hours", lateFee: "", noShow: "" },
-            complianceRequirements: [] as string[],
-            healthSafety: [] as string[],
-            vetAvailability: [] as string[],
-            sanitationProtocols: [] as string[],
-            emergencyContact: "",
-            nearestVetHospital: "",
-            emergencyResponseTime: "",
-            baseServices: [] as { name: string; priceType: string; price: string; minPrice: string; maxPrice: string; duration: string }[],
-            petSizePricing: { small: "", medium: "", large: "", giant: "", cats: "", exotic: "" },
-            addOns: [] as { name: string; price: string; type: string }[],
-            vetFees: {} as Record<string, string>,
-            boardingRules: { advanceBooking: false, sameDayBooking: false, freeCancellation: false, lateCancellationFee: false, lateCancellationFeeAmount: "", vaccinationRequired: false, healthDeclaration: false, noAggressivePets: false, liabilityWaiver: false },
-            feesCharges: { serviceFee: "", taxes: "Included", noShow: "", latePickup: "", cleaningFee: "", emergencyFee: "", holidaySurcharge: "", cancellationFee: "" },
-            paymentOptions: { deposit: false, methods: [] as string[], refundPolicy: "", qrCodeGCash: "" as string, qrCodePayMaya: "" as string },
-            pricingNotes: "",
-            additionalPricingNotes: "",
-            propertyImages: [] as File[],
-            lguPermits: [] as File[],
-            baiDocument: null as File | null,
-            contractDocument: null as File | null,
-            occupancyRate: 0,
-            animalCapacity: 0,
-            serviceCapacities: [] as { name: string; capacity: number }[],
-            legalEntityType: "" as "" | "individual" | "business",
-            contractingParty: {
-              firstName: "",
-              middleName: "",
-              lastName: "",
-              email: "",
-              phone: "",
-              phoneCountryCode: "+63",
-            },
-            contractingPartyAddress: {
-              country: "Philippines",
-              streetAddress: "",
-              addressLine2: "",
-              city: "",
-              postalCode: "",
-            },
-            legalAgreementAccepted: {
-              termsAccepted: false,
-              dataProcessing: false,
-            },
-            finalAgreementAccepted: false,
-  });
+  const [formData, setFormData] = useState<PropertyInitalData>(INITIAL_FORM_DATA);
 
   const hasBoarding = selectedTypes.includes("hotel");
   const hasGrooming = selectedTypes.includes("grooming");
   const hasVet = selectedTypes.includes("veterinary");
+
+  const updateForm = (section: Partial<PropertyInitalData>) => {
+    setFormData(prev => ({ ...prev, ...section }));
+  };
+
+  const updateSelectedTypes = (type) => {
+    setSelectedTypes((prev) =>
+      prev.includes(type.id)
+        ? prev.filter((item) => item !== type.id)
+        : [...prev, type.id],
+    )
+  }
+
+  const updateAddress = (lat, lng, data, address) => {
+    setFormData((prev) => ({
+      ...prev,
+      latitude: lat,
+      longitude: lng,
+      addressSearch: data?.display_name ?? prev.addressSearch,
+      country: address.country ?? prev.country,
+      city:
+        address.city ??
+        address.town ??
+        address.village ??
+        address.state ??
+        prev.city,
+      zipCode: address.postcode ?? prev.zipCode,
+    }));
+  }
 
   const pricingSteps = useMemo(() => {
     const stepsList = [1];
@@ -404,26 +113,9 @@ const ListProperty = () => {
     return stepsList;
   }, [hasBoarding, hasGrooming, hasVet]);
 
-  const visibleAmenities = useMemo(
-    () =>
-      amenityOptions.filter(
-        (amenity) =>
-          !amenity.types || amenity.types.some((type) => selectedTypes.includes(type)),
-      ),
-    [selectedTypes],
-  );
-
-  const visibleBookingRules = useMemo(
-    () =>
-      bookingRuleOptions.filter(
-        (rule) => !rule.types || rule.types.some((type) => selectedTypes.includes(type)),
-      ),
-    [selectedTypes],
-  );
-
   const visibleAddOns = useMemo(
     () =>
-      addOnOptions.filter(
+      ADD_ON_OPTIONS.filter(
         (addon) => !addon.types || addon.types.some((type) => selectedTypes.includes(type)),
       ),
     [selectedTypes],
@@ -431,87 +123,12 @@ const ListProperty = () => {
 
   const visiblePricingDisclaimers = useMemo(
     () =>
-      pricingDisclaimerOptions.filter(
+      PRICING_DISCLAIMER_OPTIONS.filter(
         (disclaimer) =>
           !disclaimer.types || disclaimer.types.some((type) => selectedTypes.includes(type)),
       ),
     [selectedTypes],
   );
-
-  const redPinIcon = useMemo(
-    () =>
-      L.icon({
-        iconUrl:
-          "data:image/svg+xml;utf8," +
-          encodeURIComponent(
-            `<svg xmlns='http://www.w3.org/2000/svg' width='32' height='46' viewBox='0 0 32 46'>
-              <path d='M16 0C7.7 0 1 6.7 1 15c0 10.5 15 31 15 31s15-20.5 15-31C31 6.7 24.3 0 16 0z' fill='#e11d48'/>
-              <circle cx='16' cy='15' r='6' fill='white'/>
-            </svg>`,
-          ),
-        iconSize: [32, 46],
-        iconAnchor: [16, 46],
-      }),
-    [],
-  );
-
-  const reverseGeocode = async (lat: number, lng: number) => {
-    try {
-      const params = new URLSearchParams({
-        format: "json",
-        lat: String(lat),
-        lon: String(lng),
-        addressdetails: "1",
-      });
-      const response = await fetch(
-        `https://nominatim.openstreetmap.org/reverse?${params.toString()}`,
-        {
-          headers: {
-            Accept: "application/json",
-          },
-        },
-      );
-      if (!response.ok) return;
-      const data = await response.json();
-      const address = data?.address ?? {};
-      setFormData((prev) => ({
-        ...prev,
-        latitude: lat,
-        longitude: lng,
-        addressSearch: data?.display_name ?? prev.addressSearch,
-        country: address.country ?? prev.country,
-        city:
-          address.city ??
-          address.town ??
-          address.village ??
-          address.state ??
-          prev.city,
-        zipCode: address.postcode ?? prev.zipCode,
-      }));
-    } catch {
-      setFormData((prev) => ({
-        ...prev,
-        latitude: lat,
-        longitude: lng,
-      }));
-    }
-  };
-
-  const MapClickHandler = ({
-    enabled,
-    onSelect,
-  }: {
-    enabled: boolean;
-    onSelect: (lat: number, lng: number) => void;
-  }) => {
-    useMapEvents({
-      click(e) {
-        if (!enabled) return;
-        onSelect(e.latlng.lat, e.latlng.lng);
-      },
-    });
-    return null;
-  };
 
   const handleNext = () => {
     if (currentStep === 1) {
@@ -551,10 +168,8 @@ const ListProperty = () => {
 
     if (currentStep === 2) {
       if (propertySetupStep < 5) {
-        setPropertySetupCompleted(propertySetupStep);
         setPropertySetupStep((prev) => prev + 1);
       } else {
-        setPropertySetupCompleted(5);
         setCurrentStep(3);
       }
       return;
@@ -578,10 +193,8 @@ const ListProperty = () => {
       const nextStep = pricingSteps[currentIndex + 1];
 
       if (nextStep) {
-        setPricingCalendarCompleted(pricingCalendarStep);
         setPricingCalendarStep(nextStep);
       } else {
-        setPricingCalendarCompleted(pricingSteps[pricingSteps.length - 1] ?? pricingCalendarStep);
         setCurrentStep(5);
       }
       return;
@@ -637,7 +250,6 @@ const ListProperty = () => {
     if (currentStep === 2) {
       if (propertySetupStep > 1) {
         setPropertySetupStep((prev) => prev - 1);
-        setPropertySetupCompleted((prev) => prev - 1);
         return;
       }
       setCurrentStep(1);
@@ -648,7 +260,6 @@ const ListProperty = () => {
     if (currentStep === 3) {
       setCurrentStep(2);
       setPropertySetupStep(5);
-      setPropertySetupCompleted(6);
       return;
     }
 
@@ -658,7 +269,6 @@ const ListProperty = () => {
 
       if (previousStep) {
         setPricingCalendarStep(previousStep);
-        setPricingCalendarCompleted((prev) => Math.max(prev - 1, 0));
       } else {
         setCurrentStep(3);
       }
@@ -669,7 +279,6 @@ const ListProperty = () => {
       setCurrentStep(4);
       const lastPricingStep = pricingSteps[pricingSteps.length - 1] ?? pricingCalendarStep;
       setPricingCalendarStep(lastPricingStep);
-      setPricingCalendarCompleted(lastPricingStep);
       return;
     }
 
@@ -753,11 +362,11 @@ const ListProperty = () => {
 
       // Prepare submission data
       const filteredAmenities = formData.facilitiesAmenities.filter((amenity) =>
-        visibleAmenities.some((option) => option.name === amenity),
+        AMENITY_OPTIONS.some((option) => option.name === amenity),
       );
 
       const filteredBookingRules = formData.bookingRules.filter((rule) =>
-        visibleBookingRules.some((option) => option.name === rule),
+        BOOKING_RULE_OPTIONS.some((option) => option.name === rule),
       );
 
       const primaryType = (selectedTypes[0] ?? "hotel") as PropertyTypeId;
@@ -838,49 +447,6 @@ const ListProperty = () => {
     }
   };
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (files) {
-      const newImages = Array.from(files);
-      setFormData((prev) => ({
-        ...prev,
-        propertyImages: [...prev.propertyImages, ...newImages].slice(0, 10), // Max 10 images
-      }));
-    }
-  };
-
-  const removeImage = (index: number) => {
-    setFormData((prev) => ({
-      ...prev,
-      propertyImages: prev.propertyImages.filter((_, i) => i !== index),
-    }));
-  };
-
-  const mapProps = {
-    center: [formData.latitude, formData.longitude] as L.LatLngExpression,
-    zoom: 16,
-    scrollWheelZoom: true,
-    className: "h-full w-full",
-  } as unknown as MapContainerProps;
-
-  const tileLayerProps = {
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-    url: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
-  } as unknown as TileLayerProps;
-
-  const markerProps = {
-    position: [formData.latitude, formData.longitude] as L.LatLngExpression,
-    icon: redPinIcon,
-    draggable: true,
-    eventHandlers: {
-      dragend: (event: L.DragEndEvent) => {
-        const marker = event.target as L.Marker;
-        const { lat, lng } = marker.getLatLng();
-        void reverseGeocode(lat, lng);
-      },
-    },
-  } as unknown as MarkerProps;
-
   const propertySetupTotal = 5;
   const propertySetupCompletedDisplay = currentStep > 2
     ? propertySetupTotal
@@ -899,41 +465,7 @@ const ListProperty = () => {
       <Header />
       <main>
         {/* Hero Section */}
-        <section className="py-12 md:py-16 bg-gradient-to-b from-primary/5 to-background">
-          <div className="container">
-            <div className="text-center max-w-3xl mx-auto mb-8">
-              <h1 className="font-display text-3xl md:text-4xl lg:text-5xl font-bold text-foreground mb-4">
-                List Your Property on{" "}
-                <span className="text-gradient">PawStay</span>
-              </h1>
-              <p className="text-lg text-muted-foreground">
-                Join thousands of pet care providers and start
-                earning today. It only takes 10 minutes to get
-                started.
-              </p>
-            </div>
-
-            {/* Trust indicators */}
-            <div className="flex flex-wrap items-center justify-center gap-6 text-sm text-muted-foreground">
-              <div className="flex items-center gap-2">
-                <CheckCircle2 className="h-5 w-5 text-success" />
-                <span>Free to list</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <Clock className="h-5 w-5 text-primary" />
-                <span>Go live in 24 hours</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <Users className="h-5 w-5 text-accent" />
-                <span>2,500+ active partners</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <Star className="h-5 w-5 text-rating" />
-                <span>4.8 partner satisfaction</span>
-              </div>
-            </div>
-          </div>
-        </section>
+        <ListPropertyHero />
 
         {/* Main Content */}
         <section className="py-12 md:py-16">
@@ -943,7 +475,7 @@ const ListProperty = () => {
               <div>
                 <div className="bg-card rounded-2xl shadow-elevated p-6 md:p-8">
                   <StepIndicator
-                    steps={steps}
+                    steps={LIST_PROPERTY_STEPS}
                     currentStep={currentStep}
                     establishmentSubstep={establishmentStep}
                     propertySetupCompleted={propertySetupCompletedDisplay}
@@ -955,1078 +487,74 @@ const ListProperty = () => {
 
                   {/* Step 1: Establishment Info */}
                   {currentStep === 1 && establishmentStep === 1 && (
-                    <div className="space-y-6">
-                      <div className="md:col-span-3 space-y-2">
-                        <Label htmlFor="propertyName" className="text-base font-semibold text-foreground">
-                          Property Name *
-                        </Label>
-                        <Input
-                          id="propertyName"
-                          placeholder="e.g., Happy Tails Pet Hotel"
-                          value={formData.propertyName}
-                          onChange={(e) =>
-                            setFormData((prev) => ({
-                              ...prev,
-                              propertyName: e.target.value,
-                            }))
-                          }
-                          className="h-12 text-base"
-                        />
-                      </div>
-                      <div>
-                        <h3 className="text-lg font-semibold text-foreground mb-2">
-                          Property Type
-                        </h3>
-                        <p className="text-muted-foreground">
-                          Select all that apply to your business
-                        </p>
-                      </div>
-                      <div className="grid md:grid-cols-3 gap-4">
-                        {propertyTypes.map((type) => (
-                          <PropertyTypeCard
-                            key={type.id}
-                            icon={type.icon}
-                            title={type.title}
-                            description={type.description}
-                            isSelected={
-                              selectedTypes.includes(type.id)
-                            }
-                            onClick={() =>
-                              setSelectedTypes((prev) =>
-                                prev.includes(type.id)
-                                  ? prev.filter((item) => item !== type.id)
-                                  : [...prev, type.id],
-                              )
-                            }
-                          />
-                        ))}
-                      </div>
-                    </div>
+                    <EstablishmentInfo01 
+                      formData={formData} 
+                      onChange={updateForm} 
+                      selectedTypes={selectedTypes} 
+                      updateSelectedTypes={updateSelectedTypes}                      
+                    />
                   )}
 
                   {currentStep === 1 && establishmentStep === 2 && (
-                    <div className="space-y-6">
-                      <div>
-                        <h3 className="text-lg font-semibold text-foreground mb-2">
-                          Basic Info
-                        </h3>
-                        <p className="text-muted-foreground">
-                          Provide your address details for accurate listing placement
-                        </p>
-                      </div>
-                      <div className="grid lg:grid-cols-2 gap-4">
-                        <div className="rounded-2xl border border-border overflow-hidden h-[420px]">
-                            <MapContainer {...mapProps}>
-                              <TileLayer {...tileLayerProps} />
-                              <Marker {...markerProps} />
-                            <MapClickHandler
-                              enabled
-                              onSelect={(lat, lng) => void reverseGeocode(lat, lng)}
-                            />
-                          </MapContainer>
-                        </div>
-                        <div className="rounded-2xl border border-border bg-background p-5">
-                          <div className="grid md:grid-cols-2 gap-4">
-                            <div className="md:col-span-2 space-y-2">
-                              <Label htmlFor="addressSearch">
-                                Find Your Address
-                              </Label>
-                              <Input
-                                id="addressSearch"
-                                placeholder="De La Salle University Manila"
-                                value={formData.addressSearch}
-                                onChange={(e) =>
-                                  setFormData((prev) => ({
-                                    ...prev,
-                                    addressSearch: e.target.value,
-                                  }))
-                                }
-                              />
-                            </div>
-                            <div className="md:col-span-2 space-y-2">
-                              <Label htmlFor="addressLine2">
-                                Apartment or floor number (optional)
-                              </Label>
-                              <Input
-                                id="addressLine2"
-                                placeholder="Apartment, building, floor, etc"
-                                value={formData.addressLine2}
-                                onChange={(e) =>
-                                  setFormData((prev) => ({
-                                    ...prev,
-                                    addressLine2: e.target.value,
-                                  }))
-                                }
-                              />
-                            </div>
-                            <div className="space-y-2">
-                              <Label htmlFor="country">Country/region</Label>
-                              <Input
-                                id="country"
-                                placeholder="Philippines"
-                                value={formData.country}
-                                onChange={(e) =>
-                                  setFormData((prev) => ({
-                                    ...prev,
-                                    country: e.target.value,
-                                  }))
-                                }
-                              />
-                            </div>
-                            <div className="space-y-2">
-                              <Label htmlFor="city">City</Label>
-                              <Input
-                                id="city"
-                                placeholder="Manila"
-                                value={formData.city}
-                                onChange={(e) =>
-                                  setFormData((prev) => ({
-                                    ...prev,
-                                    city: e.target.value,
-                                  }))
-                                }
-                              />
-                            </div>
-                            <div className="space-y-2">
-                              <Label htmlFor="zipCode">Zip code</Label>
-                              <Input
-                                id="zipCode"
-                                placeholder="1004"
-                                value={formData.zipCode}
-                                onChange={(e) =>
-                                  setFormData((prev) => ({
-                                    ...prev,
-                                    zipCode: e.target.value,
-                                  }))
-                                }
-                              />
-                            </div>
-                            <div className="md:col-span-2 space-y-2">
-                              <div className="flex items-start gap-2">
-                                <Checkbox
-                                  id="pinAccurate"
-                                  checked={formData.isPinAccurate}
-                                  onCheckedChange={(checked) =>
-                                    setFormData((prev) => ({
-                                      ...prev,
-                                      isPinAccurate: Boolean(checked),
-                                    }))
-                                  }
-                                  className="mt-1"
-                                />
-                                <Label
-                                  htmlFor="pinAccurate"
-                                  className="text-sm cursor-pointer text-muted-foreground"
-                                >
-                                  Update the address by moving the pin on the map.
-                                </Label>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
+                    <EstablishmentInfo02
+                      formData={formData}
+                      onChange={updateForm}
+                      updateAddress={updateAddress}
+                    />
                   )}
 
                   {/* Step 2: Property Setup */}
                   {currentStep === 2 && propertySetupStep === 1 && (
-                    <div className="max-w-4xl mx-auto">
-                      <div className="bg-card rounded-2xl shadow-elevated p-6 md:p-8">
-                        <div className="text-center mb-8">
-                          <h2 className="text-2xl font-semibold text-foreground mb-2">
-                            Pet Types Accepted
-                          </h2>
-                          <p className="text-muted-foreground">
-                            Specify which types of pets you accept and any restrictions
-                          </p>
-                        </div>
-
-                        <div className="space-y-8">
-                          {/* Pet Types */}
-                          <div>
-                            <h3 className="text-lg font-medium mb-6">Pet Types</h3>
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                              {[
-                                { name: "Dogs", icon: "🐶", sizes: ["Small", "Medium", "Large"] },
-                                { name: "Cats", icon: "🐱", sizes: null },
-                                { name: "Exotic Pets", icon: "🐦", sizes: null }
-                              ].map((type) => {
-                                const isSelected = formData.petTypesAccepted.includes(type.name);
-                                return (
-                                  <div key={type.name} className="space-y-4">
-                                    <div
-                                      className={`p-6 border-2 rounded-xl cursor-pointer transition-all text-center ${
-                                        isSelected
-                                          ? "border-primary bg-primary/5"
-                                          : "border-border hover:border-primary/30"
-                                      }`}
-                                      onClick={() => {
-                                        const newTypes = isSelected
-                                          ? formData.petTypesAccepted.filter(t => t !== type.name)
-                                          : [...formData.petTypesAccepted, type.name];
-                                        setFormData((prev) => ({ ...prev, petTypesAccepted: newTypes }));
-                                      }}
-                                    >
-                                      <div className="text-4xl mb-2">{type.icon}</div>
-                                      <div className="text-lg font-medium">{type.name}</div>
-                                    </div>
-
-                                    {isSelected && type.name === "Dogs" && (
-                                      <div className="bg-secondary/30 rounded-xl p-4 animate-in slide-in-from-top-2">
-                                        <h4 className="text-sm font-medium mb-3">Dog Sizes Accepted</h4>
-                                        <div className="flex gap-2">
-                                          {type.sizes?.map((size) => (
-                                            <label key={size} className="flex items-center gap-2 cursor-pointer">
-                                              <input
-                                                type="checkbox"
-                                                className="w-4 h-4"
-                                                checked={formData.dogSizes?.includes(size) || false}
-                                                onChange={(e) => {
-                                                  const newSizes = e.target.checked
-                                                    ? [...(formData.dogSizes || []), size]
-                                                    : (formData.dogSizes || []).filter(s => s !== size);
-                                                  setFormData((prev) => ({ ...prev, dogSizes: newSizes }));
-                                                }}
-                                              />
-                                              <span className="text-sm font-medium">{size}</span>
-                                            </label>
-                                          ))}
-                                        </div>
-                                      </div>
-                                    )}
-
-                                    {isSelected && type.name === "Exotic Pets" && (
-                                      <div className="bg-secondary/30 rounded-xl p-4 animate-in slide-in-from-top-2">
-                                        <Label className="text-sm font-medium">Specify Exotic Pet Types</Label>
-                                        <Input
-                                          placeholder="e.g., Birds, reptiles, small mammals"
-                                          value={formData.exoticPetTypes || ""}
-                                          onChange={(e) => setFormData((prev) => ({ ...prev, exoticPetTypes: e.target.value }))}
-                                          className="mt-2"
-                                        />
-                                      </div>
-                                    )}
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          </div>
-
-                          {/* Policies */}
-                          <div className="bg-secondary/30 rounded-xl p-6">
-                            <h3 className="text-lg font-medium mb-6">Policies</h3>
-                            <div className="space-y-6">
-                              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <div className="space-y-2">
-                                  <Label className="text-sm font-medium">Breed restrictions</Label>
-                                  <select
-                                    className="w-full px-3 py-2 border rounded-md"
-                                    value={formData.breedRestrictions ? "Yes" : "No"}
-                                    onChange={(e) => {
-                                      if (e.target.value === "No") {
-                                        setFormData((prev) => ({ ...prev, breedRestrictions: false, breedRestrictionDetails: "" }));
-                                      } else {
-                                        setFormData((prev) => ({ ...prev, breedRestrictions: true }));
-                                      }
-                                    }}
-                                  >
-                                    <option value="No">No restrictions</option>
-                                    <option value="Yes">Has restrictions</option>
-                                  </select>
-                                  {formData.breedRestrictions && (
-                                    <Input
-                                      placeholder="e.g., No pit bulls, no aggressive breeds"
-                                      value={formData.breedRestrictionDetails || ""}
-                                      onChange={(e) => setFormData((prev) => ({ ...prev, breedRestrictionDetails: e.target.value }))}
-                                      className="mt-2"
-                                    />
-                                  )}
-                                </div>
-
-                                <div className="space-y-2">
-                                  <Label className="text-sm font-medium">Aggressive pet policy</Label>
-                                  <select
-                                    className="w-full px-3 py-2 border rounded-md"
-                                    value={formData.aggressivePolicy ? "Yes" : "No"}
-                                    onChange={(e) => {
-                                      if (e.target.value === "No") {
-                                        setFormData((prev) => ({ ...prev, aggressivePolicy: false, aggressivePolicyDetails: "" }));
-                                      } else {
-                                        setFormData((prev) => ({ ...prev, aggressivePolicy: true }));
-                                      }
-                                    }}
-                                  >
-                                    <option value="No">Accept all pets</option>
-                                    <option value="Yes">Has policy</option>
-                                  </select>
-                                  {formData.aggressivePolicy && (
-                                    <Input
-                                      placeholder="Describe your policy for aggressive pets"
-                                      value={formData.aggressivePolicyDetails || ""}
-                                      onChange={(e) => setFormData((prev) => ({ ...prev, aggressivePolicyDetails: e.target.value }))}
-                                      className="mt-2"
-                                    />
-                                  )}
-                                </div>
-                              </div>
-
-                              <div className="space-y-2">
-                                <Label className="text-sm font-medium">Unvaccinated pet policy</Label>
-                                <select
-                                  className="w-full px-3 py-2 border rounded-md"
-                                  value={formData.unvaccinatedPolicy ? "Yes" : "No"}
-                                  onChange={(e) => {
-                                    if (e.target.value === "No") {
-                                      setFormData((prev) => ({ ...prev, unvaccinatedPolicy: false, unvaccinatedPolicyDetails: "" }));
-                                    } else {
-                                      setFormData((prev) => ({ ...prev, unvaccinatedPolicy: true }));
-                                    }
-                                  }}
-                                >
-                                  <option value="No">Accept unvaccinated pets</option>
-                                  <option value="Yes">Vaccination required</option>
-                                </select>
-                                {formData.unvaccinatedPolicy && (
-                                  <Input
-                                    placeholder="Describe vaccination requirements"
-                                    value={formData.unvaccinatedPolicyDetails || ""}
-                                    onChange={(e) => setFormData((prev) => ({ ...prev, unvaccinatedPolicyDetails: e.target.value }))}
-                                    className="mt-2"
-                                  />
-                                )}
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Capacity Section - Boarding & Grooming/Salon */}
-                          {(hasBoarding || hasGrooming) && (
-                            <div className="bg-secondary/30 rounded-xl p-6">
-                              <h3 className="text-lg font-medium mb-2">Capacity</h3>
-                              <p className="text-sm text-muted-foreground mb-6">
-                                {hasBoarding && !hasGrooming && "Set your overall facility capacity and the number of animals each room type or service can accommodate."}
-                                {hasGrooming && !hasBoarding && "Set the total number of grooming slots available and per-service simultaneous capacity."}
-                                {hasBoarding && hasGrooming && "Set the total facility capacity and per-service capacity for boarding and grooming."}
-                              </p>
-
-                              {/* Overall property-level capacity → properties.capacity */}
-                              <div className="mb-6 p-4 bg-background rounded-lg border space-y-1">
-                                <Label className="text-sm font-medium">
-                                  {hasBoarding && !hasGrooming && "Total animal capacity (entire facility)"}
-                                  {hasGrooming && !hasBoarding && "Total grooming slots (concurrent animals)"}
-                                  {hasBoarding && hasGrooming && "Total facility capacity (all services combined)"}
-                                </Label>
-                                <p className="text-xs text-muted-foreground mb-2">
-                                  {hasBoarding && !hasGrooming && "Maximum number of animals that can stay at your facility at any one time."}
-                                  {hasGrooming && !hasBoarding && "Maximum number of pets your salon can handle simultaneously across all stations."}
-                                  {hasBoarding && hasGrooming && "Overall maximum concurrent animals across boarding and grooming at one time."}
-                                </p>
-                                <Input
-                                  type="number"
-                                  min={1}
-                                  placeholder="e.g., 20"
-                                  value={formData.animalCapacity === 0 ? "" : formData.animalCapacity}
-                                  onChange={(e) =>
-                                    setFormData((prev) => ({
-                                      ...prev,
-                                      animalCapacity: parseInt(e.target.value) || 0,
-                                    }))
-                                  }
-                                  className="max-w-xs"
-                                />
-                              </div>
-
-                              <h4 className="text-sm font-semibold mb-3 text-foreground">
-                                Per-service / room-type capacity <span className="font-normal text-muted-foreground">(stored in property_services.capacity)</span>
-                              </h4>
-
-                              <div className="space-y-3 mb-4">
-                                {formData.serviceCapacities.map((item, index) => (
-                                  <div key={index} className="flex items-end gap-3 bg-background rounded-lg border p-4">
-                                    <div className="flex-1 space-y-1">
-                                      <Label className="text-sm font-medium">Service / Room Type</Label>
-                                      <Input
-                                        placeholder={hasBoarding ? "e.g., Standard Room, Deluxe Suite" : "e.g., Basic Bath & Trim"}
-                                        value={item.name}
-                                        onChange={(e) => {
-                                          const updated = [...formData.serviceCapacities];
-                                          updated[index].name = e.target.value;
-                                          setFormData((prev) => ({ ...prev, serviceCapacities: updated }));
-                                        }}
-                                      />
-                                    </div>
-                                    <div className="w-36 space-y-1">
-                                      <Label className="text-sm font-medium">Capacity (animals)</Label>
-                                      <Input
-                                        type="number"
-                                        min={1}
-                                        placeholder="e.g., 5"
-                                        value={item.capacity === 0 ? "" : item.capacity}
-                                        onChange={(e) => {
-                                          const updated = [...formData.serviceCapacities];
-                                          updated[index].capacity = parseInt(e.target.value) || 0;
-                                          setFormData((prev) => ({ ...prev, serviceCapacities: updated }));
-                                        }}
-                                      />
-                                    </div>
-                                    <button
-                                      type="button"
-                                      className="mb-0.5 text-muted-foreground hover:text-destructive transition-colors"
-                                      onClick={() => {
-                                        const updated = formData.serviceCapacities.filter((_, i) => i !== index);
-                                        setFormData((prev) => ({ ...prev, serviceCapacities: updated }));
-                                      }}
-                                    >
-                                      <X className="h-4 w-4" />
-                                    </button>
-                                  </div>
-                                ))}
-                              </div>
-
-                              <button
-                                type="button"
-                                className="flex items-center gap-2 text-sm font-medium text-primary hover:underline"
-                                onClick={() =>
-                                  setFormData((prev) => ({
-                                    ...prev,
-                                    serviceCapacities: [
-                                      ...prev.serviceCapacities,
-                                      { name: "", capacity: 0 },
-                                    ],
-                                  }))
-                                }
-                              >
-                                + Add service capacity
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
+                    <PropertySetup01
+                      formData={formData}
+                      onChange={updateForm}
+                      hasBoarding={hasBoarding}
+                      hasGrooming={hasGrooming}
+                    />
                   )}
 
                   {currentStep === 2 && propertySetupStep === 2 && (
-                    <div className="max-w-4xl mx-auto">
-                      <div className="bg-card rounded-2xl shadow-elevated p-6 md:p-8">
-                        <div className="text-center mb-8">
-                          <h2 className="text-2xl font-semibold text-foreground mb-2">
-                            Facilities & Amenities
-                          </h2>
-                          <p className="text-muted-foreground">
-                            Describe your facilities and available amenities
-                          </p>
-                        </div>
-
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          {visibleAmenities.map((amenity) => (
-                            <div
-                              key={amenity.name}
-                              className={`p-4 border-2 rounded-xl cursor-pointer transition-all ${
-                                formData.facilitiesAmenities.includes(amenity.name)
-                                  ? "border-primary bg-primary/5"
-                                  : "border-border hover:border-primary/30"
-                              }`}
-                              onClick={() => {
-                                const newAmenities = formData.facilitiesAmenities.includes(amenity.name)
-                                  ? formData.facilitiesAmenities.filter(a => a !== amenity.name)
-                                  : [...formData.facilitiesAmenities, amenity.name];
-                                setFormData((prev) => ({ ...prev, facilitiesAmenities: newAmenities }));
-                              }}
-                            >
-                              <div className="flex items-center gap-3">
-                                <div className="text-2xl">{amenity.icon}</div>
-                                <div className="flex-1">
-                                  <div className="text-sm font-medium">{amenity.name}</div>
-                                </div>
-                                <input
-                                  type="checkbox"
-                                  className="w-4 h-4"
-                                  checked={formData.facilitiesAmenities.includes(amenity.name)}
-                                  onChange={() => {}} // Handled by onClick
-                                />
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
+                    <PropertySetup02 
+                      formData={formData}
+                      onChange={updateForm}
+                      selectedTypes={selectedTypes}
+                    />
                   )}
 
                   {currentStep === 2 && propertySetupStep === 3 && (
-                    <div className="max-w-4xl mx-auto">
-                      <div className="bg-card rounded-2xl shadow-elevated p-6 md:p-8">
-                        <div className="text-center mb-8">
-                          <h2 className="text-2xl font-semibold text-foreground mb-2">
-                            Operating Hours & Availability
-                          </h2>
-                          <p className="text-muted-foreground">
-                            Set your operating hours and availability details
-                          </p>
-                        </div>
-
-                        <div className="space-y-8">
-                          {/* Operating Hours */}
-                          <div className="bg-secondary/30 rounded-xl p-6">
-                            <h3 className="text-lg font-medium mb-6">Operating Hours</h3>
-                            
-                              <div className="space-y-4">
-                              <div
-                                className="flex items-center gap-3 cursor-pointer"
-                                onClick={() => setFormData((prev) => ({ ...prev, sameHoursEveryDay: !prev.sameHoursEveryDay }))}
-                              >
-                                <input
-                                  type="checkbox"
-                                  className="w-5 h-5"
-                                  checked={formData.sameHoursEveryDay || false}
-                                  onChange={(e) => setFormData((prev) => ({ ...prev, sameHoursEveryDay: e.target.checked }))}
-                                  onClick={(e) => e.stopPropagation()}
-                                />
-                                <Label className="text-sm font-medium">Same hours every day</Label>
-                              </div>
-
-                              {formData.sameHoursEveryDay ? (
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 ml-8">
-                                  <div className="space-y-2">
-                                    <Label>Open Time</Label>
-                                    <Input
-                                      type="time"
-                                      value={formData.dailyOpenTime || ""}
-                                      onChange={(e) => setFormData((prev) => ({ ...prev, dailyOpenTime: e.target.value }))}
-                                    />
-                                  </div>
-                                  <div className="space-y-2">
-                                    <Label>Close Time</Label>
-                                    <Input
-                                      type="time"
-                                      value={formData.dailyCloseTime || ""}
-                                      onChange={(e) => setFormData((prev) => ({ ...prev, dailyCloseTime: e.target.value }))}
-                                    />
-                                  </div>
-                                </div>
-                              ) : (
-                                <div className="space-y-4 ml-8">
-                                  {["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"].map((day) => (
-                                    <div key={day} className="grid grid-cols-1 md:grid-cols-3 gap-4 items-center">
-                                      <Label className="text-sm font-medium">{day}</Label>
-                                      <Input
-                                        type="time"
-                                        placeholder="Open"
-                                        value={formData.weeklyHours?.[day]?.open || ""}
-                                        onChange={(e) => setFormData((prev) => ({
-                                          ...prev,
-                                          weeklyHours: {
-                                            ...prev.weeklyHours,
-                                            [day]: { ...prev.weeklyHours?.[day], open: e.target.value }
-                                          }
-                                        }))}
-                                      />
-                                      <Input
-                                        type="time"
-                                        placeholder="Close"
-                                        value={formData.weeklyHours?.[day]?.close || ""}
-                                        onChange={(e) => setFormData((prev) => ({
-                                          ...prev,
-                                          weeklyHours: {
-                                            ...prev.weeklyHours,
-                                            [day]: { ...prev.weeklyHours?.[day], close: e.target.value }
-                                          }
-                                        }))}
-                                      />
-                                    </div>
-                                  ))}
-                                </div>
-                              )}
-                            </div>
-                          </div>
-
-                          {/* Availability */}
-                          <div className="bg-secondary/30 rounded-xl p-6">
-                            <h3 className="text-lg font-medium mb-6">Availability</h3>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                              <div
-                                className="flex items-center justify-between p-3 bg-background rounded-lg border cursor-pointer"
-                                onClick={() => setFormData((prev) => ({ ...prev, weekendAvailability: !prev.weekendAvailability }))}
-                              >
-                                <div>
-                                  <Label className="text-sm font-medium">Weekend availability</Label>
-                                  <p className="text-xs text-muted-foreground">Open on weekends</p>
-                                </div>
-                                <input
-                                  type="checkbox"
-                                  className="w-5 h-5"
-                                  checked={formData.weekendAvailability || false}
-                                  onChange={(e) => setFormData((prev) => ({ ...prev, weekendAvailability: e.target.checked }))}
-                                  onClick={(e) => e.stopPropagation()}
-                                />
-                              </div>
-                              <div
-                                className="flex items-center justify-between p-3 bg-background rounded-lg border cursor-pointer"
-                                onClick={() => setFormData((prev) => ({ ...prev, holidayAvailability: !prev.holidayAvailability }))}
-                              >
-                                <div>
-                                  <Label className="text-sm font-medium">Holiday availability</Label>
-                                  <p className="text-xs text-muted-foreground">Open on holidays</p>
-                                </div>
-                                <input
-                                  type="checkbox"
-                                  className="w-5 h-5"
-                                  checked={formData.holidayAvailability || false}
-                                  onChange={(e) => setFormData((prev) => ({ ...prev, holidayAvailability: e.target.checked }))}
-                                  onClick={(e) => e.stopPropagation()}
-                                />
-                              </div>
-                              {hasVet && (
-                                <div
-                                  className="flex items-center justify-between p-3 bg-background rounded-lg border md:col-span-2 cursor-pointer"
-                                  onClick={() => setFormData((prev) => ({ ...prev, emergencyServices: !prev.emergencyServices }))}
-                                >
-                                  <div>
-                                    <Label className="text-sm font-medium">24/7 emergency services</Label>
-                                    <p className="text-xs text-muted-foreground">Available for emergencies</p>
-                                  </div>
-                                  <input
-                                    type="checkbox"
-                                    className="w-5 h-5"
-                                    checked={formData.emergencyServices || false}
-                                    onChange={(e) => setFormData((prev) => ({ ...prev, emergencyServices: e.target.checked }))}
-                                    onClick={(e) => e.stopPropagation()}
-                                  />
-                                </div>
-                              )}
-                            </div>
-                          </div>
-
-                          {/* Boarding Rules */}
-                          {hasBoarding && (
-                            <div className="bg-secondary/30 rounded-xl p-6">
-                              <h3 className="text-lg font-medium mb-6">Boarding Rules</h3>
-                              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <div className="space-y-2">
-                                  <Label>Check-in cut-off</Label>
-                                  <Input
-                                    type="time"
-                                    placeholder="6:00 PM"
-                                    value={formData.checkInCutoff || ""}
-                                    onChange={(e) => setFormData((prev) => ({ ...prev, checkInCutoff: e.target.value }))}
-                                  />
-                                </div>
-                                <div className="space-y-2">
-                                  <Label>Pick-up window start</Label>
-                                  <Input
-                                    type="time"
-                                    placeholder="8:00 AM"
-                                    value={formData.pickupStart || ""}
-                                    onChange={(e) => setFormData((prev) => ({ ...prev, pickupStart: e.target.value }))}
-                                  />
-                                </div>
-                                <div className="space-y-2">
-                                  <Label>Pick-up window end</Label>
-                                  <Input
-                                    type="time"
-                                    placeholder="6:00 PM"
-                                    value={formData.pickupEnd || ""}
-                                    onChange={(e) => setFormData((prev) => ({ ...prev, pickupEnd: e.target.value }))}
-                                  />
-                                </div>
-                              </div>
-                            </div>
-                          )}
-
-                          {/* Booking Type */}
-                          {(hasGrooming || hasVet) && (
-                            <div className="bg-secondary/30 rounded-xl p-6">
-                              <h3 className="text-lg font-medium mb-6">Booking Type</h3>
-                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div
-                                  className={`p-4 border-2 rounded-xl cursor-pointer transition-all ${
-                                    formData.appointmentOnly === "appointment"
-                                      ? "border-primary bg-primary/5"
-                                      : "border-border hover:border-primary/30"
-                                  }`}
-                                  onClick={() => setFormData((prev) => ({ ...prev, appointmentOnly: "appointment" }))}
-                                >
-                                  <div className="text-center">
-                                    <div className="text-2xl mb-2">📅</div>
-                                    <div className="text-sm font-medium">Appointment-only</div>
-                                    <div className="text-xs text-muted-foreground mt-1">Scheduled bookings only</div>
-                                  </div>
-                                </div>
-                                <div
-                                  className={`p-4 border-2 rounded-xl cursor-pointer transition-all ${
-                                    formData.appointmentOnly === "walkins"
-                                      ? "border-primary bg-primary/5"
-                                      : "border-border hover:border-primary/30"
-                                  }`}
-                                  onClick={() => setFormData((prev) => ({ ...prev, appointmentOnly: "walkins" }))}
-                                >
-                                  <div className="text-center">
-                                    <div className="text-2xl mb-2">🚶</div>
-                                    <div className="text-sm font-medium">Walk-ins accepted</div>
-                                    <div className="text-xs text-muted-foreground mt-1">Accept same-day visits</div>
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
+                    <PropertySetup03 
+                      formData={formData}
+                      onChange={updateForm}
+                      hasBoarding={hasBoarding}
+                      hasGrooming={hasGrooming}
+                      hasVet={hasVet}
+                    />
                   )}
 
                   {currentStep === 2 && propertySetupStep === 4 && (
-                    <div className="max-w-4xl mx-auto">
-                      <div className="bg-card rounded-2xl shadow-elevated p-6 md:p-8">
-                        <div className="text-center mb-8">
-                          <h2 className="text-2xl font-semibold text-foreground mb-2">
-                            Booking Rules & Policies
-                          </h2>
-                          <p className="text-muted-foreground">
-                            Set your booking requirements and policies
-                          </p>
-                        </div>
-
-                        <div className="space-y-8">
-                          {/* Booking Rules */}
-                          <div className="bg-secondary/30 rounded-xl p-6">
-                            <h3 className="text-lg font-medium mb-6">Booking Rules</h3>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                              {visibleBookingRules.map((rule) => (
-                                <div
-                                  key={rule.name}
-                                  className="flex items-center justify-between p-3 bg-background rounded-lg border cursor-pointer"
-                                  onClick={() => {
-                                    const newRules = formData.bookingRules.includes(rule.name)
-                                      ? formData.bookingRules.filter(r => r !== rule.name)
-                                      : [...formData.bookingRules, rule.name];
-                                    setFormData((prev) => ({ ...prev, bookingRules: newRules }));
-                                  }}
-                                >
-                                  <div>
-                                    <Label className="text-sm font-medium">{rule.name}</Label>
-                                    <p className="text-xs text-muted-foreground">{rule.description}</p>
-                                  </div>
-                                  <input
-                                    type="checkbox"
-                                    className="w-5 h-5"
-                                    checked={formData.bookingRules.includes(rule.name)}
-                                    onChange={(e) => {
-                                      const newRules = formData.bookingRules.includes(rule.name)
-                                        ? formData.bookingRules.filter(r => r !== rule.name)
-                                        : [...formData.bookingRules, rule.name];
-                                      setFormData((prev) => ({ ...prev, bookingRules: newRules }));
-                                    }}
-                                    onClick={(e) => e.stopPropagation()}
-                                  />
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-
-                          {/* Compliance Requirements */}
-                          <div className="bg-secondary/30 rounded-xl p-6">
-                            <h3 className="text-lg font-medium mb-6">Compliance Requirements</h3>
-                            <div className="space-y-4">
-                              {[
-                                { name: "Vaccination records required", required: true, description: "Proof of up-to-date vaccinations" },
-                                { name: "Health certificate required", required: false, description: "Vet health check certificate" },
-                                { name: "Parasite prevention proof", required: false, description: "Flea/tick/heartworm prevention" },
-                                { name: "Microchip identification", required: false, description: "Pet must have microchip ID" },
-                                { name: "Breed-specific restrictions apply", required: false, description: "Certain breeds not accepted" },
-                                { name: "Age restrictions apply", required: false, description: "Minimum/maximum pet age" }
-                              ].map((requirement) => (
-                                <div
-                                  key={requirement.name}
-                                  className="flex items-start gap-3 p-3 bg-background rounded-lg border cursor-pointer"
-                                  onClick={() => {
-                                    const newRequirements = formData.complianceRequirements?.includes(requirement.name)
-                                      ? formData.complianceRequirements.filter(r => r !== requirement.name)
-                                      : [...(formData.complianceRequirements || []), requirement.name];
-                                    setFormData((prev) => ({ ...prev, complianceRequirements: newRequirements }));
-                                  }}
-                                >
-                                  <input
-                                    type="checkbox"
-                                    className="w-4 h-4 mt-1"
-                                    checked={formData.complianceRequirements?.includes(requirement.name) || false}
-                                    onChange={(e) => {
-                                      const newRequirements = formData.complianceRequirements?.includes(requirement.name)
-                                        ? formData.complianceRequirements.filter(r => r !== requirement.name)
-                                        : [...(formData.complianceRequirements || []), requirement.name];
-                                      setFormData((prev) => ({ ...prev, complianceRequirements: newRequirements }));
-                                    }}
-                                    onClick={(e) => e.stopPropagation()}
-                                  />
-                                  <div className="flex-1">
-                                    <div className="flex items-center gap-2">
-                                      <Label className="text-sm font-medium">{requirement.name}</Label>
-                                      {requirement.required && <span className="text-red-500 text-xs">*</span>}
-                                    </div>
-                                    <p className="text-xs text-muted-foreground mt-1">{requirement.description}</p>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
+                    <PropertySetup04
+                      formData={formData}
+                      onChange={updateForm}
+                      selectedTypes={selectedTypes}
+                    />
                   )}
 
                   {currentStep === 2 && propertySetupStep === 5 && (
-                    <div className="max-w-4xl mx-auto">
-                      <div className="bg-card rounded-2xl shadow-elevated p-6 md:p-8">
-                        <div className="text-center mb-8">
-                          <h2 className="text-2xl font-semibold text-foreground mb-2">
-                            Health & Safety
-                          </h2>
-                          <p className="text-muted-foreground">
-                            Outline your health and safety protocols
-                          </p>
-                        </div>
-
-                        <div className="space-y-6">
-                          {/* Vaccination & Parasite Requirements */}
-                          {(hasBoarding || hasGrooming) && (
-                            <div className="bg-secondary/30 rounded-xl p-6">
-                              <h3 className="text-lg font-medium mb-4">Vaccination & Parasite Requirements</h3>
-                              <div className="space-y-4">
-                                {[
-                                  "DHPP vaccination (Distemper, Hepatitis, Parvovirus, Parainfluenza)",
-                                  "Rabies vaccination",
-                                  "Bordetella vaccination (Kennel Cough)",
-                                  "Leptospirosis vaccination",
-                                  "Heartworm prevention",
-                                  "Flea and tick prevention",
-                                  "Internal parasite prevention"
-                                ].map((requirement) => (
-                                  <div
-                                    key={requirement}
-                                    className="flex items-center justify-between p-3 bg-background rounded-lg border cursor-pointer"
-                                    onClick={() => {
-                                      const newRequirements = formData.healthSafety.includes(requirement)
-                                        ? formData.healthSafety.filter(r => r !== requirement)
-                                        : [...formData.healthSafety, requirement];
-                                      setFormData((prev) => ({ ...prev, healthSafety: newRequirements }));
-                                    }}
-                                  >
-                                    <div>
-                                      <Label className="text-sm font-medium">{requirement}</Label>
-                                      <p className="text-xs text-muted-foreground">Required for all pets</p>
-                                    </div>
-                                    <input
-                                      type="checkbox"
-                                      className="w-5 h-5"
-                                      checked={formData.healthSafety.includes(requirement)}
-                                      onChange={(e) => {
-                                        const newRequirements = formData.healthSafety.includes(requirement)
-                                          ? formData.healthSafety.filter(r => r !== requirement)
-                                          : [...formData.healthSafety, requirement];
-                                        setFormData((prev) => ({ ...prev, healthSafety: newRequirements }));
-                                      }}
-                                      onClick={(e) => e.stopPropagation()}
-                                    />
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-
-                          {/* Emergency Procedures */}
-                          <div className="bg-secondary/30 rounded-xl p-6">
-                            <h3 className="text-lg font-medium mb-4">Emergency Procedures</h3>
-                            <div className="space-y-4">
-                              <div className="space-y-2">
-                                <Label className="text-sm font-medium">Emergency contact number</Label>
-                                <Input
-                                  placeholder="+63 XXX XXX XXXX"
-                                  value={formData.emergencyContact || ""}
-                                  onChange={(e) => setFormData((prev) => ({ ...prev, emergencyContact: e.target.value }))}
-                                />
-                              </div>
-                              <div className="space-y-2">
-                                <Label className="text-sm font-medium">Nearest veterinary hospital</Label>
-                                <Input
-                                  placeholder="Hospital name and address"
-                                  value={formData.nearestVetHospital || ""}
-                                  onChange={(e) => setFormData((prev) => ({ ...prev, nearestVetHospital: e.target.value }))}
-                                />
-                              </div>
-                              <div className="space-y-2">
-                                <Label className="text-sm font-medium">Emergency response time</Label>
-                                <Input
-                                  placeholder="Within 30 minutes"
-                                  value={formData.emergencyResponseTime || ""}
-                                  onChange={(e) => setFormData((prev) => ({ ...prev, emergencyResponseTime: e.target.value }))}
-                                />
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Vet Availability */}
-                          {(hasVet || hasBoarding) && (
-                            <div className="bg-secondary/30 rounded-xl p-6">
-                              <h3 className="text-lg font-medium mb-4">Vet Availability</h3>
-                              <div className="space-y-4">
-                                {[
-                                  "On-site veterinarian available",
-                                  "24/7 vet on-call service",
-                                  "Emergency vet clinic partnership",
-                                  "Telemedicine consultations",
-                                  "Mobile vet services"
-                                ].map((service) => (
-                                  <div
-                                    key={service}
-                                    className="flex items-center justify-between p-3 bg-background rounded-lg border cursor-pointer"
-                                    onClick={() => {
-                                      const newServices = formData.vetAvailability?.includes(service)
-                                        ? formData.vetAvailability.filter(s => s !== service)
-                                        : [...(formData.vetAvailability || []), service];
-                                      setFormData((prev) => ({ ...prev, vetAvailability: newServices }));
-                                    }}
-                                  >
-                                    <div>
-                                      <Label className="text-sm font-medium">{service}</Label>
-                                      <p className="text-xs text-muted-foreground">
-                                        {service === "On-site veterinarian available" && "Vet present at facility"}
-                                        {service === "24/7 vet on-call service" && "Emergency vet support"}
-                                        {service === "Emergency vet clinic partnership" && "Affiliated with emergency clinic"}
-                                        {service === "Telemedicine consultations" && "Remote vet consultations"}
-                                        {service === "Mobile vet services" && "Vet visits facility"}
-                                      </p>
-                                    </div>
-                                    <input
-                                      type="checkbox"
-                                      className="w-5 h-5"
-                                      checked={formData.vetAvailability?.includes(service) || false}
-                                      onChange={(e) => {
-                                        const newServices = formData.vetAvailability?.includes(service)
-                                          ? formData.vetAvailability.filter(s => s !== service)
-                                          : [...(formData.vetAvailability || []), service];
-                                        setFormData((prev) => ({ ...prev, vetAvailability: newServices }));
-                                      }}
-                                      onClick={(e) => e.stopPropagation()}
-                                    />
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-
-                          {/* Isolation & Sanitation Protocols */}
-                          <div className="bg-secondary/30 rounded-xl p-6">
-                            <h3 className="text-lg font-medium mb-4">Isolation & Sanitation Protocols</h3>
-                            <div className="space-y-4">
-                              {[
-                                "Separate isolation area for sick pets",
-                                "Quarantine period for new arrivals",
-                                "Daily health monitoring",
-                                "Sanitation between pets",
-                                "Disinfection protocols",
-                                "Waste disposal procedures",
-                                "Hand washing stations",
-                                "PPE availability"
-                                ].map((protocol) => (
-                                <div
-                                  key={protocol}
-                                  className="flex items-start gap-3 p-3 bg-background rounded-lg border cursor-pointer"
-                                  onClick={() => {
-                                    const newProtocols = formData.sanitationProtocols?.includes(protocol)
-                                      ? formData.sanitationProtocols.filter(p => p !== protocol)
-                                      : [...(formData.sanitationProtocols || []), protocol];
-                                    setFormData((prev) => ({ ...prev, sanitationProtocols: newProtocols }));
-                                  }}
-                                >
-                                  <input
-                                    type="checkbox"
-                                    className="w-4 h-4 mt-1"
-                                    checked={formData.sanitationProtocols?.includes(protocol) || false}
-                                    onChange={(e) => {
-                                      const newProtocols = formData.sanitationProtocols?.includes(protocol)
-                                        ? formData.sanitationProtocols.filter(p => p !== protocol)
-                                        : [...(formData.sanitationProtocols || []), protocol];
-                                      setFormData((prev) => ({ ...prev, sanitationProtocols: newProtocols }));
-                                    }}
-                                    onClick={(e) => e.stopPropagation()}
-                                  />
-                                  <div className="flex-1">
-                                    <Label className="text-sm font-medium">{protocol}</Label>
-                                    <p className="text-xs text-muted-foreground mt-1">
-                                      {protocol === "Separate isolation area for sick pets" && "Isolated space for ill animals"}
-                                      {protocol === "Quarantine period for new arrivals" && "Observation period before mixing"}
-                                      {protocol === "Daily health monitoring" && "Regular health checks"}
-                                      {protocol === "Sanitation between pets" && "Cleaning between animals"}
-                                      {protocol === "Disinfection protocols" && "Proper disinfection procedures"}
-                                      {protocol === "Waste disposal procedures" && "Safe waste handling"}
-                                      {protocol === "Hand washing stations" && "Hygiene facilities"}
-                                      {protocol === "PPE availability" && "Protective equipment"}
-                                    </p>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
+                    <PropertySetup05
+                      formData={formData}
+                      onChange={updateForm}
+                      hasBoarding={hasBoarding}
+                      hasGrooming={hasGrooming}
+                      hasVet={hasVet}
+                    />
                   )}
 
                   {/* Step 3: Photos */}
                   {currentStep === 3 && (
-                    <div className="space-y-6">
-                      <div>
-                        <h2 className="text-xl font-semibold text-foreground mb-2">
-                          Property Photos
-                        </h2>
-                        <p className="text-muted-foreground">
-                          Upload at least 5 photos of your property. The more you upload, the more likely you are to get bookings. You can add more later.
-                        </p>
-                      </div>
-                      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                        {formData.propertyImages.map((image, index) => (
-                          <div
-                            key={index}
-                            className="relative aspect-square rounded-xl overflow-hidden bg-secondary/50 border-2 border-border group"
-                          >
-                            <img
-                              src={URL.createObjectURL(image)}
-                              alt={`Property ${index + 1}`}
-                              className="w-full h-full object-cover"
-                            />
-                            <Button
-                              variant="destructive"
-                              size="sm"
-                              onClick={() => removeImage(index)}
-                              className="absolute top-2 right-2 h-7 w-7 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
-                            >
-                              <X className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        ))}
-                        {formData.propertyImages.length < 10 && (
-                          <label className="aspect-square flex flex-col items-center justify-center p-4 border-2 border-dashed border-border rounded-xl cursor-pointer hover:border-primary/50 hover:bg-primary/5 transition-all">
-                            <Upload className="h-8 w-8 text-muted-foreground mb-2" />
-                            <span className="text-xs font-medium text-foreground text-center">
-                              Add Photo
-                            </span>
-                            <span className="text-xs text-muted-foreground mt-1">
-                              {formData.propertyImages.length}/10
-                            </span>
-                            <input
-                              type="file"
-                              accept="image/*"
-                              multiple
-                              className="hidden"
-                              onChange={handleImageUpload}
-                            />
-                          </label>
-                        )}
-                      </div>
-                      {formData.propertyImages.length > 0 && (
-                        <p className="text-xs text-success flex items-center gap-1 mt-2">
-                          <CheckCircle2 className="h-3 w-3" />
-                          {formData.propertyImages.length} {formData.propertyImages.length === 1 ? 'photo' : 'photos'} uploaded {formData.propertyImages.length >= 5 ? '(minimum met)' : `(${5 - formData.propertyImages.length} more needed)`}
-                        </p>
-                      )}
-                    </div>
+                    <Photos 
+                      formData={formData}
+                      onChange={updateForm}
+                    />
                   )}
 
                   {/* Step 4: Pricing & Calendar */}
@@ -3279,7 +1807,7 @@ const ListProperty = () => {
                                         <SelectValue />
                                       </SelectTrigger>
                                       <SelectContent>
-                                        {countryCodes.map((country) => (
+                                        {COUNTRY_CODES.map((country) => (
                                           <SelectItem key={country.code + country.country} value={country.code}>
                                             {country.flag} {country.code}
                                           </SelectItem>
