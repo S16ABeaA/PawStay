@@ -593,7 +593,8 @@ export const createBooking = async (req: Request, res: Response) => {
       if (checkoutDate.getTime() < checkinDate.getTime()) {
         return res.status(400).json({ error: "Checkout (end) cannot be before checkin (start)." });
       }
-      
+    }
+
     // ── Validate & sanitize price fields ──
     const parsedSubtotal = subtotal != null ? Number(subtotal) : null;
     const parsedServiceFee = service_fee != null ? Number(service_fee) : null;
@@ -907,8 +908,7 @@ export const createBooking = async (req: Request, res: Response) => {
     }
 
     return res.status(201).json({ booking });
-  }
-  }catch (err: any) {
+  } catch (err: any) {
     console.error("createBooking error:", err);
     return res.status(500).json({ error: "Failed to create booking.", details: err?.message || err });
   }

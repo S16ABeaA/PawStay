@@ -125,6 +125,9 @@ export const propertyController = {
       res.status(200).json({ reviews: data ?? [] });
     } catch (err: any) {
       res.status(500).json({ message: err.message || "Failed to fetch reviews" });
+    }
+  },
+
   myProperties: async (req: Request, res: Response) => {
     try {
       const userId = (req as any).user?.id;

@@ -494,26 +494,26 @@ export async function getRandomProperties(limit: number = 6) {
         is_active
       )
     `)
-    .eq("id", id)
-    .single();
+    .in("id", selectedIds);
 
   if (error) {
-    console.error("[getPropertyById]", error);
+    console.error("[getRandomProperties]", error);
     throw error;
   }
 
-  if (!data) return null;
+  if (!data || data.length === 0) return [];
 
-  // Get cheapest service price
-  const activeServices = data.property_services?.filter((s: any) => s.is_active) || [];
-  const cheapestPrice = activeServices.length > 0
-    ? Math.min(...activeServices.map((s: any) => Number(s.price || 0)))
-    : null;
-
-  return {
-    ...data,
-    cheapest_service_price: cheapestPrice,
-  };
+  // Enrich with cheapest service price
+  return data.map((p: any) => {
+    const activeServices = p.property_services?.filter((s: any) => s.is_active) || [];
+    const cheapestPrice = activeServices.length > 0
+      ? Math.min(...activeServices.map((s: any) => Number(s.price || 0)))
+      : null;
+    return {
+      ...p,
+      cheapest_service_price: cheapestPrice,
+    };
+  });
 }
 
 export async function getPropertyById(id: string) {

@@ -7,13 +7,13 @@ const router = Router();
 router.get("/search", propertyController.searchProperties);
 router.post("/search", propertyController.searchProperties);
 router.post("/randomproperty", propertyController.randomProperties);
-router.get("/:id", propertyController.getById);
-router.get("/:id/reviews", propertyController.getReviews);
-
-// Protected routes for proprietor
+// Protected routes for proprietor — place before param routes to avoid "mine" being treated as an :id
 router.get('/mine', authMiddleware, propertyController.myProperties);
 router.post('/mine/seed', authMiddleware, propertyController.seedMyProperty);
 router.get('/mine/stats', authMiddleware, propertyController.dashboardStats);
+
+router.get("/:id", propertyController.getById);
+router.get("/:id/reviews", propertyController.getReviews);
 
 // Service management routes
 router.get('/:id/services', propertyController.getServices);
