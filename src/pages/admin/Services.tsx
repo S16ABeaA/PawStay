@@ -435,6 +435,18 @@ const AdminServices = () => {
           </DialogContent>
         </Dialog>
 
+              <div className="flex items-center justify-between">
+                <p className="text-xl font-bold text-foreground">
+                  ₱{service.price}
+                  <span className="text-sm font-normal text-muted-foreground">/night</span>
+                </p>
+                <div className="flex gap-1">
+                  <Button variant="ghost" size="icon" className="h-8 w-8">
+                    <Edit className="h-4 w-4" />
+                  </Button>
+                  <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive">
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
         {/* Edit Service Dialog */}
         <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
           <DialogContent className="sm:max-w-[500px]">
