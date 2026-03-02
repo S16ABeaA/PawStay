@@ -104,6 +104,7 @@ interface PropertySubmissionData {
   contractDocument: string;
   occupancyRate: number;
   animalCapacity: number;
+  serviceCapacities?: Array<{ name: string; capacity: number }>;
   apartmentNum?: number;
 }
 
@@ -376,8 +377,19 @@ export const submitProperty = async (req: Request, res: Response) => {
       };
       const defaultCategory = categoryMap[d.propertyType] || 'Other';
 
+      // Build a lookup map: service name → capacity (from serviceCapacities)
+      const capacityByName: Record<string, number> = {};
+      if (d.serviceCapacities && d.serviceCapacities.length > 0) {
+        for (const sc of d.serviceCapacities) {
+          if (sc.name) capacityByName[sc.name.trim().toLowerCase()] = sc.capacity;
+        }
+      }
+
       for (const svc of d.baseServices) {
         const price = parseFloat(svc.price) || 0;
+        const capacityValue = svc.name
+          ? (capacityByName[svc.name.trim().toLowerCase()] ?? null)
+          : null;
         const { error: svcError } = await supabaseClient
           .from('property_services')
           .insert({
@@ -386,11 +398,60 @@ export const submitProperty = async (req: Request, res: Response) => {
             description: `${svc.priceType || 'Fixed'} — ${svc.duration || 'N/A'}`,
             price,
             category: defaultCategory,
+            ...(capacityValue !== null ? { capacity: capacityValue } : {}),
           });
 
         if (svcError) {
           console.error('Error inserting property_service:', svcError);
           // non-fatal
+        }
+      }
+
+      // Insert serviceCapacities entries that have no matching baseService
+      // (capacity-only entries not tied to a priced service)
+      if (d.serviceCapacities && d.serviceCapacities.length > 0) {
+        const baseServiceNames = new Set(
+          d.baseServices.map((s) => s.name.trim().toLowerCase())
+        );
+        for (const sc of d.serviceCapacities) {
+          if (!sc.name || baseServiceNames.has(sc.name.trim().toLowerCase())) continue;
+          const { error: capSvcError } = await supabaseClient
+            .from('property_services')
+            .insert({
+              property_id: propertyId,
+              name: sc.name,
+              description: null,
+              price: 0,
+              category: defaultCategory,
+              capacity: sc.capacity,
+            });
+          if (capSvcError) {
+            console.error('Error inserting capacity-only service:', capSvcError);
+          }
+        }
+      }
+    } else if (d.serviceCapacities && d.serviceCapacities.length > 0) {
+      // No baseServices but serviceCapacities exist — insert them directly
+      const categoryMap: Record<string, string> = {
+        hotel: 'Boarding',
+        grooming: 'Grooming',
+        veterinary: 'Veterinary',
+      };
+      const defaultCategory = categoryMap[d.propertyType] || 'Other';
+      for (const sc of d.serviceCapacities) {
+        if (!sc.name) continue;
+        const { error: capSvcError } = await supabaseClient
+          .from('property_services')
+          .insert({
+            property_id: propertyId,
+            name: sc.name,
+            description: null,
+            price: 0,
+            category: defaultCategory,
+            capacity: sc.capacity,
+          });
+        if (capSvcError) {
+          console.error('Error inserting capacity service:', capSvcError);
         }
       }
     }

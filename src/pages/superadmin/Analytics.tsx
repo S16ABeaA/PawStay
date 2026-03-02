@@ -35,7 +35,7 @@ const topLocations = [
 ];
 
 const serviceBreakdown = [
-  { name: "Boarding", percentage: 45, color: "bg-violet-500" },
+  { name: "Boarding", percentage: 45, color: "bg-[#ffa31a]" },
   { name: "Grooming", percentage: 28, color: "bg-emerald-500" },
   { name: "Daycare", percentage: 18, color: "bg-amber-500" },
   { name: "Veterinary", percentage: 9, color: "bg-rose-500" },
@@ -47,49 +47,49 @@ const SuperAdminAnalytics = () => {
   return (
     <SuperAdminLayout title="Analytics" subtitle="Platform performance and insights">
       {/* Time Range Selector */}
-      <div className="flex justify-end mb-6">
+      <div className="flex justify-end mb-6 sa-slide-in">
         <Select defaultValue="6months">
-          <SelectTrigger className="w-40 bg-slate-900 border-slate-700 text-white">
+          <SelectTrigger className="w-40 bg-[#292929] border-white/[0.09] text-white">
             <SelectValue />
           </SelectTrigger>
-          <SelectContent className="bg-slate-900 border-slate-700">
-            <SelectItem value="7days">Last 7 days</SelectItem>
-            <SelectItem value="30days">Last 30 days</SelectItem>
-            <SelectItem value="6months">Last 6 months</SelectItem>
-            <SelectItem value="1year">Last year</SelectItem>
+          <SelectContent className="bg-[#1b1b1b] border-white/[0.08] text-white">
+            <SelectItem value="7days" className="text-white focus:bg-white/[0.06] focus:text-white">Last 7 days</SelectItem>
+            <SelectItem value="30days" className="text-white focus:bg-white/[0.06] focus:text-white">Last 30 days</SelectItem>
+            <SelectItem value="6months" className="text-white focus:bg-white/[0.06] focus:text-white">Last 6 months</SelectItem>
+            <SelectItem value="1year" className="text-white focus:bg-white/[0.06] focus:text-white">Last year</SelectItem>
           </SelectContent>
         </Select>
       </div>
 
       {/* Main Metrics */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-        <Card className="bg-slate-900 border-slate-800">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8 sa-stagger">
+        <Card className="bg-[#292929] border-white/[0.07] col-span-1 sa-card sa-slide-in">
           <CardContent className="p-5">
             <div className="flex items-center gap-3">
-              <div className="p-3 rounded-lg bg-violet-600/20">
-                <Calendar className="h-5 w-5 text-violet-400" />
+              <div className="p-3 rounded-lg bg-[#ffa31a]/20">
+                <Calendar className="h-5 w-5 text-[#ffa31a]" />
               </div>
               <div>
-                <p className="text-sm text-slate-400">Total Bookings</p>
-                <p className="text-xl font-bold text-white">48,291</p>
+                <p className="text-sm text-[#808080]">Total Bookings</p>
+                <p className="text-xl font-bold text-white tabular-nums">48,291</p>
               </div>
             </div>
           </CardContent>
         </Card>
-        <Card className="bg-slate-900 border-slate-800">
+        <Card className="bg-[#292929] border-white/[0.07] sa-card sa-slide-in">
           <CardContent className="p-5">
             <div className="flex items-center gap-3">
               <div className="p-3 rounded-lg bg-emerald-600/20">
                 <TrendingUp className="h-5 w-5 text-emerald-400" />
               </div>
               <div>
-                <p className="text-sm text-slate-400">Conversion Rate</p>
-                <p className="text-xl font-bold text-white">24.8%</p>
+                <p className="text-sm text-[#808080]">Conversion Rate</p>
+                <p className="text-xl font-bold text-white tabular-nums">24.8%</p>
               </div>
             </div>
           </CardContent>
         </Card>
-        <Card className="bg-slate-900 border-slate-800">
+        <Card className="bg-[#292929] border-white/[0.07] sa-card sa-slide-in">
           <CardContent className="p-5">
             <div className="flex items-center gap-3">
               <div className="p-3 rounded-lg bg-amber-600/20">
@@ -102,24 +102,24 @@ const SuperAdminAnalytics = () => {
             </div>
           </CardContent>
         </Card>
-        <Card className="bg-slate-900 border-slate-800">
+        <Card className="bg-[#292929] border-white/[0.07] sa-card sa-slide-in">
           <CardContent className="p-5">
             <div className="flex items-center gap-3">
               <div className="p-3 rounded-lg bg-rose-600/20">
                 <Building2 className="h-5 w-5 text-rose-400" />
               </div>
               <div>
-                <p className="text-sm text-slate-400">Avg. Occupancy</p>
-                <p className="text-xl font-bold text-white">72%</p>
+                <p className="text-sm text-[#808080]">Avg. Occupancy</p>
+                <p className="text-xl font-bold text-white tabular-nums">72%</p>
               </div>
             </div>
           </CardContent>
         </Card>
       </div>
 
-      <div className="grid lg:grid-cols-3 gap-6">
+      <div className="grid lg:grid-cols-3 gap-6 sa-slide-in" style={{ animationDelay: '120ms' }}>
         {/* Bookings Chart */}
-        <Card className="lg:col-span-2 bg-slate-900 border-slate-800">
+        <Card className="lg:col-span-2 bg-[#292929] border-white/[0.07] sa-card">
           <CardHeader>
             <CardTitle className="text-lg text-white">Booking Trends</CardTitle>
           </CardHeader>
@@ -128,24 +128,24 @@ const SuperAdminAnalytics = () => {
               {chartData.map((data) => (
                 <div key={data.month} className="flex-1 flex flex-col items-center gap-2">
                   <div
-                    className="w-full bg-gradient-to-t from-violet-600 to-violet-400 rounded-t-lg transition-all hover:from-violet-500 hover:to-violet-300"
+                    className="w-full bg-gradient-to-t from-[#ffa31a] to-[#ffa31a]/60 rounded-t-lg transition-all hover:from-[#ffa31a]/90 hover:to-[#ffa31a]/50"
                     style={{ height: `${(data.bookings / maxBookings) * 100}%` }}
                   />
-                  <span className="text-xs text-slate-400">{data.month}</span>
+                  <span className="text-xs text-[#808080]">{data.month}</span>
                 </div>
               ))}
             </div>
-            <div className="flex items-center justify-center gap-6 mt-4 pt-4 border-t border-slate-800">
+            <div className="flex items-center justify-center gap-6 mt-4 pt-4 border-t border-white/[0.06]">
               <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-full bg-violet-500" />
-                <span className="text-sm text-slate-400">Bookings</span>
+                <div className="w-3 h-3 rounded-full bg-[#ffa31a]" />
+                <span className="text-sm text-[#808080]">Bookings</span>
               </div>
             </div>
           </CardContent>
         </Card>
 
         {/* Service Breakdown */}
-        <Card className="bg-slate-900 border-slate-800">
+        <Card className="bg-[#292929] border-white/[0.07] sa-card">
           <CardHeader>
             <CardTitle className="text-lg text-white">Service Breakdown</CardTitle>
           </CardHeader>
@@ -154,10 +154,10 @@ const SuperAdminAnalytics = () => {
               {serviceBreakdown.map((service) => (
                 <div key={service.name}>
                   <div className="flex justify-between text-sm mb-1">
-                    <span className="text-slate-300">{service.name}</span>
+                    <span className="text-white/80">{service.name}</span>
                     <span className="text-white font-medium">{service.percentage}%</span>
                   </div>
-                  <div className="h-2 bg-slate-800 rounded-full overflow-hidden">
+                  <div className="h-2 bg-white/[0.08] rounded-full overflow-hidden">
                     <div
                       className={`h-full ${service.color} rounded-full`}
                       style={{ width: `${service.percentage}%` }}
@@ -171,23 +171,23 @@ const SuperAdminAnalytics = () => {
       </div>
 
       {/* Top Locations */}
-      <Card className="mt-6 bg-slate-900 border-slate-800">
+      <Card className="mt-6 bg-[#292929] border-white/[0.07] sa-slide-in sa-card" style={{ animationDelay: '200ms' }}>
         <CardHeader>
           <CardTitle className="text-lg text-white flex items-center gap-2">
-            <MapPin className="h-5 w-5 text-violet-400" />
+            <MapPin className="h-5 w-5 text-[#ffa31a]" />
             Top Locations
           </CardTitle>
         </CardHeader>
         <CardContent>
           <div className="grid md:grid-cols-5 gap-4">
             {topLocations.map((location, i) => (
-              <div key={location.city} className="p-4 rounded-lg bg-slate-800/50 text-center">
-                <div className="w-10 h-10 mx-auto mb-3 rounded-full bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center text-white font-bold">
+              <div key={location.city} className="p-4 rounded-lg bg-white/[0.04] text-center">
+                <div className="w-10 h-10 mx-auto mb-3 rounded-full bg-gradient-to-br from-[#ffa31a]/90 to-[#ffa31a]/60 flex items-center justify-center text-white font-bold">
                   {i + 1}
                 </div>
                 <p className="font-medium text-white">{location.city}</p>
-                <p className="text-sm text-slate-400">{location.bookings.toLocaleString()} bookings</p>
-                <p className="text-xs text-violet-400 mt-1">{location.percentage}% of total</p>
+                <p className="text-sm text-[#808080]">{location.bookings.toLocaleString()} bookings</p>
+                <p className="text-xs text-[#ffa31a] mt-1">{location.percentage}% of total</p>
               </div>
             ))}
           </div>

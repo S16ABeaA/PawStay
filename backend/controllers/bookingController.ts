@@ -3,6 +3,7 @@ import { bookingModel } from "../models/bookingModel";
 import { petModel } from "../models/petModel";
 import { serviceHistoryModel } from "../models/serviceHistoryModel";
 import { supabaseAdmin } from "../config/supabaseAdmin";
+import { notificationModel } from "../models/notificationModel";
 
 /** GET /api/bookings/mine/today — proprietor's today's check-ins */
 export const getTodayCheckInsForOwner = async (req: any, res: any) => {
@@ -517,6 +518,46 @@ export const createBooking = async (req: Request, res: Response) => {
       } catch (shErr) {
         console.error("Failed to create service history:", shErr);
       }
+    }
+
+    // ── Send notification to the customer ──
+    try {
+      const svcLabel = service_name || service_type || "your service";
+      await notificationModel.create({
+        user_id: userId,
+        type: "booking_confirmed",
+        title: "Booking Confirmed",
+        message: `Your booking for ${svcLabel} on ${new Date(checkin).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })} has been submitted successfully.`,
+        link: "/my-bookings",
+        reference_id: booking.id,
+        reference_type: "booking",
+      });
+    } catch (notifErr) {
+      console.error("Failed to create booking notification:", notifErr);
+    }
+
+    // ── Notify property owner ──
+    try {
+      const { data: property } = await supabaseAdmin
+        .from("properties")
+        .select("owner_id, name")
+        .eq("id", resolvedPropertyId)
+        .single();
+
+      if (property?.owner_id) {
+        const svcLabel = service_name || service_type || "a service";
+        await notificationModel.create({
+          user_id: property.owner_id,
+          type: "booking_confirmed",
+          title: "New Booking Received",
+          message: `A new booking for ${svcLabel} at ${property.name || "your property"} on ${new Date(checkin).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })} has been placed.`,
+          link: "/admin/bookings",
+          reference_id: booking.id,
+          reference_type: "booking",
+        });
+      }
+    } catch (notifErr) {
+      console.error("Failed to create owner notification:", notifErr);
     }
 
     return res.status(201).json({ booking });

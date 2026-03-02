@@ -1,4 +1,54 @@
 @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&family=Fredoka:wght@500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;500;600;700;800&family=Playfair+Display:wght@600;700&display=swap');
+@import url("https://fonts.googleapis.com/css2?family=Strawberry+Crumble&display=swap");
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+/* ─── Super Admin Panel ─── */
+
+/* Font override — Inter everywhere including Radix portals */
+.sa-panel, .sa-panel * {
+  font-family: 'Inter', system-ui, sans-serif;
+}
+
+/* Custom dark scrollbar */
+.sa-panel ::-webkit-scrollbar { width: 6px; height: 6px; }
+.sa-panel ::-webkit-scrollbar-track { background: transparent; }
+.sa-panel ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 3px; }
+.sa-panel ::-webkit-scrollbar-thumb:hover { background: rgba(255,163,26,0.25); }
+.sa-panel { scrollbar-color: rgba(255,255,255,0.08) transparent; scrollbar-width: thin; }
+
+/* Fade-in & slide-up for page content */
+@keyframes sa-fade-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes sa-slide-up { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes sa-scale-in { from { opacity: 0; transform: scale(0.96); } to { opacity: 1; transform: scale(1); } }
+
+.sa-animate-in { animation: sa-fade-in 0.35s ease-out both; }
+.sa-slide-in  { animation: sa-slide-up 0.4s ease-out both; }
+.sa-scale-in  { animation: sa-scale-in 0.3s ease-out both; }
+
+/* Stagger animation delays for card grids */
+.sa-stagger > *:nth-child(1) { animation-delay: 0ms; }
+.sa-stagger > *:nth-child(2) { animation-delay: 50ms; }
+.sa-stagger > *:nth-child(3) { animation-delay: 100ms; }
+.sa-stagger > *:nth-child(4) { animation-delay: 150ms; }
+.sa-stagger > *:nth-child(5) { animation-delay: 200ms; }
+.sa-stagger > *:nth-child(6) { animation-delay: 250ms; }
+.sa-stagger > *:nth-child(7) { animation-delay: 300ms; }
+.sa-stagger > *:nth-child(8) { animation-delay: 350ms; }
+
+/* Hover-glow card used across SA pages */
+.sa-card {
+  transition: border-color 0.2s, box-shadow 0.2s, background-color 0.2s;
+}
+.sa-card:hover {
+  border-color: rgba(255,163,26,0.18);
+  box-shadow: 0 0 0 1px rgba(255,163,26,0.06), 0 4px 24px rgba(0,0,0,0.25);
+}
+
+/* Pulse dot animation for status indicators */
+@keyframes sa-pulse-dot { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+.sa-pulse-dot { animation: sa-pulse-dot 2s ease-in-out infinite; }
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -195,4 +245,10 @@
   50% {
     opacity: 0.7;
   }
+}
+
+/* Help Center page animations */
+@keyframes fadeSlideUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
