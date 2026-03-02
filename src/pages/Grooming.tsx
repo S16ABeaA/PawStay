@@ -10,7 +10,12 @@ import { Slider } from "@/components/ui/slider";
 import { Badge } from "@/components/ui/badge";
 import { Link } from "react-router-dom";
 import { fetchProperties } from "@/services/propertyApi";
-import { fetchAmenities } from "@/services/amenitiesApi";
+
+const AMENITIES_LIST = [
+  "Air Conditioning", "CCTV Monitoring", "Pick-up & Drop-off", "Waiting Lounge",
+  "Parking", "X-Ray", "Laboratory", "Surgery Room", "Pharmacy", "Emergency Room",
+  "Veterinary Clinic", "Pet Shop", "Isolation ward", "Vaccinations", "Veterinary technicians",
+];
 
 const Grooming = () => {
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
@@ -21,8 +26,8 @@ const Grooming = () => {
   // Dynamic Data States
   const [shops, setShops] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [amenitiesList, setAmenitiesList] = useState<any[]>([]);
   const [selectedAmenities, setSelectedAmenities] = useState<string[]>([]);
+  const [minRating, setMinRating] = useState<number | null>(null);
 
   const loadGrooming = async () => {
     setLoading(true);
@@ -34,6 +39,7 @@ const Grooming = () => {
         minPrice: priceRange[0],
         maxPrice: priceRange[1],
         amenities: selectedAmenities.length > 0 ? selectedAmenities : undefined,
+        rating: minRating || undefined,
       });
       setShops(data || []);
     } catch (err) {
@@ -47,13 +53,6 @@ const Grooming = () => {
   // Load initial data
   useEffect(() => {
     loadGrooming();
-  }, []);
-
-  // Load amenities for grooming service type
-  useEffect(() => {
-    fetchAmenities("grooming")
-      .then((data) => setAmenitiesList(data || []))
-      .catch((err) => console.error("Failed to load amenities:", err));
   }, []);
 
   const toggleAmenity = (amenity: string) => {
@@ -193,38 +192,41 @@ const Grooming = () => {
                 <div className="mb-6">
                   <label className="text-sm font-medium text-foreground mb-3 block">Minimum Rating</label>
                   <div className="flex gap-2">
-                    {[3, 4, 4.5].map((rating) => (
+                    {[3, 4, 4.5].map((r) => (
                       <button
-                        key={rating}
-                        className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-secondary hover:bg-secondary/80 text-sm transition-colors"
+                        key={r}
+                        onClick={() => setMinRating(minRating === r ? null : r)}
+                        className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm transition-colors ${
+                          minRating === r
+                            ? "bg-primary text-primary-foreground"
+                            : "bg-secondary hover:bg-secondary/80"
+                        }`}
                       >
                         <Star className="h-3.5 w-3.5 fill-rating text-rating" />
-                        {rating}+
+                        {r}+
                       </button>
                     ))}
                   </div>
                 </div>
 
                 {/* Amenities */}
-                {amenitiesList.length > 0 && (
-                  <div className="mb-6">
-                    <label className="text-sm font-medium text-foreground mb-3 block">Amenities</label>
-                    <div className="space-y-3 max-h-48 overflow-y-auto">
-                      {amenitiesList.map((item: any) => (
-                        <div key={item.id} className="flex items-center gap-2">
-                          <Checkbox
-                            id={`amenity-${item.id}`}
-                            checked={selectedAmenities.includes(item.amenity)}
-                            onCheckedChange={() => toggleAmenity(item.amenity)}
-                          />
-                          <label htmlFor={`amenity-${item.id}`} className="text-sm text-muted-foreground cursor-pointer">
-                            {item.amenity}
-                          </label>
-                        </div>
-                      ))}
-                    </div>
+                <div className="mb-6">
+                  <label className="text-sm font-medium text-foreground mb-3 block">Amenities</label>
+                  <div className="space-y-3 max-h-48 overflow-y-auto">
+                    {AMENITIES_LIST.map((amenity) => (
+                      <div key={amenity} className="flex items-center gap-2">
+                        <Checkbox
+                          id={`amenity-${amenity}`}
+                          checked={selectedAmenities.includes(amenity)}
+                          onCheckedChange={() => toggleAmenity(amenity)}
+                        />
+                        <label htmlFor={`amenity-${amenity}`} className="text-sm text-muted-foreground cursor-pointer">
+                          {amenity}
+                        </label>
+                      </div>
+                    ))}
                   </div>
-                )}
+                </div>
 
                 <Button variant="hero" className="w-full" onClick={loadGrooming}>Apply Filters</Button>
               </div>
