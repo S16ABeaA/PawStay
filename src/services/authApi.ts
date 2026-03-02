@@ -7,6 +7,27 @@ export const authApi = {
   resendConfirmation: async (data: any) => authHelper.post(`${API_BASE_URL}/api/auth/resendConfirmation`, data),
   signIn: async (data: any) => authHelper.post(`${API_BASE_URL}/api/auth/signIn`, data),
   signInWithGoogle: async () => authHelper.get(`${API_BASE_URL}/api/auth/signInWithGoogle`),
+  forgotPassword: async (data: any) => authHelper.post(`${API_BASE_URL}/api/auth/forgotPassword`, data),
   signOut: async () => authHelper.post(`${API_BASE_URL}/api/auth/signOut`),
   getProfile: async () => authHelper.get(`${API_BASE_URL}/api/auth/profile`),
+  updateProfile: async (data: any) => authHelper.put(`${API_BASE_URL}/api/auth/updateProfile`, data),
+  uploadAvatar: async (file: File) => {
+    const formData = new FormData();
+    formData.append("avatar", file);
+    const res = await fetch(`${API_BASE_URL}/api/auth/uploadAvatar`, {
+      method: "POST",
+      body: formData,
+      credentials: "include",
+    });
+    const data = await res.json();
+    if (!res.ok) throw data;
+    return data;
+  },
+  getUsers: async () => authHelper.get(`${API_BASE_URL}/api/auth/users`),
+  promoteUser: async (data: { email: string; role: string }) =>
+    authHelper.post(`${API_BASE_URL}/api/auth/promote`, data),
+  banUser: async (id: string, ban: boolean) =>
+    authHelper.patch(`${API_BASE_URL}/api/auth/users/${id}/ban`, { ban }),
+  deleteUser: async (id: string) =>
+    authHelper.delete(`${API_BASE_URL}/api/auth/users/${id}`),
 };

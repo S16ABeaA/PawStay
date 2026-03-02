@@ -357,6 +357,7 @@ const ListProperty = () => {
             contractDocument: null as File | null,
             occupancyRate: 0,
             animalCapacity: 0,
+            serviceCapacities: [] as { name: string; capacity: number }[],
             legalEntityType: "" as "" | "individual" | "business",
             contractingParty: {
               firstName: "",
@@ -383,6 +384,15 @@ const ListProperty = () => {
   const hasBoarding = selectedTypes.includes("hotel");
   const hasGrooming = selectedTypes.includes("grooming");
   const hasVet = selectedTypes.includes("veterinary");
+
+  const isValidPhoneNumber = (phone: string) => {
+    const digitsOnly = phone.replace(/\D/g, '');
+    return digitsOnly.length >= 7 && digitsOnly.length <= 15;
+  };
+
+  const formatPhoneInput = (value: string) => {
+    return value.replace(/[^\d\s\-+()]/g, '');
+  };
 
   const pricingSteps = useMemo(() => {
     const stepsList = [1];
@@ -549,6 +559,80 @@ const ListProperty = () => {
     }
 
     if (currentStep === 2) {
+      // Validate based on current propertySetupStep
+      if (propertySetupStep === 1) {
+        if (formData.petTypesAccepted.length === 0) {
+          toast({
+            title: "Pet Types Required",
+            description: "Please select at least one pet type you accept.",
+            variant: "destructive",
+          });
+          return;
+        }
+      }
+
+      if (propertySetupStep === 3) {
+        if (formData.sameHoursEveryDay) {
+          if (!formData.dailyOpenTime || !formData.dailyCloseTime) {
+            toast({
+              title: "Operating Hours Required",
+              description: "Please set your daily open and close times.",
+              variant: "destructive",
+            });
+            return;
+          }
+        } else {
+          const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+          const hasAnyHours = days.some(
+            (day) => formData.weeklyHours?.[day]?.open && formData.weeklyHours?.[day]?.close
+          );
+          if (!hasAnyHours) {
+            toast({
+              title: "Operating Hours Required",
+              description: "Please set operating hours for at least one day of the week.",
+              variant: "destructive",
+            });
+            return;
+          }
+        }
+      }
+
+      if (propertySetupStep === 4) {
+        if (!formData.complianceRequirements?.includes("Vaccination records required")) {
+          toast({
+            title: "Vaccination Requirement Missing",
+            description: "Vaccination records required must be checked.",
+            variant: "destructive",
+          });
+          return;
+        }
+      }
+
+      if (propertySetupStep === 5) {
+        const missingEmergency: string[] = [];
+        if (!formData.emergencyContact) missingEmergency.push("Emergency contact number");
+        if (!formData.nearestVetHospital) missingEmergency.push("Nearest veterinary hospital");
+        if (!formData.emergencyResponseTime) missingEmergency.push("Emergency response time");
+
+        if (missingEmergency.length > 0) {
+          toast({
+            title: "Emergency Procedures Required",
+            description: `Please fill in: ${missingEmergency.join(", ")}`,
+            variant: "destructive",
+          });
+          return;
+        }
+
+        if (formData.emergencyContact && !isValidPhoneNumber(formData.emergencyContact)) {
+          toast({
+            title: "Invalid Phone Number",
+            description: "Emergency contact must be a valid phone number (at least 7 digits).",
+            variant: "destructive",
+          });
+          return;
+        }
+      }
+
       if (propertySetupStep < 5) {
         setPropertySetupCompleted(propertySetupStep);
         setPropertySetupStep((prev) => prev + 1);
@@ -573,6 +657,30 @@ const ListProperty = () => {
     }
 
     if (currentStep === 4) {
+      // Validate boarding rules step (vaccination required)
+      if (pricingCalendarStep === 5 && hasBoarding) {
+        if (!formData.boardingRules?.vaccinationRequired) {
+          toast({
+            title: "Vaccination Required",
+            description: "Vaccination required must be checked in boarding rules.",
+            variant: "destructive",
+          });
+          return;
+        }
+      }
+
+      // Validate payment options step
+      if (pricingCalendarStep === 7) {
+        if (!formData.paymentOptions?.methods || formData.paymentOptions.methods.length === 0) {
+          toast({
+            title: "Payment Method Required",
+            description: "Please select at least one payment method.",
+            variant: "destructive",
+          });
+          return;
+        }
+      }
+
       const currentIndex = pricingSteps.indexOf(pricingCalendarStep);
       const nextStep = pricingSteps[currentIndex + 1];
 
@@ -587,6 +695,20 @@ const ListProperty = () => {
     }
 
     if (currentStep === 5) {
+      const missingDocs: string[] = [];
+      if (formData.lguPermits.length === 0) missingDocs.push("LGU Permit");
+      if (!formData.baiDocument) missingDocs.push("BAI Document");
+      if (!formData.contractDocument) missingDocs.push("Signed Partner Contract");
+
+      if (missingDocs.length > 0) {
+        toast({
+          title: "Legal Documents Required",
+          description: `Please upload: ${missingDocs.join(", ")}`,
+          variant: "destructive",
+        });
+        return;
+      }
+
       setCurrentStep(6);
       return;
     }
@@ -685,11 +807,66 @@ const ListProperty = () => {
     try {
       // Temporarily disabled authentication for backend testing
 
-      // Validate required fields
-      if (!formData.propertyName || selectedTypes.length === 0 || !formData.contractingParty.firstName || !formData.legalEntityType) {
+      // Validate required fields for Review & Complete
+      if (!formData.legalEntityType) {
         toast({
-          title: "Validation Error",
-          description: "Please fill in all required fields.",
+          title: "Entity Type Required",
+          description: "Please select whether you are listing as an individual or business.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const missingReviewFields: string[] = [];
+      if (!formData.contractingParty.firstName) missingReviewFields.push("First Name");
+      if (!formData.contractingParty.middleName) missingReviewFields.push("Middle Name");
+      if (!formData.contractingParty.lastName) missingReviewFields.push("Last Name");
+      if (!formData.contractingParty.email) missingReviewFields.push("Email Address");
+      if (!formData.contractingParty.phone) missingReviewFields.push("Phone Number");
+      if (!formData.contractingPartyAddress.streetAddress) missingReviewFields.push("Address Line 1");
+      if (!formData.contractingPartyAddress.city) missingReviewFields.push("City");
+      if (!formData.contractingPartyAddress.postalCode) missingReviewFields.push("Zip Code");
+
+      if (missingReviewFields.length > 0) {
+        toast({
+          title: "Required Fields Missing",
+          description: `Please fill in: ${missingReviewFields.join(", ")}`,
+          variant: "destructive",
+        });
+        return;
+      }
+
+      if (!isValidPhoneNumber(formData.contractingParty.phone)) {
+        toast({
+          title: "Invalid Phone Number",
+          description: "Please enter a valid phone number with digits only (at least 7 digits).",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      if (!formData.legalAgreementAccepted.termsAccepted) {
+        toast({
+          title: "Agreement Required",
+          description: "Please accept the Terms of Service and Privacy Policy.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      if (!formData.legalAgreementAccepted.dataProcessing) {
+        toast({
+          title: "Agreement Required",
+          description: "Please consent to the processing of your personal/business data.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      if (!formData.finalAgreementAccepted) {
+        toast({
+          title: "Confirmation Required",
+          description: "Please confirm that all information provided is accurate and complete.",
           variant: "destructive",
         });
         return;
@@ -1296,6 +1473,108 @@ const ListProperty = () => {
                               </div>
                             </div>
                           </div>
+
+                          {/* Capacity Section - Boarding & Grooming/Salon */}
+                          {(hasBoarding || hasGrooming) && (
+                            <div className="bg-secondary/30 rounded-xl p-6">
+                              <h3 className="text-lg font-medium mb-2">Capacity</h3>
+                              <p className="text-sm text-muted-foreground mb-6">
+                                {hasBoarding && !hasGrooming && "Set your overall facility capacity and the number of animals each room type or service can accommodate."}
+                                {hasGrooming && !hasBoarding && "Set the total number of grooming slots available and per-service simultaneous capacity."}
+                                {hasBoarding && hasGrooming && "Set the total facility capacity and per-service capacity for boarding and grooming."}
+                              </p>
+
+                              {/* Overall property-level capacity → properties.capacity */}
+                              <div className="mb-6 p-4 bg-background rounded-lg border space-y-1">
+                                <Label className="text-sm font-medium">
+                                  {hasBoarding && !hasGrooming && "Total animal capacity (entire facility)"}
+                                  {hasGrooming && !hasBoarding && "Total grooming slots (concurrent animals)"}
+                                  {hasBoarding && hasGrooming && "Total facility capacity (all services combined)"}
+                                </Label>
+                                <p className="text-xs text-muted-foreground mb-2">
+                                  {hasBoarding && !hasGrooming && "Maximum number of animals that can stay at your facility at any one time."}
+                                  {hasGrooming && !hasBoarding && "Maximum number of pets your salon can handle simultaneously across all stations."}
+                                  {hasBoarding && hasGrooming && "Overall maximum concurrent animals across boarding and grooming at one time."}
+                                </p>
+                                <Input
+                                  type="number"
+                                  min={1}
+                                  placeholder="e.g., 20"
+                                  value={formData.animalCapacity === 0 ? "" : formData.animalCapacity}
+                                  onChange={(e) =>
+                                    setFormData((prev) => ({
+                                      ...prev,
+                                      animalCapacity: parseInt(e.target.value) || 0,
+                                    }))
+                                  }
+                                  className="max-w-xs"
+                                />
+                              </div>
+
+                              <h4 className="text-sm font-semibold mb-3 text-foreground">
+                                Per-service / room-type capacity <span className="font-normal text-muted-foreground">(stored in property_services.capacity)</span>
+                              </h4>
+
+                              <div className="space-y-3 mb-4">
+                                {formData.serviceCapacities.map((item, index) => (
+                                  <div key={index} className="flex items-end gap-3 bg-background rounded-lg border p-4">
+                                    <div className="flex-1 space-y-1">
+                                      <Label className="text-sm font-medium">Service / Room Type</Label>
+                                      <Input
+                                        placeholder={hasBoarding ? "e.g., Standard Room, Deluxe Suite" : "e.g., Basic Bath & Trim"}
+                                        value={item.name}
+                                        onChange={(e) => {
+                                          const updated = [...formData.serviceCapacities];
+                                          updated[index].name = e.target.value;
+                                          setFormData((prev) => ({ ...prev, serviceCapacities: updated }));
+                                        }}
+                                      />
+                                    </div>
+                                    <div className="w-36 space-y-1">
+                                      <Label className="text-sm font-medium">Capacity (animals)</Label>
+                                      <Input
+                                        type="number"
+                                        min={1}
+                                        placeholder="e.g., 5"
+                                        value={item.capacity === 0 ? "" : item.capacity}
+                                        onChange={(e) => {
+                                          const updated = [...formData.serviceCapacities];
+                                          updated[index].capacity = parseInt(e.target.value) || 0;
+                                          setFormData((prev) => ({ ...prev, serviceCapacities: updated }));
+                                        }}
+                                      />
+                                    </div>
+                                    <button
+                                      type="button"
+                                      className="mb-0.5 text-muted-foreground hover:text-destructive transition-colors"
+                                      onClick={() => {
+                                        const updated = formData.serviceCapacities.filter((_, i) => i !== index);
+                                        setFormData((prev) => ({ ...prev, serviceCapacities: updated }));
+                                      }}
+                                    >
+                                      <X className="h-4 w-4" />
+                                    </button>
+                                  </div>
+                                ))}
+                              </div>
+
+                              <button
+                                type="button"
+                                className="flex items-center gap-2 text-sm font-medium text-primary hover:underline"
+                                onClick={() =>
+                                  setFormData((prev) => ({
+                                    ...prev,
+                                    serviceCapacities: [
+                                      ...prev.serviceCapacities,
+                                      { name: "", capacity: 0 },
+                                    ],
+                                  }))
+                                }
+                              >
+                                + Add service capacity
+                              </button>
+                            </div>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -1736,7 +2015,7 @@ const ListProperty = () => {
                                 <Input
                                   placeholder="+63 XXX XXX XXXX"
                                   value={formData.emergencyContact || ""}
-                                  onChange={(e) => setFormData((prev) => ({ ...prev, emergencyContact: e.target.value }))}
+                                  onChange={(e) => setFormData((prev) => ({ ...prev, emergencyContact: formatPhoneInput(e.target.value) }))}
                                 />
                               </div>
                               <div className="space-y-2">
@@ -3188,7 +3467,7 @@ const ListProperty = () => {
                                       value={formData.contractingParty.phone || ""}
                                       onChange={(e) => setFormData(prev => ({
                                         ...prev,
-                                        contractingParty: { ...prev.contractingParty, phone: e.target.value }
+                                        contractingParty: { ...prev.contractingParty, phone: formatPhoneInput(e.target.value) }
                                       }))}
                                       placeholder="9XX XXX XXXX"
                                       className="rounded-l-none"

@@ -441,7 +441,81 @@ export async function getProperties(filters: HotelFilters = {}) {
   }));
 }
 
-// ── Get Single Property by ID ──
+export async function getRandomProperties(limit: number = 6) {
+  // Fetch all approved, non-deleted property IDs
+  let idQuery = supabaseAdmin
+    .from("properties")
+    .select("id");
+
+  // Check columns dynamically (same pattern as getProperties)
+  const { data: sample } = await supabaseAdmin
+    .from("properties")
+    .select("*")
+    .limit(1);
+
+  const columns = sample?.[0] ? Object.keys(sample[0]) : [];
+  const has = (col: string) => columns.includes(col);
+
+  if (has("status")) idQuery = idQuery.eq("status", "approved");
+  if (has("is_deleted")) idQuery = idQuery.eq("is_deleted", false);
+
+  const { data: allIds, error: idError } = await idQuery;
+
+  if (idError) {
+    console.error("[getRandomProperties]", idError);
+    throw idError;
+  }
+
+  if (!allIds || allIds.length === 0) return [];
+
+  // Fisher-Yates shuffle for unbiased randomness
+  for (let i = allIds.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [allIds[i], allIds[j]] = [allIds[j], allIds[i]];
+  }
+  const selected = allIds.slice(0, Math.min(limit, allIds.length));
+  const selectedIds = selected.map((row) => row.id);
+
+  // Fetch full property data for selected IDs
+  const { data, error } = await supabaseAdmin
+    .from("properties")
+    .select(`
+      *,
+      property_amenities(
+        amenity_id,
+        amenities(amenity)
+      ),
+      property_services(
+        id,
+        name,
+        category,
+        price,
+        description,
+        is_active
+      )
+    `)
+    .eq("id", id)
+    .single();
+
+  if (error) {
+    console.error("[getPropertyById]", error);
+    throw error;
+  }
+
+  if (!data) return null;
+
+  // Get cheapest service price
+  const activeServices = data.property_services?.filter((s: any) => s.is_active) || [];
+  const cheapestPrice = activeServices.length > 0
+    ? Math.min(...activeServices.map((s: any) => Number(s.price || 0)))
+    : null;
+
+  return {
+    ...data,
+    cheapest_service_price: cheapestPrice,
+  };
+}
+
 export async function getPropertyById(id: string) {
   const { data, error } = await supabaseAdmin
     .from("properties")

@@ -328,6 +328,7 @@ const VeterinaryDetail = () => {
                 </div>
                 <div className="flex items-baseline gap-2 mb-6">
                   <span className="text-3xl font-bold text-foreground">₱{selected.price}</span>
+                  <span className="text-muted-foreground">• {selected.duration}</span>
                 </div>
 
                 {/* Price Summary */}

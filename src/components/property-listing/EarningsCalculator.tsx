@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Slider } from "@/components/ui/slider";
-import { DollarSign, TrendingUp } from "lucide-react";
+import { TrendingUp } from "lucide-react";
 
 const EarningsCalculator = () => {
   const [capacity, setCapacity] = useState([10]);
@@ -42,7 +42,7 @@ const EarningsCalculator = () => {
         <div>
           <div className="flex justify-between mb-2">
             <span className="text-sm text-muted-foreground">Price per Night</span>
-            <span className="text-sm font-medium text-foreground">${pricePerNight[0]}</span>
+            <span className="text-sm font-medium text-foreground">₱{pricePerNight[0]}</span>
           </div>
           <Slider
             value={pricePerNight}
@@ -73,7 +73,7 @@ const EarningsCalculator = () => {
           <div className="flex items-center justify-between">
             <span className="text-muted-foreground">Estimated Monthly Earnings</span>
             <div className="flex items-center gap-1">
-              <DollarSign className="h-6 w-6 text-success" />
+              <span className="text-2xl font-bold text-success">₱</span>
               <span className="text-3xl font-bold text-success">
                 {monthlyEarnings.toLocaleString()}
               </span>
