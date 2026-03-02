@@ -208,7 +208,7 @@ const HotelDetail = () => {
                           <p className="text-sm text-muted-foreground">{room.description}</p>
                         </div>
                         <div className="text-right">
-                          <p className="text-xl font-bold text-foreground">${room.price}</p>
+                          <p className="text-xl font-bold text-foreground">₱{room.price}</p>
                           <p className="text-xs text-muted-foreground">per night</p>
                         </div>
                       </div>
@@ -224,10 +224,10 @@ const HotelDetail = () => {
                 <div className="flex items-baseline gap-2 mb-6">
                   {hotelData.originalPrice && (
                     <span className="text-lg text-muted-foreground line-through">
-                      ${hotelData.originalPrice}
+                      ₱{hotelData.originalPrice}
                     </span>
                   )}
-                  <span className="text-3xl font-bold text-foreground">${selectedRoom.price}</span>
+                  <span className="text-3xl font-bold text-foreground">₱{selectedRoom.price}</span>
                   <span className="text-muted-foreground">/ night</span>
                 </div>
 
@@ -235,15 +235,15 @@ const HotelDetail = () => {
                 <div className="border-t border-border pt-4 mb-4 space-y-2">
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">{selectedRoom.name}</span>
-                    <span>${selectedRoom.price}</span>
+                    <span>₱{selectedRoom.price}</span>
                   </div>
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">Service fee (10%)</span>
-                    <span>${serviceFee}</span>
+                    <span>₱{serviceFee}</span>
                   </div>
                   <div className="flex justify-between font-semibold pt-2 border-t border-border">
                     <span>Total</span>
-                    <span>${selectedRoom.price + serviceFee}</span>
+                    <span>₱{selectedRoom.price + serviceFee}</span>
                   </div>
                 </div>
 

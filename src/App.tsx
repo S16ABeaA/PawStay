@@ -1,3 +1,4 @@
+import { ThemeProvider } from "next-themes";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -48,11 +49,12 @@ import SuperAdminSettings from "./pages/superadmin/Settings";
 const queryClient = new QueryClient();
 
 const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <Toaster />
-      <Sonner />
-      <BrowserRouter>
+  <ThemeProvider attribute="class" defaultTheme="light" enableSystem>
+    <QueryClientProvider client={queryClient}>
+      <TooltipProvider>
+        <Toaster />
+        <Sonner />
+        <BrowserRouter>
         <ScrollToTop />
         <Routes>
           {/* Public routes */}
@@ -76,7 +78,7 @@ const App = () => (
             }
           />
           <Route path="/favorites" element={<RequireAuth><Favorites /></RequireAuth>} />
-          <Route path="/booking" element={<Booking />} />
+          <Route path="/booking" element={<RequireAuth signUpFirst><Booking /></RequireAuth> } />
           <Route path="/search" element={<SearchResults />} />
           <Route path="/help-center" element={<HelpCenter />} />
           <Route
@@ -106,11 +108,46 @@ const App = () => (
           />
           
           {/* Admin routes */}
-          <Route path="/admin" element={<RequireAdmin><AdminDashboard /></RequireAdmin>} />
-          <Route path="/admin/bookings" element={<RequireAdmin><AdminBookings /></RequireAdmin>} />
-          <Route path="/admin/services" element={<RequireAdmin><AdminServices /></RequireAdmin>} />
-          <Route path="/admin/reviews" element={<RequireAdmin><AdminReviews /></RequireAdmin>} />
-          <Route path="/admin/settings" element={<RequireAdmin><AdminSettings /></RequireAdmin>} />
+          <Route
+            path="/admin"
+            element={
+              <RequireAuth allowedRoles={["proprietor"]}>
+                <AdminDashboard />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/admin/bookings"
+            element={
+              <RequireAuth allowedRoles={["proprietor"]}>
+                <AdminBookings />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/admin/services"
+            element={
+              <RequireAuth allowedRoles={["proprietor"]}>
+                <AdminServices />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/admin/reviews"
+            element={
+              <RequireAuth allowedRoles={["proprietor"]}>
+                <AdminReviews />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/admin/settings"
+            element={
+              <RequireAuth allowedRoles={["proprietor"]}>
+                <AdminSettings />
+              </RequireAuth>
+            }
+          />
           
           {/* SuperAdmin routes */}
           <Route path="/superadmin" element={<RequireSuperAdmin><SuperAdminDashboard /></RequireSuperAdmin>} />
@@ -126,6 +163,7 @@ const App = () => (
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>
+  </ThemeProvider>
 );
 
 export default App;

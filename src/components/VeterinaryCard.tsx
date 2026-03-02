@@ -123,10 +123,10 @@ const VeterinaryCard = ({ clinic }: VeterinaryCardProps) => {
             <div className="flex items-baseline gap-1.5">
               {clinic.originalPrice && (
                 <span className="text-sm text-muted-foreground line-through">
-                  ${clinic.originalPrice}
+                  ₱{clinic.originalPrice}
                 </span>
               )}
-              <span className="text-2xl font-bold text-foreground">${clinic.price}</span>
+              <span className="text-2xl font-bold text-foreground">₱{clinic.price}</span>
             </div>
             <span className="text-xs text-muted-foreground">consultation from</span>
           </div>

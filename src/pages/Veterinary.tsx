@@ -220,7 +220,7 @@ const Veterinary = () => {
                 {/* Price Range */}
                 <div className="mb-6">
                   <label className="text-sm font-medium text-foreground mb-4 block">
-                    Consultation Fee: ${priceRange[0]} - ${priceRange[1]}
+                    Consultation Fee: ₱{priceRange[0]} - ₱{priceRange[1]}
                   </label>
                   <Slider
                     value={priceRange}

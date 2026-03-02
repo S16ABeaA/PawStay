@@ -8,18 +8,75 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { Building2, Bell, CreditCard, Shield, Clock, Upload, X, QrCode, Smartphone, Wallet, Banknote } from "lucide-react";
-import { useState, useRef } from "react";
+import { settingsApi, SettingsData } from "@/services/settingsApi";
+import { Building2, Bell, CreditCard, Shield, Clock, Upload, X, QrCode, Smartphone, Wallet, Banknote, Loader2 } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 
 const AdminSettings = () => {
   const { toast } = useToast();
 
+  const [loading, setLoading] = useState(true);
+  const [business, setBusiness] = useState<SettingsData["business"]>({
+    name: "",
+    phone: "",
+    website: "",
+    description: "",
+    address: "",
+    capacity: 0,
+  });
+  const [notifications, setNotifications] = useState<SettingsData["notifications"]>({
+    newBookings: true,
+    bookingReminders: true,
+    newReviews: true,
+    marketingUpdates: false,
+  });
+  const [availability, setAvailability] = useState<SettingsData["availability"]>({
+    maxCapacity: 0,
+    minStay: 1,
+    checkInTime: "09:00",
+    checkOutTime: "17:00",
+    sameDayBookings: true,
+  });
+
   // Payment settings state
-  const [acceptedMethods, setAcceptedMethods] = useState<string[]>(["GCash", "Cash"]);
+  const [acceptedMethods, setAcceptedMethods] = useState<string[]>([]);
   const [qrCodeGCash, setQrCodeGCash] = useState<string | null>(null);
   const [qrCodePayMaya, setQrCodePayMaya] = useState<string | null>(null);
   const gcashInputRef = useRef<HTMLInputElement>(null);
   const paymayaInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    let isActive = true;
+
+    const loadSettings = async () => {
+      try {
+        setLoading(true);
+        const data = await settingsApi.getSettings();
+        if (!isActive) return;
+
+        setBusiness(data.business);
+        setNotifications(data.notifications);
+        setAvailability(data.availability);
+        setAcceptedMethods(data.payment.acceptedMethods || []);
+        setQrCodeGCash(data.payment.gcashQrUrl || null);
+        setQrCodePayMaya(data.payment.paymayaQrUrl || null);
+      } catch (err) {
+        console.error("Failed to load settings", err);
+        toast({
+          title: "Failed to load settings",
+          description: "Please try again in a moment.",
+          variant: "destructive",
+        });
+      } finally {
+        if (isActive) setLoading(false);
+      }
+    };
+
+    loadSettings();
+    return () => {
+      isActive = false;
+    };
+  }, [toast]);
 
   const toggleMethod = (method: string) => {
     setAcceptedMethods((prev) =>
@@ -41,20 +98,93 @@ const AdminSettings = () => {
     }
   };
 
-  const handleSave = () => {
-    toast({
-      title: "Settings saved",
-      description: "Your changes have been saved successfully.",
-    });
+  const handleSaveBusiness = async () => {
+    try {
+      await settingsApi.updateBusiness({
+        name: business.name,
+        phone: business.phone,
+        website: business.website,
+        description: business.description,
+        address: business.address,
+      });
+      toast({
+        title: "Business info saved",
+        description: "Your business details have been updated.",
+      });
+    } catch (err) {
+      console.error("Failed to update business", err);
+      toast({
+        title: "Update failed",
+        description: "Unable to save business details.",
+        variant: "destructive",
+      });
+    }
   };
 
-  const handleSavePayment = () => {
-    // In a real app, this would call an API to update payment_options in property_pricing
-    toast({
-      title: "Payment settings saved",
-      description: "Your payment methods and QR codes have been updated.",
-    });
+  const handleSaveNotifications = async () => {
+    try {
+      await settingsApi.updateNotifications(notifications);
+      toast({
+        title: "Preferences saved",
+        description: "Your notification preferences have been updated.",
+      });
+    } catch (err) {
+      console.error("Failed to update notifications", err);
+      toast({
+        title: "Update failed",
+        description: "Unable to save notification preferences.",
+        variant: "destructive",
+      });
+    }
   };
+
+  const handleSaveAvailability = async () => {
+    try {
+      await settingsApi.updateAvailability(availability);
+      toast({
+        title: "Availability saved",
+        description: "Your availability settings have been updated.",
+      });
+    } catch (err) {
+      console.error("Failed to update availability", err);
+      toast({
+        title: "Update failed",
+        description: "Unable to save availability settings.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleSavePayment = async () => {
+    try {
+      await settingsApi.updatePayment({
+        acceptedMethods,
+        gcashQrUrl: qrCodeGCash,
+        paymayaQrUrl: qrCodePayMaya,
+      });
+      toast({
+        title: "Payment settings saved",
+        description: "Your payment methods and QR codes have been updated.",
+      });
+    } catch (err) {
+      console.error("Failed to update payment", err);
+      toast({
+        title: "Update failed",
+        description: "Unable to save payment settings.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  if (loading) {
+    return (
+      <AdminLayout title="Settings" subtitle="Manage your business preferences">
+        <div className="flex items-center justify-center h-96">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      </AdminLayout>
+    );
+  }
 
   return (
     <AdminLayout title="Settings" subtitle="Manage your business preferences">
@@ -92,34 +222,47 @@ const AdminSettings = () => {
               <div className="grid md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="businessName">Business Name</Label>
-                  <Input id="businessName" defaultValue="Happy Paws Pet Hotel" />
+                  <Input
+                    id="businessName"
+                    value={business.name}
+                    onChange={(e) => setBusiness((prev) => ({ ...prev, name: e.target.value }))}
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="phone">Phone Number</Label>
-                  <Input id="phone" defaultValue="(555) 123-4567" />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="email">Email</Label>
-                  <Input id="email" type="email" defaultValue="contact@happypaws.com" />
+                  <Input
+                    id="phone"
+                    value={business.phone}
+                    onChange={(e) => setBusiness((prev) => ({ ...prev, phone: e.target.value }))}
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="website">Website</Label>
-                  <Input id="website" defaultValue="www.happypaws.com" />
+                  <Input
+                    id="website"
+                    value={business.website}
+                    onChange={(e) => setBusiness((prev) => ({ ...prev, website: e.target.value }))}
+                  />
                 </div>
                 <div className="md:col-span-2 space-y-2">
                   <Label htmlFor="address">Address</Label>
-                  <Input id="address" defaultValue="123 Pet Street, San Francisco, CA 94102" />
+                  <Input
+                    id="address"
+                    value={business.address}
+                    onChange={(e) => setBusiness((prev) => ({ ...prev, address: e.target.value }))}
+                  />
                 </div>
                 <div className="md:col-span-2 space-y-2">
                   <Label htmlFor="description">Description</Label>
                   <Textarea
                     id="description"
                     rows={4}
-                    defaultValue="A premium pet hotel offering boarding, grooming, and daycare services with love and care."
+                    value={business.description}
+                    onChange={(e) => setBusiness((prev) => ({ ...prev, description: e.target.value }))}
                   />
                 </div>
               </div>
-              <Button variant="hero" onClick={handleSave}>Save Changes</Button>
+              <Button variant="hero" onClick={handleSaveBusiness}>Save Changes</Button>
             </CardContent>
           </Card>
         </TabsContent>
@@ -137,31 +280,51 @@ const AdminSettings = () => {
                     <p className="font-medium">New Bookings</p>
                     <p className="text-sm text-muted-foreground">Get notified when you receive a new booking</p>
                   </div>
-                  <Switch defaultChecked />
+                  <Switch
+                    checked={notifications.newBookings}
+                    onCheckedChange={(checked) =>
+                      setNotifications((prev) => ({ ...prev, newBookings: checked }))
+                    }
+                  />
                 </div>
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="font-medium">Booking Reminders</p>
                     <p className="text-sm text-muted-foreground">Remind about upcoming check-ins and check-outs</p>
                   </div>
-                  <Switch defaultChecked />
+                  <Switch
+                    checked={notifications.bookingReminders}
+                    onCheckedChange={(checked) =>
+                      setNotifications((prev) => ({ ...prev, bookingReminders: checked }))
+                    }
+                  />
                 </div>
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="font-medium">New Reviews</p>
                     <p className="text-sm text-muted-foreground">Get notified when customers leave reviews</p>
                   </div>
-                  <Switch defaultChecked />
+                  <Switch
+                    checked={notifications.newReviews}
+                    onCheckedChange={(checked) =>
+                      setNotifications((prev) => ({ ...prev, newReviews: checked }))
+                    }
+                  />
                 </div>
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="font-medium">Marketing Updates</p>
                     <p className="text-sm text-muted-foreground">Tips and promotions from PawStay</p>
                   </div>
-                  <Switch />
+                  <Switch
+                    checked={notifications.marketingUpdates}
+                    onCheckedChange={(checked) =>
+                      setNotifications((prev) => ({ ...prev, marketingUpdates: checked }))
+                    }
+                  />
                 </div>
               </div>
-              <Button variant="hero" onClick={handleSave}>Save Preferences</Button>
+              <Button variant="hero" onClick={handleSaveNotifications}>Save Preferences</Button>
             </CardContent>
           </Card>
         </TabsContent>
@@ -176,19 +339,49 @@ const AdminSettings = () => {
               <div className="grid md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Maximum Capacity</Label>
-                  <Input type="number" defaultValue="25" />
+                  <Input
+                    type="number"
+                    value={availability.maxCapacity.toString()}
+                    onChange={(e) =>
+                      setAvailability((prev) => ({
+                        ...prev,
+                        maxCapacity: Number(e.target.value || 0),
+                      }))
+                    }
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label>Minimum Stay (nights)</Label>
-                  <Input type="number" defaultValue="1" />
+                  <Input
+                    type="number"
+                    value={availability.minStay.toString()}
+                    onChange={(e) =>
+                      setAvailability((prev) => ({
+                        ...prev,
+                        minStay: Number(e.target.value || 0),
+                      }))
+                    }
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label>Check-in Time</Label>
-                  <Input type="time" defaultValue="09:00" />
+                  <Input
+                    type="time"
+                    value={availability.checkInTime}
+                    onChange={(e) =>
+                      setAvailability((prev) => ({ ...prev, checkInTime: e.target.value }))
+                    }
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label>Check-out Time</Label>
-                  <Input type="time" defaultValue="17:00" />
+                  <Input
+                    type="time"
+                    value={availability.checkOutTime}
+                    onChange={(e) =>
+                      setAvailability((prev) => ({ ...prev, checkOutTime: e.target.value }))
+                    }
+                  />
                 </div>
               </div>
               <div className="flex items-center justify-between p-4 rounded-lg bg-secondary/50">
@@ -196,9 +389,14 @@ const AdminSettings = () => {
                   <p className="font-medium">Accept Same-Day Bookings</p>
                   <p className="text-sm text-muted-foreground">Allow customers to book for today</p>
                 </div>
-                <Switch defaultChecked />
+                <Switch
+                  checked={availability.sameDayBookings}
+                  onCheckedChange={(checked) =>
+                    setAvailability((prev) => ({ ...prev, sameDayBookings: checked }))
+                  }
+                />
               </div>
-              <Button variant="hero" onClick={handleSave}>Save Settings</Button>
+              <Button variant="hero" onClick={handleSaveAvailability}>Save Settings</Button>
             </CardContent>
           </Card>
         </TabsContent>
@@ -381,7 +579,7 @@ const AdminSettings = () => {
                 <div className="flex items-center justify-between mb-4">
                   <div>
                     <p className="font-medium">Current Balance</p>
-                    <p className="text-2xl font-bold text-foreground">$3,450.00</p>
+                    <p className="text-2xl font-bold text-foreground">₱3,450.00</p>
                   </div>
                   <Button>Withdraw</Button>
                 </div>

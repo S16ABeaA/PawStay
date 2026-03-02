@@ -1,0 +1,32 @@
+-- ============================================================
+-- Admin Settings — ensure supporting columns exist
+-- The Settings page reads/writes:
+--   • properties        → business info (name, phone, website, description, address)
+--   • profiles           → notification_prefs  (jsonb)
+--   • property_setup     → operating_hours     (jsonb — check-in/out, min stay, same-day)
+--   • property_pricing   → payment_options     (jsonb — methods, QR URLs)
+--
+-- All columns already exist in schema.sql.
+-- This migration only adds the qr_codes jsonb column to property_pricing
+-- if you want to store QR separately (optional — we embed them in payment_options).
+-- ============================================================
+
+-- Nothing to create — all tables/columns already exist in the schema.
+-- This file is kept as documentation for the Settings page data mapping.
+
+-- payment_options jsonb structure used by Settings:
+-- {
+--   "accepted_methods": ["GCash", "Cash", "PayMaya", "Credit/Debit"],
+--   "gcash_qr_url": "https://...",
+--   "paymaya_qr_url": "https://..."
+-- }
+
+-- operating_hours jsonb structure used by Settings (availability):
+-- Existing fields are preserved. Settings adds/updates:
+-- {
+--   ...existing fields,
+--   "checkInTime": "09:00",
+--   "checkOutTime": "17:00",
+--   "minStay": 1,
+--   "sameDayBookings": true
+-- }

@@ -183,10 +183,10 @@ const FeaturedHotels = () => {
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-8">
           <div>
             <h2 className="font-display text-3xl md:text-4xl font-bold text-foreground mb-2">
-              Featured Pet Hotels
+              Featured Pet Service Providers
             </h2>
             <p className="text-muted-foreground">
-              Handpicked stays loved by fur babies and their parents
+              Discover top-rated pet care services near you
             </p>
           </div>
 
@@ -368,7 +368,7 @@ const FeaturedHotels = () => {
         {/* Results count */}
         {!isLoading && !error && hasActiveFilters && (
           <p className="text-sm text-muted-foreground mb-4">
-            Showing {displayedHotels.length} of {hotels.length} hotels
+            Showing {displayedHotels.length} of {hotels.length} properties
           </p>
         )}
 
@@ -382,7 +382,7 @@ const FeaturedHotels = () => {
         >
           {isLoading ? (
             <div className="text-muted-foreground col-span-full text-center py-10">
-              Loading featured hotels...
+              Loading properties...
             </div>
           ) : error ? (
             <div className="text-destructive col-span-full text-center py-10">
@@ -391,8 +391,8 @@ const FeaturedHotels = () => {
           ) : displayedHotels.length === 0 ? (
             <div className="text-muted-foreground col-span-full text-center py-10">
               {hasActiveFilters
-                ? "No hotels match your filters. Try adjusting them."
-                : "No featured hotels found."}
+                ? "No properties match your filters. Try adjusting them."
+                : "No properties found."}
             </div>
           ) : (
             displayedHotels.map((hotel) => (
@@ -419,7 +419,7 @@ const FeaturedHotels = () => {
                 onClick={handleLoadMore}
                 disabled={isLoadingMore}
               >
-                {isLoadingMore ? "Loading..." : "Load More Hotels"}
+                {isLoadingMore ? "Loading..." : "Load More"}
               </Button>
             )}
           </div>
