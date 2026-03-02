@@ -9,12 +9,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Slider } from "@/components/ui/slider";
 import { Badge } from "@/components/ui/badge";
 import { fetchProperties } from "@/services/propertyApi";
-
-const AMENITIES_LIST = [
-  "Air Conditioning", "CCTV Monitoring", "Pick-up & Drop-off", "Waiting Lounge",
-  "Parking", "X-Ray", "Laboratory", "Surgery Room", "Pharmacy", "Emergency Room",
-  "Veterinary Clinic", "Pet Shop", "Isolation ward", "Vaccinations", "Veterinary technicians",
-];
+import { fetchAmenities } from "@/services/amenitiesApi";
 
 const Hotels = () => {
   const [hotels, setHotels] = useState<any[]>([]);
@@ -23,7 +18,10 @@ const Hotels = () => {
   const [showFilters, setShowFilters] = useState(false);
   const [location, setLocation] = useState("");
   const [selectedAmenities, setSelectedAmenities] = useState<string[]>([]);
+  const [amenitiesList, setAmenitiesList] = useState<any[]>([]);
   const [minRating, setMinRating] = useState<number | null>(null);
+  const [petType, setPetType] = useState<string | null>(null);
+  const [dogSize, setDogSize] = useState<string | null>(null);
 
   const loadHotels = async () => {
     setLoading(true);
@@ -31,12 +29,14 @@ const Hotels = () => {
       // Pass explicit filters to the API
       const data = await fetchProperties({
         propertyType: "hotel",
-        serviceCategory: "Boarding", // Only look at hotel/boarding prices
+        serviceCategory: "Boarding",
         location: location.trim() || undefined,
         minPrice: priceRange[0],
         maxPrice: priceRange[1],
         amenities: selectedAmenities.length > 0 ? selectedAmenities : undefined,
         rating: minRating || undefined,
+        petType: petType || undefined,
+        dogSize: petType === "dog" && dogSize ? dogSize : undefined,
       });
       setHotels(data || []);
     } catch (err) {
@@ -50,6 +50,13 @@ const Hotels = () => {
   // Run on initial mount
   useEffect(() => {
     loadHotels();
+  }, []);
+
+  // Load amenities dynamically
+  useEffect(() => {
+    fetchAmenities("hotel")
+      .then((data) => setAmenitiesList(data || []))
+      .catch((err) => console.error("Failed to load amenities:", err));
   }, []);
 
   const toggleAmenity = (amenity: string) => {
@@ -95,6 +102,48 @@ const Hotels = () => {
                     onKeyDown={(e) => e.key === 'Enter' && loadHotels()}
                   />
                 </div>
+
+                {/* Pet Type */}
+                <div className="mb-6">
+                  <label className="text-sm font-medium text-foreground mb-3 block">Pet Type</label>
+                  <div className="flex gap-2">
+                    {(["dog", "cat", "others"] as const).map((type) => (
+                      <button
+                        key={type}
+                        onClick={() => { setPetType(petType === type ? null : type); if (type !== "dog") setDogSize(null); }}
+                        className={`px-3 py-1.5 rounded-lg text-sm capitalize transition-colors ${
+                          petType === type
+                            ? "bg-primary text-primary-foreground"
+                            : "bg-secondary hover:bg-secondary/80"
+                        }`}
+                      >
+                        {type === "others" ? "Others" : type.charAt(0).toUpperCase() + type.slice(1)}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Dog Size — only when Dog is selected */}
+                {petType === "dog" && (
+                  <div className="mb-6">
+                    <label className="text-sm font-medium text-foreground mb-3 block">Dog Size</label>
+                    <div className="flex flex-wrap gap-2">
+                      {["small", "medium", "large", "giant"].map((size) => (
+                        <button
+                          key={size}
+                          onClick={() => setDogSize(dogSize === size ? null : size)}
+                          className={`px-3 py-1.5 rounded-lg text-sm capitalize transition-colors ${
+                            dogSize === size
+                              ? "bg-primary text-primary-foreground"
+                              : "bg-secondary hover:bg-secondary/80"
+                          }`}
+                        >
+                          {size.charAt(0).toUpperCase() + size.slice(1)}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 
                 {/* Price Slider */}
                 <div className="mb-6">
@@ -126,23 +175,25 @@ const Hotels = () => {
                 </div>
 
                 {/* Amenities */}
-                <div className="mb-6">
-                  <label className="text-sm font-medium text-foreground mb-3 block">Amenities</label>
-                  <div className="space-y-3 max-h-48 overflow-y-auto">
-                    {AMENITIES_LIST.map((amenity) => (
-                      <div key={amenity} className="flex items-center gap-2">
-                        <Checkbox
-                          id={`amenity-${amenity}`}
-                          checked={selectedAmenities.includes(amenity)}
-                          onCheckedChange={() => toggleAmenity(amenity)}
-                        />
-                        <label htmlFor={`amenity-${amenity}`} className="text-sm text-muted-foreground cursor-pointer">
-                          {amenity}
-                        </label>
-                      </div>
-                    ))}
+                {amenitiesList.length > 0 && (
+                  <div className="mb-6">
+                    <label className="text-sm font-medium text-foreground mb-3 block">Amenities</label>
+                    <div className="space-y-3 max-h-48 overflow-y-auto">
+                      {amenitiesList.map((item: any) => (
+                        <div key={item.id} className="flex items-center gap-2">
+                          <Checkbox
+                            id={`amenity-${item.id}`}
+                            checked={selectedAmenities.includes(item.amenity)}
+                            onCheckedChange={() => toggleAmenity(item.amenity)}
+                          />
+                          <label htmlFor={`amenity-${item.id}`} className="text-sm text-muted-foreground cursor-pointer">
+                            {item.amenity}
+                          </label>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                </div>
+                )}
                 
                 <Button variant="hero" className="w-full" onClick={loadHotels}>Apply Filters</Button>
               </div>
