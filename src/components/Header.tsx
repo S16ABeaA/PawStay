@@ -51,7 +51,7 @@ const Header = () => {
       <div className="container flex h-16 items-center justify-between">
         {/* Logo */}
         <Link to="/" className="flex items-center gap-1 group">
-          <img src="/PawStay Logo.jpg" alt="PawStay" className="h-10 w-10 rounded-xl object-cover" />
+          <img src="/PawStay%20Logo.jpg" alt="PawStay" className="h-10 w-10 rounded-xl object-cover" />
           <span className="font-display text-xl font-bold text-foreground">
             PawStay
           </span>
