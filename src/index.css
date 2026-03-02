@@ -252,3 +252,56 @@
   from { opacity: 0; transform: translateY(8px); }
   to   { opacity: 1; transform: translateY(0); }
 }
+
+/* ─── FullCalendar Theme Overrides ─── */
+.fc {
+  --fc-border-color: hsl(var(--border));
+  --fc-button-bg-color: hsl(var(--primary));
+  --fc-button-border-color: hsl(var(--primary));
+  --fc-button-hover-bg-color: hsl(var(--primary) / 0.85);
+  --fc-button-hover-border-color: hsl(var(--primary) / 0.85);
+  --fc-button-active-bg-color: hsl(var(--primary) / 0.75);
+  --fc-button-active-border-color: hsl(var(--primary) / 0.75);
+  --fc-today-bg-color: hsl(var(--primary) / 0.06);
+  --fc-page-bg-color: transparent;
+  --fc-neutral-bg-color: hsl(var(--secondary));
+  --fc-list-event-hover-bg-color: hsl(var(--secondary));
+  --fc-now-indicator-color: hsl(var(--primary));
+  font-family: inherit;
+}
+
+.fc .fc-col-header-cell-cushion,
+.fc .fc-daygrid-day-number,
+.fc .fc-list-day-cushion {
+  color: hsl(var(--foreground));
+}
+
+.fc .fc-daygrid-day.fc-day-today {
+  background-color: hsl(var(--primary) / 0.06);
+}
+
+.fc .fc-event {
+  border: none;
+  border-radius: 4px;
+  padding: 1px 4px;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.fc .fc-timegrid-slot {
+  height: 3rem;
+}
+
+.fc .fc-scrollgrid {
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.fc .fc-list-event:hover td {
+  background-color: hsl(var(--secondary));
+}
+
+/* Google Calendar event styling */
+.fc .gcal-event {
+  border-left: 3px solid #4285F4 !important;
+}

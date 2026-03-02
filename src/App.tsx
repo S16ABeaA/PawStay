@@ -36,6 +36,7 @@ import AdminBookings from "./pages/admin/Bookings";
 import AdminServices from "./pages/admin/Services";
 import AdminReviews from "./pages/admin/Reviews";
 import AdminSettings from "./pages/admin/Settings";
+import AdminCalendar from "./pages/admin/Calendar";
 
 // SuperAdmin pages
 import SuperAdminDashboard from "./pages/superadmin/Dashboard";
