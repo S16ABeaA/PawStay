@@ -149,6 +149,14 @@ const App = () => (
               </RequireAuth>
             }
           />
+          <Route
+            path="/admin/calendar"
+            element={
+              <RequireAuth allowedRoles={["proprietor"]}>
+                <AdminCalendar />
+              </RequireAuth>
+            }
+          />
           
           {/* SuperAdmin routes */}
           <Route path="/superadmin" element={<RequireSuperAdmin><SuperAdminDashboard /></RequireSuperAdmin>} />
