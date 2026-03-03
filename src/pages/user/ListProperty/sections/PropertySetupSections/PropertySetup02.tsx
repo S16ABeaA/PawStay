@@ -1,7 +1,7 @@
-import { PropertyTypeId } from "../static/propertyTypeIDs";
-import { AMENITY_OPTIONS } from "../static/amenityOptions";
+import { PropertyTypeId } from "../../static/propertyTypeIDs";
+import { AMENITY_OPTIONS } from "../../static/amenityOptions";
 
-import { PropertyInitalData } from "../types/initial_types/propertyInitialData";
+import { PropertyInitalData } from "../../types/initial_types/propertyInitialData";
 
 interface Props {
   formData: PropertyInitalData;

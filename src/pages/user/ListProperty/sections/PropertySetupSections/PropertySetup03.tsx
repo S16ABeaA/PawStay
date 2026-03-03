@@ -1,7 +1,7 @@
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
-import { PropertyInitalData } from "../types/initial_types/propertyInitialData";
+import { PropertyInitalData } from "../../types/initial_types/propertyInitialData";
 
 interface Props {
   formData: PropertyInitalData;

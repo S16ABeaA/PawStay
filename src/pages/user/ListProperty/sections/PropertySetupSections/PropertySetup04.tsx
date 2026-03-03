@@ -1,9 +1,9 @@
 import { Label } from "@/components/ui/label";
 
-import { PropertyTypeId } from "../static/propertyTypeIDs";
-import { BOOKING_RULE_OPTIONS } from "../static/bookingRuleOptions";
+import { PropertyTypeId } from "../../static/propertyTypeIDs";
+import { BOOKING_RULE_OPTIONS } from "../../static/bookingRuleOptions";
 
-import { PropertyInitalData } from "../types/initial_types/propertyInitialData";
+import { PropertyInitalData } from "../../types/initial_types/propertyInitialData";
 
 interface Props {
   formData: PropertyInitalData;

@@ -1,11 +1,11 @@
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import PropertyTypeCard from "../components/listPropertyTypeCard";
+import PropertyTypeCard from "../../components/listPropertyTypeCard";
 
-import { PropertyTypeId } from "../static/propertyTypeIDs";
-import { PROPERTY_TYPES } from "../static/propertyTypes";
+import { PropertyTypeId } from "../../static/propertyTypeIDs";
+import { PROPERTY_TYPES } from "../../static/propertyTypes";
 
-import { PropertyInitalData } from "../types/initial_types/propertyInitialData";
+import { PropertyInitalData } from "../../types/initial_types/propertyInitialData";
 
 interface Props {
   formData: PropertyInitalData;
