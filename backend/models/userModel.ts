@@ -41,21 +41,14 @@ export const userModel = {
 
   updateUser: async (
     id: string,
-    updates: Partial<{
-      first_name: string;
-      last_name: string;
-      phone: string;
-      address: string;
-      avatar_url: string;
-    }>
+    fields: { first_name?: string; last_name?: string; phone?: string; address?: string; avatar_url?: string }
   ) => {
     const { data, error } = await supabaseAdmin
       .from("profiles")
-      .update({ ...updates, updated_at: new Date().toISOString() })
+      .update(fields)
       .eq("id", id)
       .select("id, first_name, last_name, role, phone, address, avatar_url")
       .single();
-
     if (error) throw error;
     return data;
   },

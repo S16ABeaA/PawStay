@@ -120,10 +120,20 @@ export const reviewsController = {
       if (bookingErr || !booking) return res.status(404).json({ message: "Booking not found" });
       if (String(booking.user_id) !== String(userId)) return res.status(403).json({ message: "This booking does not belong to you" });
 
-      // Allow review if status is confirmed, completed, or checked_out
-      const reviewableStatuses = ["confirmed", "completed", "checked_out", "checked_in"];
-      if (!reviewableStatuses.includes(booking.status)) {
-        return res.status(400).json({ message: "You can only review confirmed or completed bookings" });
+      // Allow review if status is completed/checked_out, OR if the booking dates have passed
+      const completedStatuses = ["completed", "checked_out"];
+      const reviewableByDate = ["confirmed", "checked_in", "completed", "checked_out"];
+      const endDate = booking.checkout || booking.checkin;
+      const isPast = endDate ? new Date(endDate) < new Date(new Date().toISOString().slice(0, 10)) : false;
+      const canReview = completedStatuses.includes(booking.status) || (isPast && reviewableByDate.includes(booking.status));
+
+      if (!canReview) {
+        return res.status(400).json({ message: "You can only review completed or past bookings" });
+      }
+
+      // If the booking dates have passed but status wasn't updated, auto-complete it
+      if (isPast && !completedStatuses.includes(booking.status) && reviewableByDate.includes(booking.status)) {
+        await supabaseAdmin.from("bookings").update({ status: "completed" }).eq("id", booking_id);
       }
 
       // Check if a review already exists for this booking

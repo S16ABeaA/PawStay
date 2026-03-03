@@ -14,6 +14,19 @@ export interface Review {
   created_at: string;
 }
 
+export interface OwnerReview {
+  id: string;
+  pet: string | null;
+  author: string;
+  rating: number;
+  date: string;
+  text: string | null;
+  replied: boolean;
+  reply: string;
+  service: string | null;
+  flagged: boolean;
+}
+
 export interface CreateReviewPayload {
   booking_id: string;
   rating: number;
@@ -32,4 +45,12 @@ export const reviewsApi = {
   /** Check if user has already reviewed a booking */
   checkReview: (bookingId: string): Promise<{ hasReview: boolean; review: Review | null }> =>
     authHelper.get(`${API_BASE_URL}/api/reviews/check/${bookingId}`),
+
+  /** Get reviews for the current owner's properties (admin/proprietor) */
+  myReviews: (): Promise<{ reviews: OwnerReview[]; avgRating: number; total: number; pendingReplies: number }> =>
+    authHelper.get(`${API_BASE_URL}/api/reviews/mine`),
+
+  /** Reply to a review (property owner) */
+  replyToReview: (reviewId: string, reply: string): Promise<{ success: boolean; review: any }> =>
+    authHelper.post(`${API_BASE_URL}/api/reviews/${reviewId}/reply`, { reply }),
 };

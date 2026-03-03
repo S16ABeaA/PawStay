@@ -29,8 +29,11 @@ export interface BookingRow {
   payment_method: string | null;
   payment_status: string;
   payment_screenshot_url: string | null;
+  room_name: string | null;
   status: string;
   notes: string | null;
+  source: string;
+  created_by: string | null;
   is_deleted: boolean;
   created_at: string;
   updated_at: string;
@@ -223,18 +226,36 @@ export const bookingModel = {
   /**
    * Get the capacity and current booking count for a property on a date.
    * Used for appointment-based services (grooming/vet).
+   * Checks both property_services capacity (sum of Grooming + Veterinary) and
+   * property-level capacity, using whichever is available.
    */
   async getCapacityForDate(
     propertyId: string,
     date: string
   ): Promise<{ capacity: number; booked: number }> {
-    const { data: propData } = await supabaseAdmin
-      .from("properties")
-      .select("capacity")
-      .eq("id", propertyId)
-      .single();
+    // First check service-level capacity for appointment categories
+    const { data: services } = await supabaseAdmin
+      .from("property_services")
+      .select("capacity, category")
+      .eq("property_id", propertyId)
+      .eq("is_active", true)
+      .eq("is_deleted", false)
+      .in("category", ["Grooming", "Veterinary"]);
 
-    const capacity = propData?.capacity ?? 5;
+    let capacity: number;
+    if (services && services.length > 0) {
+      // Sum service-level capacities (how many concurrent appointments per slot)
+      capacity = services.reduce((sum: number, s: any) => sum + (s.capacity ?? 1), 0);
+    } else {
+      // Fallback to property-level capacity
+      const { data: propData } = await supabaseAdmin
+        .from("properties")
+        .select("capacity")
+        .eq("id", propertyId)
+        .single();
+
+      capacity = propData?.capacity ?? 5;
+    }
 
     const { data: bookings, error } = await supabaseAdmin
       .from("bookings")
@@ -248,5 +269,57 @@ export const bookingModel = {
     if (error) throw error;
 
     return { capacity, booked: (bookings ?? []).length };
+  },
+
+  /**
+   * Get per-slot booking counts for a property on a specific date.
+   * Returns a map of time_slot → count of active bookings.
+   */
+  async getSlotCountsForDate(
+    propertyId: string,
+    date: string
+  ): Promise<Record<string, number>> {
+    const { data, error } = await supabaseAdmin
+      .from("bookings")
+      .select("time_slot")
+      .eq("property_id", propertyId)
+      .eq("checkin", date)
+      .is("checkout", null)
+      .eq("is_deleted", false)
+      .in("status", ["pending", "confirmed", "checked_in"]);
+
+    if (error) throw error;
+
+    const slotCounts: Record<string, number> = {};
+    for (const b of data ?? []) {
+      if (b.time_slot) {
+        slotCounts[b.time_slot] = (slotCounts[b.time_slot] || 0) + 1;
+      }
+    }
+    return slotCounts;
+  },
+
+  /** Update a booking's status (admin action) */
+  async updateStatus(bookingId: string, status: string): Promise<BookingRow> {
+    const { data, error } = await supabaseAdmin
+      .from("bookings")
+      .update({ status })
+      .eq("id", bookingId)
+      .eq("is_deleted", false)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
+
+  /** Soft-delete a booking */
+  async softDelete(bookingId: string): Promise<void> {
+    const { error } = await supabaseAdmin
+      .from("bookings")
+      .update({ is_deleted: true })
+      .eq("id", bookingId);
+
+    if (error) throw error;
   },
 };

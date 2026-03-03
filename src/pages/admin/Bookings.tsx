@@ -24,7 +24,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Search, Download, Eye, CheckCircle, XCircle } from "lucide-react";
+import { Search, Download, Eye, CheckCircle, XCircle, FileText, CreditCard, Image as ImageIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { authHelper } from "@/helpers/authHelper";
@@ -35,6 +35,7 @@ const AdminBookings = () => {
   const [bookings, setBookings] = useState(initialBookings);
   const [selectedBooking, setSelectedBooking] = useState<typeof initialBookings[0] | null>(null);
   const [viewDialogOpen, setViewDialogOpen] = useState(false);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [serviceFilter, setServiceFilter] = useState("all");
@@ -56,16 +57,33 @@ const AdminBookings = () => {
     try {
       await authHelper.post(`${API_BASE_URL}/api/bookings/${id}/status`, { status: 'cancelled' });
       setBookings((prev) => prev.map(b => b.id === id ? { ...b, status: 'cancelled' } : b));
-      toast({ title: 'Booking Cancelled', description: `Booking has been cancelled.`, variant: 'destructive' });
+      toast({ title: 'Booking Cancelled', description: `Booking ${id} has been cancelled.`, variant: 'destructive' });
     } catch (err: any) {
       console.error('Cancel failed', err);
       toast({ title: 'Error', description: err?.message || 'Failed to cancel booking', variant: 'destructive' });
     }
   };
 
-  const handleView = (booking: typeof initialBookings[0]) => {
+  const handleView = async (booking: typeof initialBookings[0]) => {
     setSelectedBooking(booking);
     setViewDialogOpen(true);
+
+    // Fetch full booking details (with image data) from the dedicated endpoint
+    try {
+      const data = await authHelper.get(`${API_BASE_URL}/api/bookings/mine/${booking.id}`);
+      if (data?.booking) {
+        const b = data.booking;
+        setSelectedBooking((prev: any) => ({
+          ...prev,
+          paymentScreenshotUrl: b.payment_screenshot_url || prev?.paymentScreenshotUrl || null,
+          vaccineRecordUrl: b.vaccine_record_url || prev?.vaccineRecordUrl || null,
+          medCertUrl: b.med_cert_url || prev?.medCertUrl || null,
+          referenceNumber: b.reference_number || prev?.referenceNumber || null,
+        }));
+      }
+    } catch (err) {
+      console.error('Failed to fetch booking details:', err);
+    }
   };
 
   const handleExport = () => {
@@ -97,6 +115,11 @@ const AdminBookings = () => {
           checkOut: b.checkout || '-',
           status: b.status,
           amount: b.total_price ? `₱${Number(b.total_price).toFixed(2)}` : '-',
+          paymentMethod: b.payment_method || null,
+          referenceNumber: b.reference_number || null,
+          paymentScreenshotUrl: b.payment_screenshot_url || null,
+          vaccineRecordUrl: b.vaccine_record_url || null,
+          medCertUrl: b.med_cert_url || null,
         })));
       } catch (err) {
         console.error('Failed to load bookings', err);
@@ -230,13 +253,14 @@ const AdminBookings = () => {
 
       {/* View Dialog */}
       <Dialog open={viewDialogOpen} onOpenChange={setViewDialogOpen}>
-        <DialogContent>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Booking Details</DialogTitle>
             <DialogDescription>Booking ID: {selectedBooking?.id}</DialogDescription>
           </DialogHeader>
           {selectedBooking && (
-            <div className="space-y-4">
+            <div className="space-y-6">
+              {/* Basic Info */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <p className="text-sm text-muted-foreground">Pet Name</p>
@@ -277,7 +301,91 @@ const AdminBookings = () => {
                   </Badge>
                 </div>
               </div>
-              <div className="flex gap-2 pt-4">
+
+              {/* Payment Details */}
+              {selectedBooking.paymentMethod && (
+                <div className="border-t pt-4">
+                  <h4 className="font-semibold text-sm mb-3 flex items-center gap-2">
+                    <CreditCard className="h-4 w-4 text-primary" />
+                    Payment Information
+                  </h4>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-sm text-muted-foreground">Payment Method</p>
+                      <p className="font-medium capitalize">{selectedBooking.paymentMethod}</p>
+                    </div>
+                    {selectedBooking.referenceNumber && (
+                      <div>
+                        <p className="text-sm text-muted-foreground">Reference Number</p>
+                        <p className="font-medium font-mono text-sm bg-muted/50 px-2 py-1 rounded inline-block">{selectedBooking.referenceNumber}</p>
+                      </div>
+                    )}
+                  </div>
+                  {selectedBooking.paymentScreenshotUrl && (
+                    <div className="mt-3">
+                      <p className="text-sm text-muted-foreground mb-2">Payment Screenshot / Proof</p>
+                      <div
+                        className="cursor-pointer inline-block border border-border rounded-lg overflow-hidden hover:ring-2 hover:ring-primary/50 transition-all"
+                        onClick={() => setImagePreview(selectedBooking.paymentScreenshotUrl)}
+                      >
+                        <img
+                          src={selectedBooking.paymentScreenshotUrl}
+                          alt="Payment proof"
+                          className="w-40 h-40 object-cover"
+                        />
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-1">Click to enlarge</p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Documents */}
+              {(selectedBooking.vaccineRecordUrl || selectedBooking.medCertUrl) && (
+                <div className="border-t pt-4">
+                  <h4 className="font-semibold text-sm mb-3 flex items-center gap-2">
+                    <FileText className="h-4 w-4 text-primary" />
+                    Pet Documents
+                  </h4>
+                  <div className="flex flex-wrap gap-4">
+                    {selectedBooking.vaccineRecordUrl && (
+                      <div>
+                        <p className="text-sm text-muted-foreground mb-2">Vaccine Record</p>
+                        <div
+                          className="cursor-pointer inline-block border border-border rounded-lg overflow-hidden hover:ring-2 hover:ring-primary/50 transition-all"
+                          onClick={() => setImagePreview(selectedBooking.vaccineRecordUrl)}
+                        >
+                          <img
+                            src={selectedBooking.vaccineRecordUrl}
+                            alt="Vaccine record"
+                            className="w-40 h-40 object-cover"
+                          />
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-1">Click to enlarge</p>
+                      </div>
+                    )}
+                    {selectedBooking.medCertUrl && (
+                      <div>
+                        <p className="text-sm text-muted-foreground mb-2">Medical Certificate</p>
+                        <div
+                          className="cursor-pointer inline-block border border-border rounded-lg overflow-hidden hover:ring-2 hover:ring-primary/50 transition-all"
+                          onClick={() => setImagePreview(selectedBooking.medCertUrl)}
+                        >
+                          <img
+                            src={selectedBooking.medCertUrl}
+                            alt="Medical certificate"
+                            className="w-40 h-40 object-cover"
+                          />
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-1">Click to enlarge</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Action Buttons */}
+              <div className="flex gap-2 pt-4 border-t">
                 {selectedBooking.status === "pending" && (
                   <>
                     <Button className="flex-1" onClick={() => { handleConfirm(selectedBooking.id); setViewDialogOpen(false); }}>
@@ -295,6 +403,21 @@ const AdminBookings = () => {
                 )}
                 <Button variant="outline" onClick={() => setViewDialogOpen(false)}>Close</Button>
               </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Image Preview Dialog */}
+      <Dialog open={!!imagePreview} onOpenChange={() => setImagePreview(null)}>
+        <DialogContent className="max-w-3xl p-2">
+          <DialogHeader>
+            <DialogTitle>Image Preview</DialogTitle>
+            <DialogDescription>Click outside or press Escape to close</DialogDescription>
+          </DialogHeader>
+          {imagePreview && (
+            <div className="flex items-center justify-center">
+              <img src={imagePreview} alt="Preview" className="max-w-full max-h-[75vh] object-contain rounded-lg" />
             </div>
           )}
         </DialogContent>

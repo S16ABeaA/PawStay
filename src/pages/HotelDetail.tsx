@@ -3,62 +3,60 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { 
-  Star, Heart, MapPin, Wifi, Car, Coffee, Shield, 
+import {
+  Star, Heart, MapPin, Wifi, Car, Coffee, Shield,
   ArrowLeft, Share2, Check,
-  Phone, Mail, Clock
+  Phone, Mail, Clock, Loader2
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { favoritesApi } from "../services/favoritesApi";
-import ReviewList from "@/components/ReviewList";
-
-const hotelData = {
-  id: 1,
-  propertyId: "a1000000-0000-0000-0000-000000000001",
-  name: "Pawsome Paradise Resort",
-  images: [
-    "https://images.unsplash.com/photo-1587300003388-59208cc962cb?w=800&auto=format&fit=crop",
-    "https://images.unsplash.com/photo-1601758228041-f3b2795255f1?w=800&auto=format&fit=crop",
-    "https://images.unsplash.com/photo-1548199973-03cce0bbc87b?w=800&auto=format&fit=crop",
-    "https://images.unsplash.com/photo-1587559070757-f72a388edbba?w=800&auto=format&fit=crop",
-  ],
-  location: "123 Pet Paradise Lane, Los Angeles, CA 90001",
-  rating: 4.9,
-  reviews: 328,
-  price: 65,
-  originalPrice: 85,
-  description: "Welcome to Pawsome Paradise Resort, where your furry friends receive the royal treatment they deserve. Our state-of-the-art facility offers spacious suites, professional care staff, and a range of premium services to ensure your pet's stay is nothing short of exceptional.",
-  amenities: [
-    { name: "Free WiFi", icon: Wifi },
-    { name: "24/7 Care", icon: Coffee },
-    { name: "Vet On-site", icon: Shield },
-    { name: "Free Parking", icon: Car },
-  ],
-  features: [
-    "Spacious individual suites",
-    "Daily exercise and playtime",
-    "Webcam access for pet parents",
-    "Gourmet meal options",
-    "Climate-controlled environment",
-    "Professional grooming available",
-  ],
-  roomTypes: [
-    { name: "Standard Suite", price: 65, description: "Cozy space for small to medium pets" },
-    { name: "Deluxe Suite", price: 85, description: "Extra spacious with outdoor access" },
-    { name: "VIP Suite", price: 120, description: "Premium luxury with personal attendant" },
-  ],
-};
+import { fetchPropertyById, fetchPropertyReviews } from "../services/propertyApi";
 
 const HotelDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const [property, setProperty] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
   const [isLiked, setIsLiked] = useState(false);
-  const [selectedRoom, setSelectedRoom] = useState(hotelData.roomTypes[0]);
+  const [selectedRoom, setSelectedRoom] = useState<any>(null);
+  const [reviews, setReviews] = useState<any[]>([]);
+
   const isAuthenticated =
     typeof window !== "undefined" &&
     localStorage.getItem("pawstay.authenticated") === "true";
 
-  // Check if this property is already favorited on mount
+  // ── Fetch property data ──
+  useEffect(() => {
+    let mounted = true;
+    const load = async () => {
+      try {
+        setLoading(true);
+        const data = await fetchPropertyById(id || "");
+        if (mounted && data) {
+          setProperty(data);
+          // Filter services by "Boarding" category and pick the first one
+          const boardingServices = (data.property_services || [])
+            .filter((s: any) => s.is_active && s.category === "Boarding");
+          if (boardingServices.length > 0) {
+            setSelectedRoom(boardingServices[0]);
+          } else {
+            // fallback if no boarding services exist
+            setSelectedRoom({ name: "Standard Room", price: data.cheapest_service_price || 0, description: "Cozy space for your pet" });
+          }
+          // Load reviews in parallel
+          fetchPropertyReviews(data.id).then(setReviews).catch(() => {});
+        }
+      } catch (err) {
+        console.error("Failed to fetch property", err);
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    };
+    load();
+    return () => { mounted = false; };
+  }, [id]);
+
+  // ── Check favorites ──
   useEffect(() => {
     let mounted = true;
     if (!isAuthenticated || !id) return;
@@ -94,7 +92,53 @@ const HotelDetail = () => {
     }
   };
 
-  const serviceFee = Math.round(selectedRoom.price * 0.10 * 100) / 100;
+  // ── Loading state ──
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background">
+        <Header />
+        <div className="flex flex-col items-center justify-center py-32 gap-4">
+          <Loader2 className="h-12 w-12 animate-spin text-primary" />
+          <p className="text-muted-foreground">Loading hotel details...</p>
+        </div>
+        <Footer />
+      </div>
+    );
+  }
+
+  // ── Not found ──
+  if (!property) {
+    return (
+      <div className="min-h-screen bg-background">
+        <Header />
+        <main className="py-8">
+          <div className="container text-center py-20">
+            <p className="text-muted-foreground text-lg">Hotel not found</p>
+            <Link to="/hotels" className="text-primary hover:underline mt-4 inline-block">
+              ← Back to Hotels
+            </Link>
+          </div>
+        </main>
+        <Footer />
+      </div>
+    );
+  }
+
+  // ── Derived data ──
+  const coverImage = property.cover_image || "https://images.unsplash.com/photo-1587300003388-59208cc962cb?w=800&auto=format&fit=crop";
+  const images = property.images?.length > 0
+    ? property.images
+    : [coverImage, coverImage, coverImage, coverImage];
+
+  // Filter services by "Boarding" category only
+  const boardingServices = (property.property_services || [])
+    .filter((s: any) => s.is_active && s.category === "Boarding");
+
+  // Amenities from DB
+  const amenities = (property.property_amenities || []).map((a: any) => a.amenities?.amenity).filter(Boolean);
+
+  const selected = selectedRoom || boardingServices[0] || { name: "Standard Room", price: 0 };
+  const serviceFee = Math.round(selected.price * 0.10 * 100) / 100;
 
   return (
     <div className="min-h-screen bg-background">
@@ -111,13 +155,13 @@ const HotelDetail = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
             <div className="aspect-[4/3] rounded-2xl overflow-hidden">
               <img
-                src={hotelData.images[0]}
-                alt={hotelData.name}
+                src={images[0]}
+                alt={property.name}
                 className="w-full h-full object-cover"
               />
             </div>
             <div className="grid grid-cols-2 gap-4">
-              {hotelData.images.slice(1).map((img, i) => (
+              {images.slice(1, 5).map((img: string, i: number) => (
                 <div key={i} className="aspect-[4/3] rounded-xl overflow-hidden">
                   <img src={img} alt="" className="w-full h-full object-cover" />
                 </div>
@@ -135,16 +179,16 @@ const HotelDetail = () => {
                     <Badge className="bg-gradient-hero text-primary-foreground border-0">Featured</Badge>
                     <div className="flex items-center gap-1 px-2 py-1 rounded-md bg-rating/10">
                       <Star className="h-4 w-4 fill-rating text-rating" />
-                      <span className="text-sm font-bold">{hotelData.rating}</span>
+                      <span className="text-sm font-bold">{property.rating || 0}</span>
                     </div>
-                    <span className="text-sm text-muted-foreground">({hotelData.reviews} reviews)</span>
+                    <span className="text-sm text-muted-foreground">({property.review_count || 0} reviews)</span>
                   </div>
                   <h1 className="font-display text-3xl md:text-4xl font-bold text-foreground mb-2">
-                    {hotelData.name}
+                    {property.name}
                   </h1>
                   <div className="flex items-center gap-1 text-muted-foreground">
                     <MapPin className="h-4 w-4" />
-                    <span>{hotelData.location}</span>
+                    <span>{property.address || property.city || "Location not specified"}</span>
                   </div>
                 </div>
                 <div className="flex gap-2">
@@ -160,89 +204,153 @@ const HotelDetail = () => {
               {/* Description */}
               <div className="mb-8">
                 <h2 className="font-semibold text-xl mb-3">About This Hotel</h2>
-                <p className="text-muted-foreground leading-relaxed">{hotelData.description}</p>
+                <p className="text-muted-foreground leading-relaxed">
+                  {property.description || "Welcome to our pet hotel. Your furry friends will receive the royal treatment they deserve with spacious suites, professional care staff, and a range of premium services."}
+                </p>
               </div>
 
               {/* Amenities */}
-              <div className="mb-8">
-                <h2 className="font-semibold text-xl mb-4">Amenities</h2>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  {hotelData.amenities.map((amenity, i) => (
-                    <div key={i} className="flex items-center gap-3 p-4 rounded-xl bg-secondary/50">
-                      <amenity.icon className="h-5 w-5 text-primary" />
-                      <span className="text-sm font-medium">{amenity.name}</span>
-                    </div>
-                  ))}
+              {amenities.length > 0 && (
+                <div className="mb-8">
+                  <h2 className="font-semibold text-xl mb-4">Amenities</h2>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    {amenities.map((name: string, i: number) => (
+                      <div key={i} className="flex items-center gap-3 p-4 rounded-xl bg-secondary/50">
+                        <Check className="h-5 w-5 text-primary" />
+                        <span className="text-sm font-medium">{name}</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              </div>
+              )}
 
-              {/* Features */}
-              <div className="mb-8">
-                <h2 className="font-semibold text-xl mb-4">What's Included</h2>
-                <div className="grid md:grid-cols-2 gap-3">
-                  {hotelData.features.map((feature, i) => (
-                    <div key={i} className="flex items-center gap-2">
-                      <Check className="h-5 w-5 text-success" />
-                      <span className="text-muted-foreground">{feature}</span>
-                    </div>
-                  ))}
+              {/* Features - from property facilities_amenities or fallback */}
+              {property.facilities_amenities?.length > 0 && (
+                <div className="mb-8">
+                  <h2 className="font-semibold text-xl mb-4">What's Included</h2>
+                  <div className="grid md:grid-cols-2 gap-3">
+                    {property.facilities_amenities.map((feature: string, i: number) => (
+                      <div key={i} className="flex items-center gap-2">
+                        <Check className="h-5 w-5 text-success" />
+                        <span className="text-muted-foreground">{feature}</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              </div>
+              )}
 
-              {/* Room Types */}
-              <div>
+              {/* Room Types — filtered by Boarding category */}
+              <div className="mb-8">
                 <h2 className="font-semibold text-xl mb-4">Choose Your Room</h2>
-                <div className="space-y-3">
-                  {hotelData.roomTypes.map((room) => (
-                    <div
-                      key={room.name}
-                      onClick={() => setSelectedRoom(room)}
-                      className={`p-4 rounded-xl border-2 cursor-pointer transition-all ${
-                        selectedRoom.name === room.name
-                          ? "border-primary bg-primary/5"
-                          : "border-border hover:border-primary/50"
-                      }`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <h3 className="font-semibold text-foreground">{room.name}</h3>
-                          <p className="text-sm text-muted-foreground">{room.description}</p>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-xl font-bold text-foreground">₱{room.price}</p>
-                          <p className="text-xs text-muted-foreground">per night</p>
+                {boardingServices.length > 0 ? (
+                  <div className="space-y-3">
+                    {boardingServices.map((room: any) => (
+                      <div
+                        key={room.id}
+                        onClick={() => setSelectedRoom(room)}
+                        className={`p-4 rounded-xl border-2 cursor-pointer transition-all ${
+                          selected.id === room.id
+                            ? "border-primary bg-primary/5"
+                            : "border-border hover:border-primary/50"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <h3 className="font-semibold text-foreground">{room.name}</h3>
+                            <p className="text-sm text-muted-foreground">{room.description || "Comfortable room for your pet"}</p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-xl font-bold text-foreground">₱{room.price}</p>
+                            <p className="text-xs text-muted-foreground">per night</p>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-muted-foreground">No boarding services available for this property.</p>
+                )}
               </div>
 
-              {/* Reviews */}
+              {/* Reviews Section */}
               <div className="mb-8">
-                <h2 className="font-semibold text-xl mb-4">Guest Reviews</h2>
-                <ReviewList propertyId={hotelData.propertyId} />
+                <div className="flex items-center gap-3 mb-6">
+                  <h2 className="font-semibold text-xl">Guest Reviews</h2>
+                  {reviews.length > 0 && (
+                    <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-rating/10">
+                      <Star className="h-4 w-4 fill-rating text-rating" />
+                      <span className="font-bold text-sm">{property.rating || 0}</span>
+                      <span className="text-sm text-muted-foreground">· {reviews.length} review{reviews.length !== 1 ? "s" : ""}</span>
+                    </div>
+                  )}
+                </div>
+                {reviews.length === 0 ? (
+                  <div className="text-center py-10 border border-dashed rounded-xl text-muted-foreground">
+                    No reviews yet. Be the first to share your experience!
+                  </div>
+                ) : (
+                  <div className="space-y-5">
+                    {reviews.map((review: any) => {
+                      const name = review.profiles
+                        ? `${review.profiles.first_name || ""} ${review.profiles.last_name || ""}`.trim() || "Guest"
+                        : "Guest";
+                      const avatar = review.profiles?.avatar_url;
+                      const date = new Date(review.created_at).toLocaleDateString("en-PH", { year: "numeric", month: "long", day: "numeric" });
+                      return (
+                        <div key={review.id} className="p-5 rounded-xl border border-border bg-card">
+                          <div className="flex items-start justify-between mb-3">
+                            <div className="flex items-center gap-3">
+                              {avatar ? (
+                                <img src={avatar} alt={name} className="w-10 h-10 rounded-full object-cover" />
+                              ) : (
+                                <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center font-semibold text-primary text-sm">
+                                  {name.charAt(0).toUpperCase()}
+                                </div>
+                              )}
+                              <div>
+                                <p className="font-semibold text-sm text-foreground">{name}</p>
+                                <p className="text-xs text-muted-foreground">{date}</p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              {Array.from({ length: 5 }).map((_, i) => (
+                                <Star key={i} className={`h-3.5 w-3.5 ${i < review.rating ? "fill-rating text-rating" : "text-muted-foreground/30"}`} />
+                              ))}
+                            </div>
+                          </div>
+                          {review.pet_name && (
+                            <p className="text-xs text-muted-foreground mb-2">🐾 Pet: {review.pet_name}</p>
+                          )}
+                          <p className="text-sm text-muted-foreground leading-relaxed">{review.comment}</p>
+                          {review.reply && (
+                            <div className="mt-3 pl-4 border-l-2 border-primary/30">
+                              <p className="text-xs font-semibold text-primary mb-1">Owner's Reply</p>
+                              <p className="text-xs text-muted-foreground">{review.reply}</p>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
+
+
             </div>
 
             {/* Booking Card */}
             <div className="lg:col-span-1">
               <div className="bg-card rounded-2xl p-6 shadow-elevated sticky top-24">
                 <div className="flex items-baseline gap-2 mb-6">
-                  {hotelData.originalPrice && (
-                    <span className="text-lg text-muted-foreground line-through">
-                      ₱{hotelData.originalPrice}
-                    </span>
-                  )}
-                  <span className="text-3xl font-bold text-foreground">₱{selectedRoom.price}</span>
+                  <span className="text-3xl font-bold text-foreground">₱{selected.price}</span>
                   <span className="text-muted-foreground">/ night</span>
                 </div>
 
                 {/* Price Breakdown */}
                 <div className="border-t border-border pt-4 mb-4 space-y-2">
                   <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">{selectedRoom.name}</span>
-                    <span>₱{selectedRoom.price}</span>
+                    <span className="text-muted-foreground">{selected.name}</span>
+                    <span>₱{selected.price}</span>
                   </div>
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">Service fee (10%)</span>
@@ -250,11 +358,28 @@ const HotelDetail = () => {
                   </div>
                   <div className="flex justify-between font-semibold pt-2 border-t border-border">
                     <span>Total</span>
-                    <span>₱{selectedRoom.price + serviceFee}</span>
+                    <span>₱{selected.price + serviceFee}</span>
                   </div>
                 </div>
 
-                <Link to="/booking" state={{ shop: { type: "hotel", name: hotelData.name, location: hotelData.location, image: hotelData.images[0], price: selectedRoom.price, serviceName: selectedRoom.name, propertyId: hotelData.propertyId, qrCodeGCash: (hotelData as any).qrCodeGCash, qrCodePayMaya: (hotelData as any).qrCodePayMaya, acceptedPaymentMethods: (hotelData as any).acceptedPaymentMethods } }}>
+                <Link
+                  to="/booking"
+                  state={{
+                    shop: {
+                      type: "hotel",
+                      name: property.name,
+                      location: property.city || property.address,
+                      image: coverImage,
+                      price: selected.price,
+                      serviceName: selected.name,
+                      serviceId: selected.id,
+                      propertyId: property.id,
+                      qrCodeGCash: property.qrCodeGCash,
+                      qrCodePayMaya: property.qrCodePayMaya,
+                      acceptedPaymentMethods: property.acceptedPaymentMethods,
+                    },
+                  }}
+                >
                   <Button variant="hero" size="lg" className="w-full mb-4">
                     Reserve Now
                   </Button>
@@ -266,14 +391,18 @@ const HotelDetail = () => {
 
                 {/* Contact */}
                 <div className="border-t border-border pt-4 space-y-3">
-                  <div className="flex items-center gap-3 text-sm text-muted-foreground">
-                    <Phone className="h-4 w-4" />
-                    <span>+1 (555) 123-4567</span>
-                  </div>
-                  <div className="flex items-center gap-3 text-sm text-muted-foreground">
-                    <Mail className="h-4 w-4" />
-                    <span>contact@pawsome.com</span>
-                  </div>
+                  {property.phone && (
+                    <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                      <Phone className="h-4 w-4" />
+                      <span>{property.phone}</span>
+                    </div>
+                  )}
+                  {property.website && (
+                    <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                      <Mail className="h-4 w-4" />
+                      <span>{property.website}</span>
+                    </div>
+                  )}
                   <div className="flex items-center gap-3 text-sm text-muted-foreground">
                     <Clock className="h-4 w-4" />
                     <span>Check-in: 2PM / Check-out: 11AM</span>

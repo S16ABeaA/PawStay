@@ -15,6 +15,7 @@ import VeterinaryDetail from "./pages/VeterinaryDetail";
 import About from "./pages/About";
 import SignIn from "./pages/SignIn";
 import CheckEmail from "./pages/CheckEmail";
+import ForgotPassword from "./pages/ForgotPassword";
 import ListProperty from "./pages/ListProperty";
 import Favorites from "./pages/Favorites";
 import Booking from "./pages/Booking";
@@ -23,7 +24,11 @@ import NotFound from "./pages/NotFound";
 import Profile from "./pages/Profile";
 import MyPets from "./pages/MyPets";
 import MyBookings from "./pages/MyBookings";
+import Notifications from "./pages/Notifications";
+import HelpCenter from "./pages/HelpCenter";
 import RequireAuth from "./components/RequireAuth";
+import RequireAdmin from "./components/RequireAdmin";
+import RequireSuperAdmin from "./components/RequireSuperAdmin";
 
 // Admin pages
 import AdminDashboard from "./pages/admin/Dashboard";
@@ -31,6 +36,7 @@ import AdminBookings from "./pages/admin/Bookings";
 import AdminServices from "./pages/admin/Services";
 import AdminReviews from "./pages/admin/Reviews";
 import AdminSettings from "./pages/admin/Settings";
+import AdminCalendar from "./pages/admin/Calendar";
 
 // SuperAdmin pages
 import SuperAdminDashboard from "./pages/superadmin/Dashboard";
@@ -63,6 +69,7 @@ const App = () => (
           <Route path="/about" element={<About />} />
           <Route path="/signin" element={<SignIn />} />
           <Route path="/check-email" element={<CheckEmail />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route
             path="/list-property"
             element={
@@ -71,23 +78,10 @@ const App = () => (
               </RequireAuth>
             }
           />
-          <Route
-            path="/favorites"
-            element={
-              <RequireAuth>
-                <Favorites />
-              </RequireAuth>
-            }
-          />
-          <Route
-            path="/booking"
-            element={
-              <RequireAuth signUpFirst>
-                <Booking />
-              </RequireAuth>
-            }
-          />
+          <Route path="/favorites" element={<RequireAuth><Favorites /></RequireAuth>} />
+          <Route path="/booking" element={<RequireAuth signUpFirst><Booking /></RequireAuth> } />
           <Route path="/search" element={<SearchResults />} />
+          <Route path="/help-center" element={<HelpCenter />} />
           <Route
             path="/profile"
             element={
@@ -96,19 +90,20 @@ const App = () => (
               </RequireAuth>
             }
           />
-          <Route
-            path="/my-pets"
-            element={
-              <RequireAuth>
-                <MyPets />
-              </RequireAuth>
-            }
-          />
+          <Route path="/my-pets" element={<RequireAuth><MyPets /></RequireAuth>} />
           <Route
             path="/my-bookings"
             element={
               <RequireAuth>
                 <MyBookings />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/notifications"
+            element={
+              <RequireAuth>
+                <Notifications />
               </RequireAuth>
             }
           />
@@ -154,15 +149,23 @@ const App = () => (
               </RequireAuth>
             }
           />
+          <Route
+            path="/admin/calendar"
+            element={
+              <RequireAuth allowedRoles={["proprietor"]}>
+                <AdminCalendar />
+              </RequireAuth>
+            }
+          />
           
           {/* SuperAdmin routes */}
-          <Route path="/superadmin" element={<SuperAdminDashboard />} />
-          <Route path="/superadmin/users" element={<SuperAdminUsers />} />
-          <Route path="/superadmin/properties" element={<SuperAdminProperties />} />
-          <Route path="/superadmin/analytics" element={<SuperAdminAnalytics />} />
-          <Route path="/superadmin/revenue" element={<SuperAdminRevenue />} />
-          <Route path="/superadmin/support" element={<SuperAdminSupport />} />
-          <Route path="/superadmin/settings" element={<SuperAdminSettings />} />
+          <Route path="/superadmin" element={<RequireSuperAdmin><SuperAdminDashboard /></RequireSuperAdmin>} />
+          <Route path="/superadmin/users" element={<RequireSuperAdmin><SuperAdminUsers /></RequireSuperAdmin>} />
+          <Route path="/superadmin/properties" element={<RequireSuperAdmin><SuperAdminProperties /></RequireSuperAdmin>} />
+          <Route path="/superadmin/analytics" element={<RequireSuperAdmin><SuperAdminAnalytics /></RequireSuperAdmin>} />
+          <Route path="/superadmin/revenue" element={<RequireSuperAdmin><SuperAdminRevenue /></RequireSuperAdmin>} />
+          <Route path="/superadmin/support" element={<RequireSuperAdmin><SuperAdminSupport /></RequireSuperAdmin>} />
+          <Route path="/superadmin/settings" element={<RequireSuperAdmin><SuperAdminSettings /></RequireSuperAdmin>} />
           
           <Route path="*" element={<NotFound />} />
         </Routes>

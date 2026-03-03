@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
+import { Mail, ArrowLeft, CheckCircle2 } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { authApi } from "../services/authApi";
 
@@ -20,7 +20,33 @@ const CheckEmail = () => {
   const [resendLoading, setResendLoading] = useState(false);
   const [cooldown, setCooldown] = useState(0);
 
-  // Toast on confirmation
+  useEffect(() => {
+    if (cooldown === 0) return;
+    const timer = setInterval(() => setCooldown((prev) => Math.max(prev - 1, 0)), 1000);
+    return () => clearInterval(timer);
+  }, [cooldown]);
+  
+  useEffect(() => {
+    if (!email || confirmed) return;
+
+    const sendEmail = async () => {
+      setResendLoading(true);
+      try {
+        const result = await authApi.resendConfirmation({ email });
+        toast({
+          title: "Email Sent",
+          description: result.message || "Confirmation email sent successfully.",
+        });
+        setCooldown(RESEND_COOLDOWN);
+      } catch (err: any) {
+        toast({ title: "Error", description: err.message || "Failed to send email." });
+      } finally {
+        setResendLoading(false);
+      }
+    };
+    sendEmail();
+  }, [email, confirmed, toast]);
+
   useEffect(() => {
     if (confirmed) {
       toast({
@@ -29,15 +55,6 @@ const CheckEmail = () => {
       });
     }
   }, [confirmed, toast]);
-
-  // Handle resend cooldown countdown
-  useEffect(() => {
-    if (cooldown === 0) return;
-    const timer = setInterval(() => {
-      setCooldown((prev) => Math.max(prev - 1, 0));
-    }, 1000);
-    return () => clearInterval(timer);
-  }, [cooldown]);
 
   const handleResendEmail = async () => {
     if (confirmed || cooldown > 0) return;
@@ -49,7 +66,7 @@ const CheckEmail = () => {
         title: "Email Sent",
         description: result.message || "Confirmation email resent successfully.",
       });
-      setCooldown(RESEND_COOLDOWN); // start cooldown
+      setCooldown(RESEND_COOLDOWN);
     } catch (err: any) {
       toast({ title: "Error", description: err.message || "Failed to resend email." });
     } finally {
@@ -57,54 +74,72 @@ const CheckEmail = () => {
     }
   };
 
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
-      <div className="bg-white p-8 rounded-2xl shadow-md max-w-md w-full text-center">
-        {confirmed ? (
-          <>
-            <div className="text-green-600 text-6xl mb-4">🎉</div>
-            <h1 className="text-2xl font-bold mb-2">Email Confirmed!</h1>
-            <p className="text-gray-600 mb-6">
-              Your email <strong>{email}</strong> has been successfully confirmed. You can now log in.
-            </p>
-            <Button className="w-full" onClick={() => navigate("/signin")}>
-              Go to Sign In
-            </Button>
-          </>
-        ) : (
-          <>
-            <div className="text-blue-500 text-6xl mb-4">📩</div>
-            <h1 className="text-2xl font-bold mb-2">Check your email</h1>
-            <p className="text-gray-600 mb-6">
-              We've sent a confirmation link to <strong>{email}</strong>. 
-              Please click the link in your email to activate your account.
-            </p>
-            {/* <Button
-              className="w-full mb-4"
-              onClick={handleResendEmail}
-              disabled={resendLoading || cooldown > 0}
-            > */}
-            <Button
-              className="w-full"
-              onClick={handleResendEmail}
-              disabled={resendLoading || cooldown > 0}
-            >
-              {resendLoading
-                ? "Sending..."
-                : cooldown > 0
-                ? `Resend in ${cooldown}s`
-                : "Resend Email"}
-            </Button>
-          </>
-        )}
+  const handleBackToLogin = () => navigate("/signin");
 
-        <Button
-          variant="outline"
-          className="w-full mt-2"
-          onClick={() => navigate("/")}
-        >
-          Back to Homepage
-        </Button>
+  return (
+    <div className="min-h-screen bg-background flex items-center justify-center p-4">
+      <div className="w-full max-w-md">
+        <div className="bg-card rounded-lg shadow-lg border border-border p-8 flex flex-col items-center">
+          {confirmed ? (
+            <>
+              <div className="text-center mb-6">
+                <div className="inline-flex items-center justify-center w-16 h-16 bg-green-100 rounded-full mb-4">
+                  <CheckCircle2 className="w-8 h-8 text-green-600" />
+                </div>
+                <h2 className="text-2xl font-semibold mb-2">Email Confirmed!</h2>
+                <p className="text-muted-foreground mb-4">
+                  Your email has been successfully confirmed. You can now sign in.
+                  {/* <span className="block mt-1 text-foreground font-medium">{email}</span> */}
+                </p>
+              </div>
+              <button
+                onClick={handleBackToLogin}
+                className="w-full bg-primary text-primary-foreground py-3 rounded-lg hover:bg-primary/90 transition-colors"
+              >
+                Go to Sign In
+              </button>
+            </>
+          ) : (
+            <>
+              <div className="text-center mb-6">
+                <div className="inline-flex items-center justify-center w-16 h-16 bg-primary/10 rounded-full mb-4">
+                  <Mail className="w-8 h-8 text-primary" />
+                </div>
+                <h2 className="text-2xl font-semibold mb-2">Check your email</h2>
+                <p className="text-muted-foreground mb-4">
+                  We've sent a confirmation link to <strong>{email}</strong>. 
+                  Please click the link in your email to activate your account.
+                  {/* <span className="block mt-1 text-foreground font-medium">{email}</span>. */}
+                  {/* Please click the link in your email to activate your account. */}
+                </p>
+              </div>
+
+              <div className="w-full flex flex-col gap-3 mb-4">
+                <button
+                  onClick={handleResendEmail}
+                  disabled={resendLoading || cooldown > 0}
+                  className={`w-full bg-primary text-primary-foreground py-3 rounded-lg hover:bg-primary/90 transition-colors ${
+                    resendLoading || cooldown > 0 ? "opacity-50 cursor-not-allowed" : ""
+                  }`}
+                >
+                  {resendLoading
+                    ? "Sending..."
+                    : cooldown > 0
+                    ? `Resend in ${cooldown}s`
+                    : "Resend Email"}
+                </button>
+              </div>
+
+              <button
+                onClick={() => navigate("/")}
+                className="w-full mt-2 flex items-center justify-center gap-2 text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <ArrowLeft className="w-4 h-4" />
+                Back to Homepage
+              </button>
+            </>
+          )}
+        </div>
       </div>
     </div>
   );

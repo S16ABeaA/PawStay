@@ -357,6 +357,7 @@ const ListProperty = () => {
             contractDocument: null as File | null,
             occupancyRate: 0,
             animalCapacity: 0,
+            serviceCapacities: [] as { name: string; capacity: number }[],
             legalEntityType: "" as "" | "individual" | "business",
             contractingParty: {
               firstName: "",
@@ -1472,6 +1473,108 @@ const ListProperty = () => {
                               </div>
                             </div>
                           </div>
+
+                          {/* Capacity Section - Boarding & Grooming/Salon */}
+                          {(hasBoarding || hasGrooming) && (
+                            <div className="bg-secondary/30 rounded-xl p-6">
+                              <h3 className="text-lg font-medium mb-2">Capacity</h3>
+                              <p className="text-sm text-muted-foreground mb-6">
+                                {hasBoarding && !hasGrooming && "Set your overall facility capacity and the number of animals each room type or service can accommodate."}
+                                {hasGrooming && !hasBoarding && "Set the total number of grooming slots available and per-service simultaneous capacity."}
+                                {hasBoarding && hasGrooming && "Set the total facility capacity and per-service capacity for boarding and grooming."}
+                              </p>
+
+                              {/* Overall property-level capacity → properties.capacity */}
+                              <div className="mb-6 p-4 bg-background rounded-lg border space-y-1">
+                                <Label className="text-sm font-medium">
+                                  {hasBoarding && !hasGrooming && "Total animal capacity (entire facility)"}
+                                  {hasGrooming && !hasBoarding && "Total grooming slots (concurrent animals)"}
+                                  {hasBoarding && hasGrooming && "Total facility capacity (all services combined)"}
+                                </Label>
+                                <p className="text-xs text-muted-foreground mb-2">
+                                  {hasBoarding && !hasGrooming && "Maximum number of animals that can stay at your facility at any one time."}
+                                  {hasGrooming && !hasBoarding && "Maximum number of pets your salon can handle simultaneously across all stations."}
+                                  {hasBoarding && hasGrooming && "Overall maximum concurrent animals across boarding and grooming at one time."}
+                                </p>
+                                <Input
+                                  type="number"
+                                  min={1}
+                                  placeholder="e.g., 20"
+                                  value={formData.animalCapacity === 0 ? "" : formData.animalCapacity}
+                                  onChange={(e) =>
+                                    setFormData((prev) => ({
+                                      ...prev,
+                                      animalCapacity: parseInt(e.target.value) || 0,
+                                    }))
+                                  }
+                                  className="max-w-xs"
+                                />
+                              </div>
+
+                              <h4 className="text-sm font-semibold mb-3 text-foreground">
+                                Per-service / room-type capacity <span className="font-normal text-muted-foreground">(stored in property_services.capacity)</span>
+                              </h4>
+
+                              <div className="space-y-3 mb-4">
+                                {formData.serviceCapacities.map((item, index) => (
+                                  <div key={index} className="flex items-end gap-3 bg-background rounded-lg border p-4">
+                                    <div className="flex-1 space-y-1">
+                                      <Label className="text-sm font-medium">Service / Room Type</Label>
+                                      <Input
+                                        placeholder={hasBoarding ? "e.g., Standard Room, Deluxe Suite" : "e.g., Basic Bath & Trim"}
+                                        value={item.name}
+                                        onChange={(e) => {
+                                          const updated = [...formData.serviceCapacities];
+                                          updated[index].name = e.target.value;
+                                          setFormData((prev) => ({ ...prev, serviceCapacities: updated }));
+                                        }}
+                                      />
+                                    </div>
+                                    <div className="w-36 space-y-1">
+                                      <Label className="text-sm font-medium">Capacity (animals)</Label>
+                                      <Input
+                                        type="number"
+                                        min={1}
+                                        placeholder="e.g., 5"
+                                        value={item.capacity === 0 ? "" : item.capacity}
+                                        onChange={(e) => {
+                                          const updated = [...formData.serviceCapacities];
+                                          updated[index].capacity = parseInt(e.target.value) || 0;
+                                          setFormData((prev) => ({ ...prev, serviceCapacities: updated }));
+                                        }}
+                                      />
+                                    </div>
+                                    <button
+                                      type="button"
+                                      className="mb-0.5 text-muted-foreground hover:text-destructive transition-colors"
+                                      onClick={() => {
+                                        const updated = formData.serviceCapacities.filter((_, i) => i !== index);
+                                        setFormData((prev) => ({ ...prev, serviceCapacities: updated }));
+                                      }}
+                                    >
+                                      <X className="h-4 w-4" />
+                                    </button>
+                                  </div>
+                                ))}
+                              </div>
+
+                              <button
+                                type="button"
+                                className="flex items-center gap-2 text-sm font-medium text-primary hover:underline"
+                                onClick={() =>
+                                  setFormData((prev) => ({
+                                    ...prev,
+                                    serviceCapacities: [
+                                      ...prev.serviceCapacities,
+                                      { name: "", capacity: 0 },
+                                    ],
+                                  }))
+                                }
+                              >
+                                + Add service capacity
+                              </button>
+                            </div>
+                          )}
                         </div>
                       </div>
                     </div>

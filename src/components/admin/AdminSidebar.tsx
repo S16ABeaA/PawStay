@@ -2,6 +2,7 @@ import { Link, useLocation } from "react-router-dom";
 import {
   LayoutDashboard,
   Calendar,
+  CalendarDays,
   Settings,
   Star,
   Package,
@@ -16,6 +17,7 @@ import { useState } from "react";
 const navItems = [
   { icon: LayoutDashboard, label: "Dashboard", href: "/admin" },
   { icon: Calendar, label: "Bookings", href: "/admin/bookings" },
+  { icon: CalendarDays, label: "Calendar", href: "/admin/calendar" },
   { icon: Package, label: "Services", href: "/admin/services" },
   { icon: Star, label: "Reviews", href: "/admin/reviews" },
   { icon: Settings, label: "Settings", href: "/admin/settings" },
@@ -36,7 +38,7 @@ const AdminSidebar = () => {
       <div className="h-16 flex items-center justify-between px-4 border-b border-border">
         {!collapsed && (
           <Link to="/" className="flex items-center gap-2">
-            <img src="/PawStay Logo.jpg" alt="PawStay" className="h-9 w-9 rounded-lg object-cover" />
+            <img src="/PawStay%20Logo.jpg" alt="PawStay" className="h-9 w-9 rounded-lg object-cover" />
             <span className="font-display font-bold text-foreground">PawStay</span>
           </Link>
         )}

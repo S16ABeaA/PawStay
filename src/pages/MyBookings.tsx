@@ -59,11 +59,7 @@ interface Booking {
 const statusConfig: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
   pending: { label: "Pending", variant: "secondary" },
   confirmed: { label: "Confirmed", variant: "default" },
-  checked_in: { label: "Checked In", variant: "default" },
-  checked_out: { label: "Checked Out", variant: "outline" },
-  completed: { label: "Completed", variant: "outline" },
   cancelled: { label: "Cancelled", variant: "destructive" },
-  no_show: { label: "No Show", variant: "destructive" },
 };
 
 const serviceTypeLabel: Record<string, string> = {
@@ -80,7 +76,7 @@ function isUpcoming(b: Booking): boolean {
   const end = b.checkout ? new Date(b.checkout) : new Date(b.checkin);
   return (
     end >= now &&
-    !["cancelled", "completed", "checked_out", "no_show"].includes(b.status)
+    !["cancelled"].includes(b.status)
   );
 }
 
@@ -94,8 +90,10 @@ function isPastDate(b: Booking): boolean {
 
 /** Whether a past booking qualifies for writing a review */
 function canWriteReview(b: Booking): boolean {
-  const reviewableStatuses = ["confirmed", "completed", "checked_out", "checked_in"];
-  return reviewableStatuses.includes(b.status);
+  const validStatuses = ["confirmed"];
+  return (
+    validStatuses.includes(b.status) && isPastDate(b)
+  );
 }
 
 function formatDate(dateStr: string): string {
@@ -119,6 +117,7 @@ const MyBookings = () => {
   const [reviewDialogOpen, setReviewDialogOpen] = useState(false);
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
   const [detailBooking, setDetailBooking] = useState<Booking | null>(null);
+  const [checkingPayment, setCheckingPayment] = useState<string | null>(null);
 
   const fetchBookings = async () => {
     try {
@@ -129,6 +128,36 @@ const MyBookings = () => {
       toast({ title: "Error", description: "Failed to load bookings." });
     } finally {
       setLoading(false);
+    }
+  };
+
+  /** Check payment status for a single booking and update UI */
+  const handleCheckPayment = async (bookingId: string) => {
+    setCheckingPayment(bookingId);
+    try {
+      const res = await bookingApi.checkPaymentStatus(bookingId);
+      // Update the booking in-place with the latest payment status
+      setBookings((prev) =>
+        prev.map((b) =>
+          b.id === bookingId
+            ? { ...b, payment_status: res.payment_status, status: res.booking_status }
+            : b
+        )
+      );
+      const statusLabel = res.payment_status === "paid" ? "Paid" : res.payment_status === "refunded" ? "Refunded" : res.payment_status === "partially_refunded" ? "Partially Refunded" : "Unpaid";
+      toast({
+        title: `Payment Status: ${statusLabel}`,
+        description: res.payment_status === "paid"
+          ? `Payment of ₱${Number(res.total_price ?? 0).toFixed(2)} has been confirmed${res.paid_at ? ` on ${new Date(res.paid_at).toLocaleDateString()}` : ""}.`
+          : res.payment_status === "refunded"
+            ? "Your payment has been refunded."
+            : `Payment is currently ${statusLabel.toLowerCase()}. Please contact the property if you believe this is incorrect.`,
+      });
+    } catch (err: any) {
+      console.error("Failed to check payment:", err);
+      toast({ title: "Error", description: "Failed to check payment status.", variant: "destructive" });
+    } finally {
+      setCheckingPayment(null);
     }
   };
 
@@ -240,7 +269,14 @@ const MyBookings = () => {
                 {upcoming.length === 0 ? (
                   <EmptyState message="No upcoming bookings" />
                 ) : (
-                  upcoming.map((b) => <BookingCard key={b.id} booking={b} />)
+                  upcoming.map((b) => (
+                    <BookingCard
+                      key={b.id}
+                      booking={b}
+                      onCheckPayment={() => handleCheckPayment(b.id)}
+                      isCheckingPayment={checkingPayment === b.id}
+                    />
+                  ))
                 )}
               </TabsContent>
 
@@ -256,6 +292,8 @@ const MyBookings = () => {
                       isReviewed={reviewedBookings.has(b.id)}
                       onWriteReview={() => handleOpenReview(b)}
                       onViewDetail={() => handleOpenDetail(b)}
+                      onCheckPayment={() => handleCheckPayment(b.id)}
+                      isCheckingPayment={checkingPayment === b.id}
                     />
                   ))
                 )}
@@ -313,12 +351,16 @@ function BookingCard({
   isReviewed,
   onWriteReview,
   onViewDetail,
+  onCheckPayment,
+  isCheckingPayment,
 }: {
   booking: Booking;
   isPast?: boolean;
   isReviewed?: boolean;
   onWriteReview?: () => void;
   onViewDetail?: () => void;
+  onCheckPayment?: () => void;
+  isCheckingPayment?: boolean;
 }) {
   const b = booking;
   const { label: statusLabel, variant: statusVariant } =
@@ -409,11 +451,27 @@ function BookingCard({
                 {b.payment_method?.replace("_", " ") ?? "—"}
               </span>
               <Badge
-                variant={b.payment_status === "paid" ? "default" : "secondary"}
-                className="text-[10px] px-1.5 py-0"
+                variant={b.payment_status === "paid" ? "default" : b.payment_status === "refunded" ? "destructive" : "secondary"}
+                className={`text-[10px] px-1.5 py-0 ${b.payment_status === "paid" ? "bg-green-600" : ""}`}
               >
-                {b.payment_status}
+                {b.payment_status === "paid" ? "✓ Paid" : b.payment_status === "refunded" ? "Refunded" : b.payment_status === "partially_refunded" ? "Partial Refund" : "Unpaid"}
               </Badge>
+              {b.payment_status !== "paid" && onCheckPayment && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 px-2 text-xs text-primary hover:text-primary/80 gap-1"
+                  onClick={onCheckPayment}
+                  disabled={isCheckingPayment}
+                >
+                  {isCheckingPayment ? (
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                  ) : (
+                    <CreditCard className="h-3 w-3" />
+                  )}
+                  Check Payment
+                </Button>
+              )}
             </div>
             <span className="font-semibold text-foreground">
               {formatCurrency(b.total_price)}
@@ -580,10 +638,10 @@ function PastBookingDetailDialog({
                 {b.payment_method?.replace("_", " ") ?? "—"}
               </span>
               <Badge
-                variant={b.payment_status === "paid" ? "default" : "secondary"}
-                className="text-[10px] px-1.5 py-0"
+                variant={b.payment_status === "paid" ? "default" : b.payment_status === "refunded" ? "destructive" : "secondary"}
+                className={`text-[10px] px-1.5 py-0 ${b.payment_status === "paid" ? "bg-green-600" : ""}`}
               >
-                {b.payment_status}
+                {b.payment_status === "paid" ? "✓ Paid" : b.payment_status === "refunded" ? "Refunded" : b.payment_status === "partially_refunded" ? "Partial Refund" : "Unpaid"}
               </Badge>
             </div>
           </div>

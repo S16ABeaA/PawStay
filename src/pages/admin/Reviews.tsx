@@ -11,72 +11,64 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Star, MessageSquare, ThumbsUp, Flag, Send } from "lucide-react";
+import { Star, MessageSquare, ThumbsUp, Flag, Send, Loader2 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
-
-const initialReviews: any[] = [];
+import { reviewsApi, OwnerReview } from "@/services/reviewsApi";
 
 const AdminReviews = () => {
-  const [reviews, setReviews] = useState(initialReviews);
+  const [reviews, setReviews] = useState<OwnerReview[]>([]);
+  const [loading, setLoading] = useState(true);
   const [replyDialogOpen, setReplyDialogOpen] = useState(false);
-  const [selectedReview, setSelectedReview] = useState<typeof initialReviews[0] | null>(null);
+  const [selectedReview, setSelectedReview] = useState<OwnerReview | null>(null);
   const [replyText, setReplyText] = useState("");
+  const [replying, setReplying] = useState(false);
   const { toast } = useToast();
 
   const averageRating = reviews.length ? (reviews.reduce((acc, r) => acc + Number(r.rating || 0), 0) / reviews.length).toFixed(1) : "0.0";
   const pendingReplies = reviews.filter((r) => !r.replied).length;
 
-  const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5001';
-
   // Fetch reviews from backend for owner's properties
   useEffect(() => {
     const fetchReviews = async () => {
       try {
-        const res = await fetch(`${API_BASE_URL}/api/reviews/mine`, { credentials: 'include' });
-        const contentType = res.headers.get('content-type') || '';
-        const data = contentType.includes('application/json') ? await res.json() : await res.text();
-        if (!res.ok) throw data;
-        setReviews((data && (data as any).reviews) ? (data as any).reviews : []);
+        setLoading(true);
+        const data = await reviewsApi.myReviews();
+        setReviews(data.reviews ?? []);
       } catch (err) {
         console.error('Failed to load reviews', err);
+        toast({ title: "Error", description: "Failed to load reviews.", variant: "destructive" });
+      } finally {
+        setLoading(false);
       }
     };
 
     fetchReviews();
   }, []);
 
-  const handleReply = (review: typeof initialReviews[0]) => {
+  const handleReply = (review: OwnerReview) => {
     setSelectedReview(review);
     setReplyText("");
     setReplyDialogOpen(true);
   };
 
-  const submitReply = () => {
-    if (selectedReview && replyText.trim()) {
-      (async () => {
-        try {
-          const res = await fetch(`${API_BASE_URL}/api/reviews/${selectedReview.id}/reply`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            credentials: 'include',
-            body: JSON.stringify({ reply: replyText }),
-          });
-          const contentType = res.headers.get('content-type') || '';
-          const data = contentType.includes('application/json') ? await res.json() : await res.text();
-          if (!res.ok) throw data;
-          setReviews((prev) => prev.map((r) => (r.id === selectedReview.id ? { ...r, replied: true, reply: replyText } : r)));
-          toast({ title: 'Reply Sent', description: 'Your reply has been posted.' });
-          setReplyDialogOpen(false);
-        } catch (err: any) {
-          console.error('Reply failed', err);
-          toast({ title: 'Error', description: err?.message || 'Failed to send reply', variant: 'destructive' });
-        }
-      })();
+  const submitReply = async () => {
+    if (!selectedReview || !replyText.trim()) return;
+    setReplying(true);
+    try {
+      await reviewsApi.replyToReview(selectedReview.id, replyText);
+      setReviews((prev) => prev.map((r) => (r.id === selectedReview.id ? { ...r, replied: true, reply: replyText } : r)));
+      toast({ title: 'Reply Sent', description: 'Your reply has been posted.' });
+      setReplyDialogOpen(false);
+    } catch (err: any) {
+      console.error('Reply failed', err);
+      toast({ title: 'Error', description: err?.message || 'Failed to send reply', variant: 'destructive' });
+    } finally {
+      setReplying(false);
     }
   };
 
-  const handleFlag = (id: number) => {
+  const handleFlag = (id: string) => {
     toast({ title: "Review Flagged", description: "This review has been flagged for moderation." });
   };
 
@@ -93,7 +85,7 @@ const AdminReviews = () => {
     }
   };
 
-  const ReviewCard = ({ review }: { review: typeof initialReviews[0] }) => (
+  const ReviewCard = ({ review }: { review: OwnerReview }) => (
     <Card key={review.id}>
       <CardContent className="p-5">
         <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
@@ -155,6 +147,12 @@ const AdminReviews = () => {
 
   return (
     <AdminLayout title="Reviews" subtitle="Monitor and respond to customer feedback">
+      {loading ? (
+        <div className="flex items-center justify-center py-16">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      ) : (
+      <>
       {/* Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
         <Card>
@@ -245,16 +243,18 @@ const AdminReviews = () => {
                 rows={4}
               />
               <div className="flex gap-2 justify-end">
-                <Button variant="outline" onClick={() => setReplyDialogOpen(false)}>Cancel</Button>
-                <Button onClick={submitReply} className="gap-2">
-                  <Send className="h-4 w-4" />
-                  Send Reply
+                <Button variant="outline" onClick={() => setReplyDialogOpen(false)} disabled={replying}>Cancel</Button>
+                <Button onClick={submitReply} className="gap-2" disabled={replying || !replyText.trim()}>
+                  {replying ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                  {replying ? "Sending…" : "Send Reply"}
                 </Button>
               </div>
             </div>
           )}
         </DialogContent>
       </Dialog>
+      </>
+      )}
     </AdminLayout>
   );
 };
