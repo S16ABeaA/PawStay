@@ -42,6 +42,7 @@ const AdminBookings = () => {
   const [serviceFilter, setServiceFilter] = useState("all");
   const { toast } = useToast();
   const { selectedPropertyId, loading: propLoading } = useAdminProperty();
+  const [loadingBookings, setLoadingBookings] = useState(false);
   const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5001';
 
   const handleConfirm = async (id: string) => {
@@ -102,12 +103,18 @@ const AdminBookings = () => {
   });
 
   useEffect(() => {
+    let cancelled = false;
+
+    // Clear stale bookings immediately when property changes
+    setBookings([]);
+
     if (propLoading || !selectedPropertyId) return;
 
-    const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5001';
     const fetchBookings = async () => {
       try {
+        setLoadingBookings(true);
         const data = await authHelper.get(`${API_BASE_URL}/api/bookings/mine/list?property_id=${selectedPropertyId}`);
+        if (cancelled) return;
         setBookings((data.bookings || []).map((b: any) => ({
           id: b.id,
           pet: b.pet_name,
@@ -127,10 +134,14 @@ const AdminBookings = () => {
         })));
       } catch (err) {
         console.error('Failed to load bookings', err);
+      } finally {
+        if (!cancelled) setLoadingBookings(false);
       }
     };
 
     fetchBookings();
+
+    return () => { cancelled = true; };
   }, [selectedPropertyId, propLoading]);
 
   return (
@@ -191,7 +202,19 @@ const AdminBookings = () => {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filteredBookings.map((booking) => (
+            {loadingBookings ? (
+              <TableRow>
+                <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
+                  Loading bookings...
+                </TableCell>
+              </TableRow>
+            ) : filteredBookings.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
+                  No bookings found
+                </TableCell>
+              </TableRow>
+            ) : filteredBookings.map((booking) => (
               <TableRow key={booking.id}>
                 <TableCell className="font-medium">{booking.id}</TableCell>
                 <TableCell>

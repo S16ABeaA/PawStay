@@ -72,8 +72,29 @@ const AdminServices = () => {
 
   // Fetch services when selected property changes
   useEffect(() => {
+    let cancelled = false;
+
+    // Clear stale services when property changes
+    setServices([]);
+
     if (propLoading || !propertyId) return;
-    fetchServices(propertyId);
+
+    const doFetch = async () => {
+      try {
+        setLoading(true);
+        const data = await servicesApi.getServices(propertyId);
+        if (cancelled) return;
+        setServices(data);
+      } catch (err) {
+        console.error("Failed to fetch services", err);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+
+    doFetch();
+
+    return () => { cancelled = true; };
   }, [propertyId, propLoading]);
 
   const fetchServices = async (propId: string) => {

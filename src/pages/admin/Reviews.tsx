@@ -32,22 +32,30 @@ const AdminReviews = () => {
 
   // Fetch reviews from backend for selected property
   useEffect(() => {
+    let cancelled = false;
+
+    // Clear stale reviews when property changes
+    setReviews([]);
+
     if (propLoading) return;
 
     const fetchReviews = async () => {
       try {
         setLoading(true);
         const data = await reviewsApi.myReviews(selectedPropertyId);
+        if (cancelled) return;
         setReviews(data.reviews ?? []);
       } catch (err) {
         console.error('Failed to load reviews', err);
-        toast({ title: "Error", description: "Failed to load reviews.", variant: "destructive" });
+        if (!cancelled) toast({ title: "Error", description: "Failed to load reviews.", variant: "destructive" });
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     };
 
     fetchReviews();
+
+    return () => { cancelled = true; };
   }, [selectedPropertyId, propLoading]);
 
   const handleReply = (review: OwnerReview) => {

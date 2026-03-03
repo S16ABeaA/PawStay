@@ -24,6 +24,9 @@ const AdminDashboard = () => {
   const [loadingRecent, setLoadingRecent] = useState(false);
 
   useEffect(() => {
+    // Track whether this effect has been superseded by a newer one
+    let cancelled = false;
+
     // Clear stale data immediately when property changes
     setStats({ totalBookings: 0, revenue: 0, avgRating: 0, occupancy: 0 });
     setTodayCheckIns([]);
@@ -38,6 +41,7 @@ const AdminDashboard = () => {
       try {
         setLoadingStats(true);
         const data = await authHelper.get(`${API_BASE_URL}/api/properties/mine/stats${qs}`);
+        if (cancelled) return;
         setStats({
           totalBookings: data.totalBookings || 0,
           revenue: data.revenue || 0,
@@ -47,37 +51,41 @@ const AdminDashboard = () => {
       } catch (err) {
         console.error('Failed to load dashboard stats', err);
       } finally {
-        setLoadingStats(false);
+        if (!cancelled) setLoadingStats(false);
       }
     };
 
-    fetchStats();
     const fetchCheckIns = async () => {
       try {
         setLoadingCheckIns(true);
         const data = await authHelper.get(`${API_BASE_URL}/api/bookings/mine/today${qs}`);
+        if (cancelled) return;
         setTodayCheckIns(data.checkIns || []);
       } catch (err) {
         console.error('Failed to load today check-ins', err);
       } finally {
-        setLoadingCheckIns(false);
+        if (!cancelled) setLoadingCheckIns(false);
       }
     };
 
-    fetchCheckIns();
     const fetchRecent = async () => {
       try {
         setLoadingRecent(true);
         const data = await authHelper.get(`${API_BASE_URL}/api/bookings/mine/recent${qs}`);
+        if (cancelled) return;
         setRecentBookings(data.bookings || []);
       } catch (err) {
         console.error('Failed to load recent bookings', err);
       } finally {
-        setLoadingRecent(false);
+        if (!cancelled) setLoadingRecent(false);
       }
     };
 
+    fetchStats();
+    fetchCheckIns();
     fetchRecent();
+
+    return () => { cancelled = true; };
   }, [selectedPropertyId, propLoading]);
 
   return (

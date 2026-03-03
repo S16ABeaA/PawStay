@@ -3,7 +3,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useLocation, Outlet } from "react-router-dom";
 import ScrollToTop from "@/components/ScrollToTop";
 import Index from "./pages/Index";
 import Hotels from "./pages/Hotels";
@@ -49,6 +49,15 @@ import SuperAdminSupport from "./pages/superadmin/Support";
 import SuperAdminSettings from "./pages/superadmin/Settings";
 
 const queryClient = new QueryClient();
+
+/** Shared wrapper for all /admin routes so the property context persists across navigation */
+const AdminRouteWrapper = () => (
+  <RequireAuth allowedRoles={["proprietor"]}>
+    <AdminPropertyProvider>
+      <Outlet />
+    </AdminPropertyProvider>
+  </RequireAuth>
+);
 
 const App = () => (
   <ThemeProvider attribute="class" defaultTheme="light" enableSystem>
@@ -109,67 +118,15 @@ const App = () => (
             }
           />
           
-          {/* Admin routes — wrapped in AdminPropertyProvider */}
-          <Route
-            path="/admin"
-            element={
-              <RequireAuth allowedRoles={["proprietor"]}>
-                <AdminPropertyProvider>
-                  <AdminDashboard />
-                </AdminPropertyProvider>
-              </RequireAuth>
-            }
-          />
-          <Route
-            path="/admin/bookings"
-            element={
-              <RequireAuth allowedRoles={["proprietor"]}>
-                <AdminPropertyProvider>
-                  <AdminBookings />
-                </AdminPropertyProvider>
-              </RequireAuth>
-            }
-          />
-          <Route
-            path="/admin/services"
-            element={
-              <RequireAuth allowedRoles={["proprietor"]}>
-                <AdminPropertyProvider>
-                  <AdminServices />
-                </AdminPropertyProvider>
-              </RequireAuth>
-            }
-          />
-          <Route
-            path="/admin/reviews"
-            element={
-              <RequireAuth allowedRoles={["proprietor"]}>
-                <AdminPropertyProvider>
-                  <AdminReviews />
-                </AdminPropertyProvider>
-              </RequireAuth>
-            }
-          />
-          <Route
-            path="/admin/settings"
-            element={
-              <RequireAuth allowedRoles={["proprietor"]}>
-                <AdminPropertyProvider>
-                  <AdminSettings />
-                </AdminPropertyProvider>
-              </RequireAuth>
-            }
-          />
-          <Route
-            path="/admin/calendar"
-            element={
-              <RequireAuth allowedRoles={["proprietor"]}>
-                <AdminPropertyProvider>
-                  <AdminCalendar />
-                </AdminPropertyProvider>
-              </RequireAuth>
-            }
-          />
+          {/* Admin routes — single shared AdminPropertyProvider via layout route */}
+          <Route path="/admin" element={<AdminRouteWrapper />}>
+            <Route index element={<AdminDashboard />} />
+            <Route path="bookings" element={<AdminBookings />} />
+            <Route path="services" element={<AdminServices />} />
+            <Route path="reviews" element={<AdminReviews />} />
+            <Route path="settings" element={<AdminSettings />} />
+            <Route path="calendar" element={<AdminCalendar />} />
+          </Route>
           
           {/* SuperAdmin routes */}
           <Route path="/superadmin" element={<RequireSuperAdmin><SuperAdminDashboard /></RequireSuperAdmin>} />
