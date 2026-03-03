@@ -1,5 +1,6 @@
 import { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import AdminLayout from "@/components/admin/AdminLayout";
+import { useAdminProperty } from "@/hooks/useAdminProperty";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -150,6 +151,7 @@ function bookingToEvent(b: AdminCalendarBooking): CalendarEvent {
 const AdminCalendar = () => {
   const calendarRef = useRef<FullCalendar>(null);
   const { toast } = useToast();
+  const { selectedPropertyId, setSelectedPropertyId, loading: propCtxLoading } = useAdminProperty();
 
   // Data from API
   const [loading, setLoading] = useState(true);
@@ -184,7 +186,7 @@ const AdminCalendar = () => {
 
   // Filters
   const [statusFilter, setStatusFilter] = useState<string>("all");
-  const [propertyFilter, setPropertyFilter] = useState<string>("all");
+  const [propertyFilter, setPropertyFilter] = useState<string>(selectedPropertyId ?? "all");
   const [serviceTypeFilter, setServiceTypeFilter] = useState<string>("all");
 
   // -----------------------------------------------------------------------
@@ -220,12 +222,14 @@ const AdminCalendar = () => {
     fetchCalendarData();
   }, [fetchCalendarData]);
 
-  // If there are properties and no property is selected, default to the first property
+  // Sync with AdminPropertyProvider context
   useEffect(() => {
-    if (properties.length > 0 && propertyFilter === "all") {
+    if (selectedPropertyId && propertyFilter !== selectedPropertyId) {
+      setPropertyFilter(selectedPropertyId);
+    } else if (!selectedPropertyId && properties.length > 0 && propertyFilter === "all") {
       setPropertyFilter(properties[0].id);
     }
-  }, [properties, propertyFilter]);
+  }, [selectedPropertyId, properties, propertyFilter]);
 
   const currentPropertyName = useMemo(
     () => properties.find((p) => p.id === propertyFilter)?.name ?? "",
@@ -719,7 +723,7 @@ const AdminCalendar = () => {
           <div className="flex flex-wrap items-center gap-3">
             {/* Property filter */}
             {properties.length > 0 && (
-              <Select value={propertyFilter} onValueChange={setPropertyFilter}>
+              <Select value={propertyFilter} onValueChange={(val) => { setPropertyFilter(val); setSelectedPropertyId(val); }}>
                 <SelectTrigger className="w-[170px] h-9">
                   <SelectValue placeholder="Property" />
                 </SelectTrigger>

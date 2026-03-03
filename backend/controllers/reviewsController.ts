@@ -7,12 +7,18 @@ export const reviewsController = {
       const userId = (req as any).user?.id;
       if (!userId) return res.status(401).json({ message: "Unauthorized" });
 
+      const filterPropertyId = req.query.property_id as string | undefined;
+
       // Get owner's properties
-      const { data: props, error: propsErr } = await supabaseAdmin
+      let propsQuery = supabaseAdmin
         .from("properties")
         .select("id")
         .eq("owner_id", userId)
         .eq("is_deleted", false);
+
+      if (filterPropertyId) propsQuery = propsQuery.eq("id", filterPropertyId);
+
+      const { data: props, error: propsErr } = await propsQuery;
 
       if (propsErr) throw propsErr;
 

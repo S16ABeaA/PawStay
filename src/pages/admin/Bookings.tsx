@@ -28,6 +28,7 @@ import { Search, Download, Eye, CheckCircle, XCircle, FileText, CreditCard, Imag
 import { useEffect, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { authHelper } from "@/helpers/authHelper";
+import { useAdminProperty } from "@/hooks/useAdminProperty";
 
 const initialBookings: any[] = [];
 
@@ -40,6 +41,7 @@ const AdminBookings = () => {
   const [statusFilter, setStatusFilter] = useState("all");
   const [serviceFilter, setServiceFilter] = useState("all");
   const { toast } = useToast();
+  const { selectedPropertyId, loading: propLoading } = useAdminProperty();
   const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5001';
 
   const handleConfirm = async (id: string) => {
@@ -100,10 +102,12 @@ const AdminBookings = () => {
   });
 
   useEffect(() => {
+    if (propLoading || !selectedPropertyId) return;
+
     const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5001';
     const fetchBookings = async () => {
       try {
-        const data = await authHelper.get(`${API_BASE_URL}/api/bookings/mine/list`);
+        const data = await authHelper.get(`${API_BASE_URL}/api/bookings/mine/list?property_id=${selectedPropertyId}`);
         setBookings((data.bookings || []).map((b: any) => ({
           id: b.id,
           pet: b.pet_name,
@@ -127,7 +131,7 @@ const AdminBookings = () => {
     };
 
     fetchBookings();
-  }, []);
+  }, [selectedPropertyId, propLoading]);
 
   return (
     <AdminLayout title="Bookings" subtitle="Manage all your reservations and appointments">

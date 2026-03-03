@@ -47,8 +47,10 @@ export const reviewsApi = {
     authHelper.get(`${API_BASE_URL}/api/reviews/check/${bookingId}`),
 
   /** Get reviews for the current owner's properties (admin/proprietor) */
-  myReviews: (): Promise<{ reviews: OwnerReview[]; avgRating: number; total: number; pendingReplies: number }> =>
-    authHelper.get(`${API_BASE_URL}/api/reviews/mine`),
+  myReviews: (propertyId?: string | null): Promise<{ reviews: OwnerReview[]; avgRating: number; total: number; pendingReplies: number }> => {
+    const qs = propertyId ? `?property_id=${propertyId}` : "";
+    return authHelper.get(`${API_BASE_URL}/api/reviews/mine${qs}`);
+  },
 
   /** Reply to a review (property owner) */
   replyToReview: (reviewId: string, reply: string): Promise<{ success: boolean; review: any }> =>

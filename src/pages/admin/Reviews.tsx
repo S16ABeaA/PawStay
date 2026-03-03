@@ -15,6 +15,7 @@ import { Star, MessageSquare, ThumbsUp, Flag, Send, Loader2 } from "lucide-react
 import { useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { reviewsApi, OwnerReview } from "@/services/reviewsApi";
+import { useAdminProperty } from "@/hooks/useAdminProperty";
 
 const AdminReviews = () => {
   const [reviews, setReviews] = useState<OwnerReview[]>([]);
@@ -24,16 +25,19 @@ const AdminReviews = () => {
   const [replyText, setReplyText] = useState("");
   const [replying, setReplying] = useState(false);
   const { toast } = useToast();
+  const { selectedPropertyId, loading: propLoading } = useAdminProperty();
 
   const averageRating = reviews.length ? (reviews.reduce((acc, r) => acc + Number(r.rating || 0), 0) / reviews.length).toFixed(1) : "0.0";
   const pendingReplies = reviews.filter((r) => !r.replied).length;
 
-  // Fetch reviews from backend for owner's properties
+  // Fetch reviews from backend for selected property
   useEffect(() => {
+    if (propLoading) return;
+
     const fetchReviews = async () => {
       try {
         setLoading(true);
-        const data = await reviewsApi.myReviews();
+        const data = await reviewsApi.myReviews(selectedPropertyId);
         setReviews(data.reviews ?? []);
       } catch (err) {
         console.error('Failed to load reviews', err);
@@ -44,7 +48,7 @@ const AdminReviews = () => {
     };
 
     fetchReviews();
-  }, []);
+  }, [selectedPropertyId, propLoading]);
 
   const handleReply = (review: OwnerReview) => {
     setSelectedReview(review);

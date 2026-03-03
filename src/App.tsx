@@ -29,6 +29,7 @@ import HelpCenter from "./pages/HelpCenter";
 import RequireAuth from "./components/RequireAuth";
 import RequireAdmin from "./components/RequireAdmin";
 import RequireSuperAdmin from "./components/RequireSuperAdmin";
+import { AdminPropertyProvider } from "./hooks/useAdminProperty";
 
 // Admin pages
 import AdminDashboard from "./pages/admin/Dashboard";
@@ -108,12 +109,14 @@ const App = () => (
             }
           />
           
-          {/* Admin routes */}
+          {/* Admin routes — wrapped in AdminPropertyProvider */}
           <Route
             path="/admin"
             element={
               <RequireAuth allowedRoles={["proprietor"]}>
-                <AdminDashboard />
+                <AdminPropertyProvider>
+                  <AdminDashboard />
+                </AdminPropertyProvider>
               </RequireAuth>
             }
           />
@@ -121,7 +124,9 @@ const App = () => (
             path="/admin/bookings"
             element={
               <RequireAuth allowedRoles={["proprietor"]}>
-                <AdminBookings />
+                <AdminPropertyProvider>
+                  <AdminBookings />
+                </AdminPropertyProvider>
               </RequireAuth>
             }
           />
@@ -129,7 +134,9 @@ const App = () => (
             path="/admin/services"
             element={
               <RequireAuth allowedRoles={["proprietor"]}>
-                <AdminServices />
+                <AdminPropertyProvider>
+                  <AdminServices />
+                </AdminPropertyProvider>
               </RequireAuth>
             }
           />
@@ -137,7 +144,9 @@ const App = () => (
             path="/admin/reviews"
             element={
               <RequireAuth allowedRoles={["proprietor"]}>
-                <AdminReviews />
+                <AdminPropertyProvider>
+                  <AdminReviews />
+                </AdminPropertyProvider>
               </RequireAuth>
             }
           />
@@ -145,7 +154,9 @@ const App = () => (
             path="/admin/settings"
             element={
               <RequireAuth allowedRoles={["proprietor"]}>
-                <AdminSettings />
+                <AdminPropertyProvider>
+                  <AdminSettings />
+                </AdminPropertyProvider>
               </RequireAuth>
             }
           />
@@ -153,7 +164,9 @@ const App = () => (
             path="/admin/calendar"
             element={
               <RequireAuth allowedRoles={["proprietor"]}>
-                <AdminCalendar />
+                <AdminPropertyProvider>
+                  <AdminCalendar />
+                </AdminPropertyProvider>
               </RequireAuth>
             }
           />

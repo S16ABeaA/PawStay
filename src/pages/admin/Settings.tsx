@@ -11,9 +11,11 @@ import { useToast } from "@/hooks/use-toast";
 import { settingsApi, SettingsData } from "@/services/settingsApi";
 import { Building2, Bell, CreditCard, Shield, Clock, Upload, X, QrCode, Smartphone, Wallet, Banknote, Loader2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { useAdminProperty } from "@/hooks/useAdminProperty";
 
 const AdminSettings = () => {
   const { toast } = useToast();
+  const { selectedPropertyId, loading: propLoading } = useAdminProperty();
 
   const [loading, setLoading] = useState(true);
   const [business, setBusiness] = useState<SettingsData["business"]>({
@@ -46,12 +48,14 @@ const AdminSettings = () => {
   const paymayaInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
+    if (propLoading) return;
+
     let isActive = true;
 
     const loadSettings = async () => {
       try {
         setLoading(true);
-        const data = await settingsApi.getSettings();
+        const data = await settingsApi.getSettings(selectedPropertyId);
         if (!isActive) return;
 
         setBusiness(data.business);
@@ -76,7 +80,7 @@ const AdminSettings = () => {
     return () => {
       isActive = false;
     };
-  }, [toast]);
+  }, [selectedPropertyId, propLoading, toast]);
 
   const toggleMethod = (method: string) => {
     setAcceptedMethods((prev) =>
@@ -106,6 +110,7 @@ const AdminSettings = () => {
         website: business.website,
         description: business.description,
         address: business.address,
+        property_id: selectedPropertyId || undefined,
       });
       toast({
         title: "Business info saved",
@@ -140,7 +145,7 @@ const AdminSettings = () => {
 
   const handleSaveAvailability = async () => {
     try {
-      await settingsApi.updateAvailability(availability);
+      await settingsApi.updateAvailability({ ...availability, property_id: selectedPropertyId || undefined });
       toast({
         title: "Availability saved",
         description: "Your availability settings have been updated.",
@@ -161,6 +166,7 @@ const AdminSettings = () => {
         acceptedMethods,
         gcashQrUrl: qrCodeGCash,
         paymayaQrUrl: qrCodePayMaya,
+        property_id: selectedPropertyId || undefined,
       });
       toast({
         title: "Payment settings saved",

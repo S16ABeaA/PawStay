@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Link, useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { authHelper } from "@/helpers/authHelper";
+import { useAdminProperty } from "@/hooks/useAdminProperty";
 
 const recentBookings = [];
 
@@ -14,8 +15,7 @@ const upcomingCheckIns: any[] = [];
 
 const AdminDashboard = () => {
   const navigate = useNavigate();
-  const [properties, setProperties] = useState<any[]>([]);
-  const [loadingProps, setLoadingProps] = useState(false);
+  const { selectedPropertyId, loading: propLoading } = useAdminProperty();
   const [stats, setStats] = useState({ totalBookings: 0, revenue: 0, avgRating: 0, occupancy: 0 });
   const [loadingStats, setLoadingStats] = useState(false);
   const [todayCheckIns, setTodayCheckIns] = useState<any[]>([]);
@@ -24,23 +24,20 @@ const AdminDashboard = () => {
   const [loadingRecent, setLoadingRecent] = useState(false);
 
   useEffect(() => {
+    // Clear stale data immediately when property changes
+    setStats({ totalBookings: 0, revenue: 0, avgRating: 0, occupancy: 0 });
+    setTodayCheckIns([]);
+    setRecentBookings([]);
+
+    if (propLoading || !selectedPropertyId) return;
+
     const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5001";
-    const fetchMyProperties = async () => {
-      try {
-        setLoadingProps(true);
-        const data = await authHelper.get(`${API_BASE_URL}/api/properties/mine`);
-        setProperties(data.properties || []);
-      } catch (err) {
-        console.error("Failed to load properties", err);
-      } finally {
-        setLoadingProps(false);
-      }
-    };
+    const qs = `?property_id=${selectedPropertyId}`;
 
     const fetchStats = async () => {
       try {
         setLoadingStats(true);
-        const data = await authHelper.get(`${API_BASE_URL}/api/properties/mine/stats`);
+        const data = await authHelper.get(`${API_BASE_URL}/api/properties/mine/stats${qs}`);
         setStats({
           totalBookings: data.totalBookings || 0,
           revenue: data.revenue || 0,
@@ -54,12 +51,11 @@ const AdminDashboard = () => {
       }
     };
 
-    fetchMyProperties();
     fetchStats();
     const fetchCheckIns = async () => {
       try {
         setLoadingCheckIns(true);
-        const data = await authHelper.get(`${API_BASE_URL}/api/bookings/mine/today`);
+        const data = await authHelper.get(`${API_BASE_URL}/api/bookings/mine/today${qs}`);
         setTodayCheckIns(data.checkIns || []);
       } catch (err) {
         console.error('Failed to load today check-ins', err);
@@ -72,7 +68,7 @@ const AdminDashboard = () => {
     const fetchRecent = async () => {
       try {
         setLoadingRecent(true);
-        const data = await authHelper.get(`${API_BASE_URL}/api/bookings/mine/recent`);
+        const data = await authHelper.get(`${API_BASE_URL}/api/bookings/mine/recent${qs}`);
         setRecentBookings(data.bookings || []);
       } catch (err) {
         console.error('Failed to load recent bookings', err);
@@ -82,7 +78,7 @@ const AdminDashboard = () => {
     };
 
     fetchRecent();
-  }, []);
+  }, [selectedPropertyId, propLoading]);
 
   return (
     <AdminLayout title="Dashboard" subtitle="Welcome back! Here's your business overview.">

@@ -1234,9 +1234,9 @@ const Booking = () => {
                         <div className="bg-secondary/30 rounded-xl p-6 flex flex-col items-center gap-4">
                           <div className="bg-white p-4 rounded-lg shadow-sm">
                             {(paymentMethod === "gcash" && shopQRCodes.gcash) || (paymentMethod === "paymaya" && shopQRCodes.paymaya) ? (
-                              <img src={paymentMethod === "gcash" ? shopQRCodes.gcash! : shopQRCodes.paymaya!} alt={`${paymentMethod.toUpperCase()} QR Code`} className="w-48 h-48 object-contain rounded" />
+                              <img src={paymentMethod === "gcash" ? shopQRCodes.gcash! : shopQRCodes.paymaya!} alt={`${paymentMethod.toUpperCase()} QR Code`} className="w-64 h-64 object-contain rounded" />
                             ) : (
-                              <div className="w-48 h-48 flex items-center justify-center border-2 border-dashed border-border rounded">
+                              <div className="w-64 h-64 flex items-center justify-center border-2 border-dashed border-border rounded">
                                 <div className="text-center">
                                   <QrCode className="h-16 w-16 mx-auto mb-2 text-muted-foreground" />
                                   <p className="text-xs text-muted-foreground">
@@ -1248,11 +1248,7 @@ const Booking = () => {
                             )}
                           </div>
                           <div className="text-center">
-                            <p className="text-sm font-medium mb-1">
-                              {paymentMethod === "gcash" && "GCash Number: 0917-123-4567"}
-                              {paymentMethod === "paymaya" && "PayMaya Number: 0917-987-6543"}
-                            </p>
-                            <p className="text-xs text-muted-foreground">Scan the QR code or send payment to the above details</p>
+                            <p className="text-xs text-muted-foreground">Scan the QR code to complete your payment</p>
                           </div>
                         </div>
                       </div>

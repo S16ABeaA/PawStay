@@ -271,12 +271,21 @@ export const propertyController = {
       const userId = (req as any).user?.id;
       if (!userId) return res.status(401).json({ message: 'Unauthorized' });
 
+      // Optional: filter by a single property_id
+      const filterPropertyId = req.query.property_id as string | undefined;
+
       // Get user's properties
-      const { data: props, error: propsErr } = await supabaseAdmin
+      let propsQuery = supabaseAdmin
         .from('properties')
         .select('id, capacity')
         .eq('owner_id', userId)
         .eq('is_deleted', false);
+
+      if (filterPropertyId) {
+        propsQuery = propsQuery.eq('id', filterPropertyId);
+      }
+
+      const { data: props, error: propsErr } = await propsQuery;
 
       if (propsErr) throw propsErr;
 
