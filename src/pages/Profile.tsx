@@ -302,6 +302,7 @@ const Profile = () => {
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [isAvatarDialogOpen, setIsAvatarDialogOpen] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [isViewAvatarOpen, setIsViewAvatarOpen] = useState(false);
 
   const handleAvatarSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -372,7 +373,10 @@ const Profile = () => {
           {/* Profile Header */}
           <div className="flex flex-col md:flex-row items-start md:items-center gap-6 mb-8">
             <div className="relative">
-              <Avatar className="h-24 w-24 border-4 border-background shadow-elevated">
+              <Avatar
+                className="h-24 w-24 border-4 border-background shadow-elevated cursor-pointer hover:opacity-80 transition-opacity"
+                onClick={() => setIsViewAvatarOpen(true)}
+              >
                 <AvatarImage src={user.avatar} />
                 <AvatarFallback className="bg-gradient-hero text-2xl text-white">
                   {user.firstName[0]}{user.lastName[0]}
@@ -832,6 +836,30 @@ const Profile = () => {
               {isUploading ? "Uploading..." : "Save"}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* View Avatar Full-Size Dialog */}
+      <Dialog open={isViewAvatarOpen} onOpenChange={setIsViewAvatarOpen}>
+        <DialogContent className="sm:max-w-lg flex flex-col items-center">
+          <DialogHeader>
+            <DialogTitle>Profile Picture</DialogTitle>
+          </DialogHeader>
+          <div className="flex justify-center py-4">
+            {user?.avatar ? (
+              <img
+                src={user.avatar}
+                alt={`${user.firstName} ${user.lastName}`}
+                className="max-h-[60vh] max-w-full rounded-xl object-contain"
+              />
+            ) : (
+              <Avatar className="h-48 w-48 border-4 border-background shadow-elevated">
+                <AvatarFallback className="bg-gradient-hero text-5xl text-white">
+                  {user?.firstName?.[0]}{user?.lastName?.[0]}
+                </AvatarFallback>
+              </Avatar>
+            )}
+          </div>
         </DialogContent>
       </Dialog>
     </div>
