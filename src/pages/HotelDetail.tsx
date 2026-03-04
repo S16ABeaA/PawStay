@@ -140,6 +140,14 @@ const HotelDetail = () => {
   const selected = selectedRoom || boardingServices[0] || { name: "Standard Room", price: 0 };
   const serviceFee = Math.round(selected.price * 0.10 * 100) / 100;
 
+  const formatLabel = (s: string) =>
+    s
+      ? s
+          .toString()
+          .replace(/_/g, " ")
+          .toLowerCase()
+          .replace(/(^|\s)\S/g, (t) => t.toUpperCase())
+      : s;
   return (
     <div className="min-h-screen bg-background">
       <Header />
@@ -220,6 +228,50 @@ const HotelDetail = () => {
                         <span className="text-sm font-medium">{name}</span>
                       </div>
                     ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Pet types and dog sizes (improved design) */}
+              {(property.pet_types_accepted?.length > 0 || property.dog_sizes?.length > 0) && (
+                <div className="mb-8">
+                  <h2 className="font-semibold text-xl mb-4">Pet Types & Sizes</h2>
+
+                  <div className="flex flex-col gap-4">
+                    {property.pet_types_accepted?.length > 0 && (
+                      <div>
+                        <h3 className="text-sm font-medium mb-3">Accepted Pets</h3>
+                        <div className="flex flex-wrap gap-2">
+                          {property.pet_types_accepted.map((p: string, i: number) => (
+                            <span
+                              key={i}
+                              className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-gradient-to-r from-primary/5 to-primary/10 text-primary text-sm font-medium border border-primary/10 shadow-sm"
+                              aria-label={`Accepted pet ${formatLabel(p)}`}
+                            >
+                              <span className="text-xs">🐾</span>
+                              <span>{formatLabel(p)}</span>
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {property.dog_sizes?.length > 0 && (
+                      <div>
+                        <h3 className="text-sm font-medium mb-3">Dog Sizes</h3>
+                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+                          {property.dog_sizes.map((d: string, i: number) => (
+                            <div
+                              key={i}
+                              className="inline-flex items-center justify-center px-3 py-2 rounded-xl bg-secondary/60 text-sm font-semibold text-foreground border border-border"
+                              aria-label={`Dog size ${formatLabel(d)}`}
+                            >
+                              {formatLabel(d)}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
