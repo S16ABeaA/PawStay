@@ -40,6 +40,8 @@ const Veterinary = () => {
   const [timeSlot, setTimeSlot] = useState<string>("");
   const [dateError, setDateError] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
+  const PAGE_SIZE = 9;
+  const [displayCount, setDisplayCount] = useState(PAGE_SIZE);
   type SortOption = "default" | "price-asc" | "price-desc" | "rating-desc" | "name-asc" | "distance-asc";
   const [sortBy, setSortBy] = useState<SortOption>("default");
   const sortLabels: Record<SortOption, string> = {
@@ -84,6 +86,20 @@ const Veterinary = () => {
     setDateError(null);
   };
 
+  // Reset UI and reload results, then scroll to results
+  const handleResetAllAndReload = () => {
+    handleResetAll();
+    loadClinics();
+    setTimeout(() => {
+      const el = resultsRef.current;
+      if (!el) return;
+      const header = document.querySelector('header');
+      const offset = (header?.clientHeight ?? 0) + 8;
+      const y = el.getBoundingClientRect().top + window.scrollY - offset;
+      window.scrollTo({ top: y, behavior: 'smooth' });
+    }, 120);
+  };
+
   const loadClinics = async () => {
     setLoading(true);
     try {
@@ -102,6 +118,7 @@ const Veterinary = () => {
         timeSlot: timeSlot || undefined,
       });
       setClinics(data || []);
+      setDisplayCount(PAGE_SIZE);
     } catch (err) {
       console.error("Filter Error:", err);
       setClinics([]);
@@ -210,7 +227,7 @@ const Veterinary = () => {
                     variant="ghost"
                     size="sm"
                     className="h-8 px-2 text-xs hover:bg-destructive/10 hover:text-destructive"
-                    onClick={handleResetAll}
+                    onClick={handleResetAllAndReload}
                   >
                     Reset All
                   </Button>
@@ -488,7 +505,7 @@ const Veterinary = () => {
                         break;
                     }
 
-                    return list.map((c) => (
+                    return list.slice(0, displayCount).map((c) => (
                       <VeterinaryCard key={c.id} clinic={{
                         ...c,
                         image: c.cover_image || "https://images.unsplash.com/photo-1628009368231-7bb7cfcb0def?w=800",
@@ -500,6 +517,14 @@ const Veterinary = () => {
                       }} />
                     ));
                   })()}
+                </div>
+              )}
+              {/* Load More */}
+              {clinics.length > displayCount && (
+                <div className="text-center mt-10">
+                  <Button variant="outline" size="lg" onClick={() => setDisplayCount(c => Math.min(c + PAGE_SIZE, clinics.length))}>
+                    Load More Clinics
+                  </Button>
                 </div>
               )}
             </div>

@@ -36,6 +36,8 @@ const Hotels = () => {
   const [checkOut, setCheckOut] = useState("");
   const [dateError, setDateError] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
+  const PAGE_SIZE = 9;
+  const [displayCount, setDisplayCount] = useState(PAGE_SIZE);
   type SortOption = "default" | "price-asc" | "price-desc" | "rating-desc" | "name-asc" | "distance-asc";
   const [sortBy, setSortBy] = useState<SortOption>("default");
   const sortLabels: Record<SortOption, string> = {
@@ -83,6 +85,20 @@ const Hotels = () => {
     setDateError(null);
   };
 
+  // Reset UI and reload results, then scroll to results
+  const handleResetAllAndReload = () => {
+    handleResetAll();
+    loadHotels();
+    setTimeout(() => {
+      const el = resultsRef.current;
+      if (!el) return;
+      const header = document.querySelector("header");
+      const offset = (header?.clientHeight ?? 0) + 8;
+      const y = el.getBoundingClientRect().top + window.scrollY - offset;
+      window.scrollTo({ top: y, behavior: "smooth" });
+    }, 120);
+  };
+
   const loadHotels = async () => {
     setLoading(true);
     try {
@@ -101,6 +117,7 @@ const Hotels = () => {
         checkOut: checkOut || undefined,
       });
       setHotels(data || []);
+      setDisplayCount(PAGE_SIZE);
     } catch (err) {
       console.error("Filter Error:", err);
       setHotels([]);
@@ -207,7 +224,7 @@ const Hotels = () => {
                     variant="ghost"
                     size="sm"
                     className="h-8 px-2 text-xs hover:bg-destructive/10 hover:text-destructive"
-                    onClick={handleResetAll}
+                    onClick={handleResetAllAndReload}
                   >
                     Reset All
                   </Button>
@@ -452,7 +469,7 @@ const Hotels = () => {
                 <div className="flex justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
               ) : hotels.length === 0 ? (
                 <div className="text-center py-20 text-muted-foreground">No hotels found. Try adjusting your filters.</div>
-              ) : (
+                ) : (
                 <div className={`grid gap-6 ${viewMode === "grid" ? "grid-cols-1 md:grid-cols-2 xl:grid-cols-3" : "grid-cols-1"}`}>
                   {(() => {
                     const list = [...hotels];
@@ -476,7 +493,7 @@ const Hotels = () => {
                         break;
                     }
 
-                    return list.map((h) => (
+                    return list.slice(0, displayCount).map((h) => (
                       <HotelCard key={h.id} hotel={{
                         ...h,
                         image: h.cover_image || "https://images.unsplash.com/photo-1587300003388-59208cc962cb?w=800",
@@ -486,6 +503,14 @@ const Hotels = () => {
                       }} />
                     ));
                   })()}
+                </div>
+              )}
+              {/* Load More */}
+              {hotels.length > displayCount && (
+                <div className="text-center mt-10">
+                  <Button variant="outline" size="lg" onClick={() => setDisplayCount(c => Math.min(c + PAGE_SIZE, hotels.length))}>
+                    Load More Results
+                  </Button>
                 </div>
               )}
             </div>

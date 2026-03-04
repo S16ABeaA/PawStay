@@ -19,6 +19,8 @@ const timeSlots = [
 const Grooming = () => {
   const resultsRef = useRef<HTMLDivElement>(null);
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
+  const PAGE_SIZE = 9;
+  const [displayCount, setDisplayCount] = useState(PAGE_SIZE);
   const [priceRange, setPriceRange] = useState([0, 3000]);
   const [location, setLocation] = useState("");
   const [showFilters, setShowFilters] = useState(false);
@@ -68,6 +70,20 @@ const Grooming = () => {
     setDateError(null);
   };
 
+  // Reset UI and reload results, then scroll to results
+  const handleResetAllAndReload = () => {
+    handleResetAll();
+    loadGrooming();
+    setTimeout(() => {
+      const el = resultsRef.current;
+      if (!el) return;
+      const header = document.querySelector('header');
+      const offset = (header?.clientHeight ?? 0) + 8;
+      const y = el.getBoundingClientRect().top + window.scrollY - offset;
+      window.scrollTo({ top: y, behavior: 'smooth' });
+    }, 120);
+  };
+
   const loadGrooming = async () => {
     setLoading(true);
     try {
@@ -85,6 +101,7 @@ const Grooming = () => {
         timeSlot: timeSlot || undefined,
       });
       setShops(data || []);
+      setDisplayCount(PAGE_SIZE);
     } catch (err) {
       console.error("Grooming Fetch Error:", err);
       setShops([]);
@@ -207,7 +224,7 @@ const Grooming = () => {
                     variant="ghost"
                     size="sm"
                     className="h-8 px-2 text-xs hover:bg-destructive/10 hover:text-destructive"
-                    onClick={handleResetAll}
+                    onClick={handleResetAllAndReload}
                   >
                     Reset All
                   </Button>
@@ -450,7 +467,7 @@ const Grooming = () => {
               </div>
 
               {/* Grooming Grid */}
-              {loading ? (
+                {loading ? (
                 <div className="flex justify-center py-20">
                   <Loader2 className="h-8 w-8 animate-spin text-primary" />
                 </div>
@@ -458,13 +475,13 @@ const Grooming = () => {
                 <div className="text-center py-20 text-muted-foreground">
                   No grooming salons found in this area/price range.
                 </div>
-              ) : (
+                ) : (
                 <div className={`grid gap-6 ${
                   viewMode === "grid" 
                     ? "grid-cols-1 md:grid-cols-2 xl:grid-cols-3" 
                     : "grid-cols-1"
                 }`}>
-                  {shops.map((shop) => (
+                  {shops.slice(0, displayCount).map((shop) => (
                     <GroomingCard 
                       key={shop.id} 
                       grooming={{
@@ -484,11 +501,13 @@ const Grooming = () => {
               )}
 
               {/* Load More */}
-              <div className="text-center mt-10">
-                <Button variant="outline" size="lg">
-                  Load More Grooming Salons
-                </Button>
-              </div>
+              {shops.length > displayCount && (
+                <div className="text-center mt-10">
+                  <Button variant="outline" size="lg" onClick={() => setDisplayCount(c => Math.min(c + PAGE_SIZE, shops.length))}>
+                    Load More Grooming Salons
+                  </Button>
+                </div>
+              )}
             </div>
           </div>
         </div>

@@ -146,6 +146,8 @@ const SearchResults = () => {
   const [loading, setLoading] = useState(false);
   
   const [sortBy, setSortBy] = useState<SortOption>("default");
+  const PAGE_SIZE = 9;
+  const [displayCount, setDisplayCount] = useState(PAGE_SIZE);
 
   useEffect(() => {
     setSearchLocation(location);
@@ -238,6 +240,8 @@ const SearchResults = () => {
       }
     };
     runSearch();
+    // reset displayed count when applied filters change
+    setDisplayCount(PAGE_SIZE);
   }, [appliedFilters]);
 
   // Reset all filters
@@ -963,21 +967,26 @@ function haversineDistance(
                     </div>
                   </div>
                 ) : (
-                  sortedProperties.map((property, index) => {
-                    const mapped = mapPropertyToHotel(property, index);
-                    return <HotelCard key={mapped.id} hotel={mapped} />;
-                  })
+                    // only render the first `displayCount` items; Load More will increase this
+                    sortedProperties.slice(0, displayCount).map((property, index) => {
+                      const mapped = mapPropertyToHotel(property, index);
+                      return <HotelCard key={mapped.id} hotel={mapped} />;
+                    })
                 )}
               </div>
 
-              {/* Load More */}
-                  {properties.length > 9 && (
-                    <div className="text-center mt-10">
-                      <Button variant="outline" size="lg">
-                        Load More Results
-                      </Button>
-                    </div>
-                  )}
+                {/* Load More */}
+                {sortedProperties.length > displayCount && (
+                  <div className="text-center mt-10">
+                    <Button
+                      variant="outline"
+                      size="lg"
+                      onClick={() => setDisplayCount((c) => Math.min(c + PAGE_SIZE, sortedProperties.length))}
+                    >
+                      Load More Results
+                    </Button>
+                  </div>
+                )}
             </div>
           </div>
         </div>
