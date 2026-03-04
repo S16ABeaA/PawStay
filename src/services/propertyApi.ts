@@ -1,7 +1,7 @@
 type PropertyFilters = {
   location?: string;
-  petType?: string;
-  dogSize?: string;
+  petType?: string | string[];
+  dogSize?: string | string[];
   propertyType?: string;
   serviceCategory?: string;  // per-service filter: Boarding, Grooming, Veterinary, etc.
   checkIn?: string;

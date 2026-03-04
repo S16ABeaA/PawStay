@@ -7,8 +7,8 @@ export type HotelFilters = {
   checkin?: string;
   checkout?: string;
   timeSlot?: string;          // for same-day services like grooming/vet
-  petType?: string;
-  dogSize?: string;
+  petType?: string | string[];
+  dogSize?: string | string[];
   propertyType?: string;
   serviceCategory?: string;  // per-service filter: Boarding, Grooming, Veterinary, etc.
   minPrice?: number;
@@ -107,28 +107,44 @@ export async function getProperties(filters: HotelFilters = {}) {
     }
   }
 
-  // ── Pet type ──
+  // ── Pet type (multi-select) ──
   if (filters.petType) {
-    if (filters.petType === "others") {
-      query = query.not("exotic_pet_types", "is", null);
-    }
+    const petTypes = (Array.isArray(filters.petType) ? filters.petType : [filters.petType]).filter(Boolean);
+    if (petTypes.length > 0) {
+      const hasOthers = petTypes.some(t => t.toLowerCase() === "others");
+      const normalTypes = petTypes
+        .filter(t => t.toLowerCase() !== "others")
+        .map(t => t.charAt(0).toUpperCase() + t.slice(1).toLowerCase());
 
-    else if (has("pet_types_accepted")) {
-      const formatted =
-        filters.petType.charAt(0).toUpperCase() +
-        filters.petType.slice(1).toLowerCase();
-      query = query.contains("pet_types_accepted", [formatted]);
+      if (hasOthers && normalTypes.length === 0) {
+        query = query.not("exotic_pet_types", "is", null);
+      } else if (hasOthers && normalTypes.length > 0 && has("pet_types_accepted")) {
+        const orParts = normalTypes.map(t => `pet_types_accepted.cs.{${t}}`);
+        orParts.push("exotic_pet_types.not.is.null");
+        query = query.or(orParts.join(","));
+      } else if (normalTypes.length > 0 && has("pet_types_accepted")) {
+        if (normalTypes.length === 1) {
+          query = query.contains("pet_types_accepted", [normalTypes[0]]);
+        } else {
+          const orParts = normalTypes.map(t => `pet_types_accepted.cs.{${t}}`);
+          query = query.or(orParts.join(","));
+        }
+      }
     }
   }
 
-// -- Dog Size --
+  // ── Dog Size (multi-select) ──
   if (filters.dogSize) {
-  const formatted =
-    filters.dogSize.charAt(0).toUpperCase() +
-    filters.dogSize.slice(1).toLowerCase();
+    const dogSizes = (Array.isArray(filters.dogSize) ? filters.dogSize : [filters.dogSize]).filter(Boolean);
+    const validSizes = dogSizes.map(s => s.charAt(0).toUpperCase() + s.slice(1).toLowerCase());
 
-    if (has("dog_sizes")) {
-      query = query.contains("dog_sizes", [formatted]);
+    if (validSizes.length > 0 && has("dog_sizes")) {
+      if (validSizes.length === 1) {
+        query = query.contains("dog_sizes", [validSizes[0]]);
+      } else {
+        const orParts = validSizes.map(s => `dog_sizes.cs.{${s}}`);
+        query = query.or(orParts.join(","));
+      }
     }
   }
 

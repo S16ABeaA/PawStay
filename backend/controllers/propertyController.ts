@@ -19,6 +19,21 @@ export const propertyController = {
         return Number.isFinite(num) ? num : undefined;
       };
 
+      const normalizeStringOrArray = (val: unknown): string | string[] | undefined => {
+        if (!val) return undefined;
+        if (Array.isArray(val)) {
+          const items = val.map((v) => String(v).trim().toLowerCase()).filter(Boolean);
+          return items.length === 1 ? items[0] : items.length > 0 ? items : undefined;
+        }
+        const str = String(val).trim();
+        if (!str) return undefined;
+        if (str.includes(",")) {
+          const items = str.split(",").map((v) => v.trim().toLowerCase()).filter(Boolean);
+          return items.length === 1 ? items[0] : items.length > 0 ? items : undefined;
+        }
+        return str.toLowerCase();
+      };
+
       const normalizeAmenities = (val: unknown): string[] | undefined => {
         if (!val) return undefined;
         if (Array.isArray(val)) {
@@ -36,8 +51,8 @@ export const propertyController = {
         checkin: asString(source.checkin || source.checkIn),
         checkout: asString(source.checkout || source.checkOut),
         timeSlot: asString(source.timeSlot || source.time_slot),
-        petType: asString(source.petType || source.pet)?.toLowerCase(),
-        dogSize: asString(source.dogSize || source.dogsize)?.toLowerCase(),
+        petType: normalizeStringOrArray(source.petType || source.pet),
+        dogSize: normalizeStringOrArray(source.dogSize || source.dogsize),
         propertyType: asString(source.propertyType || source.type)?.toLowerCase(),
         serviceCategory: asString(source.serviceCategory),
         minPrice: asNumber(source.minPrice),

@@ -1,13 +1,21 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import VeterinaryCard from "@/components/VeterinaryCard";
 import { fetchProperties } from "@/services/propertyApi";
 import { fetchAmenities } from "@/services/amenitiesApi";
-import { Loader2, Star, ArrowRight, SlidersHorizontal } from "lucide-react";
+import { Loader2, Star, ArrowRight, SlidersHorizontal, ArrowUpDown, Grid3X3, List } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+  DropdownMenuLabel,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Slider } from "@/components/ui/slider";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -17,6 +25,7 @@ const timeSlots = [
 ];
 
 const Veterinary = () => {
+  const resultsRef = useRef<HTMLDivElement>(null);
   const [clinics, setClinics] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [priceRange, setPriceRange] = useState([0, 3000]);
@@ -25,11 +34,22 @@ const Veterinary = () => {
   const [selectedAmenities, setSelectedAmenities] = useState<string[]>([]);
   const [amenitiesList, setAmenitiesList] = useState<any[]>([]);
   const [minRating, setMinRating] = useState<number | null>(null);
-  const [petType, setPetType] = useState<string>("Dog");
-  const [dogSize, setDogSize] = useState<string>("Small");
+  const [petTypes, setPetTypes] = useState<string[]>(["Dog"]);
+  const [dogSizes, setDogSizes] = useState<string[]>(["Small"]);
   const [appointmentDate, setAppointmentDate] = useState("");
   const [timeSlot, setTimeSlot] = useState<string>("");
   const [dateError, setDateError] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
+  type SortOption = "default" | "price-asc" | "price-desc" | "rating-desc" | "name-asc" | "distance-asc";
+  const [sortBy, setSortBy] = useState<SortOption>("default");
+  const sortLabels: Record<SortOption, string> = {
+    default: "Default",
+    "price-asc": "Price: Low to High",
+    "price-desc": "Price: High to Low",
+    "rating-desc": "Rating: High to Low",
+    "name-asc": "Name: A to Z",
+    "distance-asc": "Distance: Near to Far",
+  };
 
   const today = new Date();
   const todayISO = today.toISOString().split("T")[0];
@@ -54,8 +74,8 @@ const Veterinary = () => {
 
   const handleResetAll = () => {
     setLocation("");
-    setPetType("Dog");
-    setDogSize("Small");
+    setPetTypes(["Dog"]);
+    setDogSizes(["Small"]);
     setPriceRange([0, 3000]);
     setMinRating(null);
     setSelectedAmenities([]);
@@ -76,8 +96,8 @@ const Veterinary = () => {
         maxPrice: priceRange[1],
         amenities: selectedAmenities.length > 0 ? selectedAmenities : undefined,
         rating: minRating ?? undefined,
-        petType: petType?.toLowerCase(),
-        dogSize: petType === "Dog" && dogSize ? dogSize : undefined,
+        petType: petTypes.length > 0 ? petTypes.map(p => p.toLowerCase()) : undefined,
+        dogSize: petTypes.includes("Dog") && dogSizes.length > 0 ? dogSizes : undefined,
         checkIn: appointmentDate || undefined,
         timeSlot: timeSlot || undefined,
       });
@@ -183,7 +203,7 @@ const Veterinary = () => {
           <div className="flex flex-col lg:flex-row gap-8">
             {/* Filters Sidebar */}
             <aside className={`lg:w-72 shrink-0 ${showFilters ? 'block' : 'hidden lg:block'}`}>
-              <div className="bg-card rounded-2xl p-6 shadow-soft sticky top-24 border">
+              <div className="bg-card rounded-2xl p-6 shadow-soft">
                 <div className="flex items-center justify-between mb-6">
                   <h3 className="font-semibold text-lg">Filters</h3>
                   <Button
@@ -204,11 +224,14 @@ const Veterinary = () => {
                       <button
                         key={pet}
                         onClick={() => {
-                          setPetType(pet);
-                          if (pet !== "Dog") setDogSize("Small");
+                          setPetTypes(prev =>
+                            prev.includes(pet)
+                              ? prev.filter(p => p !== pet)
+                              : [...prev, pet]
+                          );
                         }}
                         className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium border transition-all duration-200 active:scale-95 ${
-                          petType === pet
+                          petTypes.includes(pet)
                             ? "bg-primary text-primary-foreground border-primary shadow-sm"
                             : "bg-background text-foreground border-border hover:border-foreground/40 hover:bg-muted"
                         }`}
@@ -220,16 +243,20 @@ const Veterinary = () => {
                 </div>
 
                 {/* Dog Size */}
-                {petType === "Dog" && (
+                {petTypes.includes("Dog") && (
                   <div className="pb-6 border-b border-border/50">
                     <label className="text-sm font-semibold text-foreground mb-3 block">Dog Size</label>
                     <div className="flex flex-wrap gap-2">
                       {["Small", "Medium", "Large", "Giant"].map((size) => (
                         <button
                           key={size}
-                          onClick={() => setDogSize(size)}
+                          onClick={() => setDogSizes(prev =>
+                            prev.includes(size)
+                              ? prev.filter(s => s !== size)
+                              : [...prev, size]
+                          )}
                           className={`flex-1 px-4 py-2 rounded-lg text-sm font-medium border transition-all duration-200 active:scale-95 ${
-                            dogSize === size
+                            dogSizes.includes(size)
                               ? "bg-primary text-primary-foreground border-primary shadow-sm"
                               : "bg-background text-foreground border-border hover:border-foreground/40 hover:bg-muted"
                           }`}
@@ -357,7 +384,17 @@ const Veterinary = () => {
                 <Button
                   variant="hero"
                   className="w-full mt-6"
-                  onClick={loadClinics}
+                  onClick={() => {
+                    loadClinics();
+                    setTimeout(() => {
+                      const el = resultsRef.current;
+                      if (!el) return;
+                      const header = document.querySelector('header');
+                      const offset = (header?.clientHeight ?? 0) + 8;
+                      const y = el.getBoundingClientRect().top + window.scrollY - offset;
+                      window.scrollTo({ top: y, behavior: 'smooth' });
+                    }, 120);
+                  }}
                   disabled={Boolean(dateError)}
                 >
                   Apply Filters
@@ -366,7 +403,56 @@ const Veterinary = () => {
             </aside>
 
             {/* Results */}
-            <div className="flex-1">
+            <div className="flex-1" ref={resultsRef}>
+              <div className="flex items-center justify-between mb-6">
+                <div />
+                <div className="flex items-center gap-2 ml-auto">
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant={sortBy !== "default" ? "default" : "outline"}
+                        size="sm"
+                        className="gap-2"
+                      >
+                        <ArrowUpDown className="h-4 w-4" />
+                        {sortBy === "default" ? "Sort" : sortLabels[sortBy]}
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-48">
+                      <DropdownMenuLabel>Sort By</DropdownMenuLabel>
+                      <DropdownMenuSeparator />
+                      {Object.keys(sortLabels).map((option) => (
+                        <DropdownMenuItem
+                          key={option}
+                          onClick={() => setSortBy(option as any)}
+                          className={sortBy === option ? "bg-accent font-medium" : ""}
+                        >
+                          {sortLabels[option as keyof typeof sortLabels]}
+                        </DropdownMenuItem>
+                      ))}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+
+                  <div className="hidden md:flex items-center gap-1 p-1 bg-secondary rounded-lg">
+                    <button
+                      onClick={() => setViewMode("grid")}
+                      className={`p-2 rounded-md transition-colors ${
+                        viewMode === "grid" ? "bg-card shadow-sm" : "hover:bg-card/50"
+                      }`}
+                    >
+                      <Grid3X3 className="h-4 w-4" />
+                    </button>
+                    <button
+                      onClick={() => setViewMode("list")}
+                      className={`p-2 rounded-md transition-colors ${
+                        viewMode === "list" ? "bg-card shadow-sm" : "hover:bg-card/50"
+                      }`}
+                    >
+                      <List className="h-4 w-4" />
+                    </button>
+                  </div>
+                </div>
+              </div>
               <div className="flex items-center justify-between mb-6 lg:hidden">
                 <h2 className="text-2xl font-bold">Veterinary Clinics</h2>
                 <Button variant="outline" onClick={() => setShowFilters(!showFilters)}>
@@ -379,18 +465,41 @@ const Veterinary = () => {
               ) : clinics.length === 0 ? (
                 <div className="text-center py-20 text-muted-foreground">No clinics found. Try adjusting your filters.</div>
               ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                  {clinics.map((c) => (
-                    <VeterinaryCard key={c.id} clinic={{
-                      ...c,
-                      image: c.cover_image || "https://images.unsplash.com/photo-1628009368231-7bb7cfcb0def?w=800",
-                      location: c.city,
-                      price: c.cheapest_service_price,
-                      services: ["Consultation", "Vaccination"],
-                      rating: c.rating || 0,
-                      reviews: c.review_count || 0
-                    }} />
-                  ))}
+                <div className={`grid gap-6 ${viewMode === "grid" ? "grid-cols-1 md:grid-cols-2 xl:grid-cols-3" : "grid-cols-1"}`}>
+                  {(() => {
+                    const list = [...clinics];
+                    const getPrice = (p: any) => Number(p?.cheapest_service_price ?? 0);
+                    const getRating = (p: any) => Number(p?.rating ?? 0);
+                    const getName = (p: any) => String(p?.name ?? "");
+                    switch (sortBy) {
+                      case "price-asc":
+                        list.sort((a, b) => getPrice(a) - getPrice(b));
+                        break;
+                      case "price-desc":
+                        list.sort((a, b) => getPrice(b) - getPrice(a));
+                        break;
+                      case "rating-desc":
+                        list.sort((a, b) => getRating(b) - getRating(a));
+                        break;
+                      case "name-asc":
+                        list.sort((a, b) => getName(a).localeCompare(getName(b)));
+                        break;
+                      default:
+                        break;
+                    }
+
+                    return list.map((c) => (
+                      <VeterinaryCard key={c.id} clinic={{
+                        ...c,
+                        image: c.cover_image || "https://images.unsplash.com/photo-1628009368231-7bb7cfcb0def?w=800",
+                        location: c.city,
+                        price: c.cheapest_service_price,
+                        services: ["Consultation", "Vaccination"],
+                        rating: c.rating || 0,
+                        reviews: c.review_count || 0
+                      }} />
+                    ));
+                  })()}
                 </div>
               )}
             </div>

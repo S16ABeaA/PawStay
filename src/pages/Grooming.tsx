@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import GroomingCard from "@/components/GroomingCard";
@@ -17,6 +17,7 @@ const timeSlots = [
 ];
 
 const Grooming = () => {
+  const resultsRef = useRef<HTMLDivElement>(null);
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [priceRange, setPriceRange] = useState([0, 3000]);
   const [location, setLocation] = useState("");
@@ -28,8 +29,8 @@ const Grooming = () => {
   const [selectedAmenities, setSelectedAmenities] = useState<string[]>([]);
   const [amenitiesList, setAmenitiesList] = useState<any[]>([]);
   const [minRating, setMinRating] = useState<number | null>(null);
-  const [petType, setPetType] = useState<string>("Dog");
-  const [dogSize, setDogSize] = useState<string>("Small");
+  const [petTypes, setPetTypes] = useState<string[]>(["Dog"]);
+  const [dogSizes, setDogSizes] = useState<string[]>(["Small"]);
   const [appointmentDate, setAppointmentDate] = useState("");
   const [timeSlot, setTimeSlot] = useState<string>("");
   const [dateError, setDateError] = useState<string | null>(null);
@@ -57,8 +58,8 @@ const Grooming = () => {
 
   const handleResetAll = () => {
     setLocation("");
-    setPetType("Dog");
-    setDogSize("Small");
+    setPetTypes(["Dog"]);
+    setDogSizes(["Small"]);
     setPriceRange([0, 3000]);
     setMinRating(null);
     setSelectedAmenities([]);
@@ -78,8 +79,8 @@ const Grooming = () => {
         maxPrice: priceRange[1],
         amenities: selectedAmenities.length > 0 ? selectedAmenities : undefined,
         rating: minRating ?? undefined,
-        petType: petType?.toLowerCase(),
-        dogSize: petType === "Dog" && dogSize ? dogSize : undefined,
+        petType: petTypes.length > 0 ? petTypes.map(p => p.toLowerCase()) : undefined,
+        dogSize: petTypes.includes("Dog") && dogSizes.length > 0 ? dogSizes : undefined,
         checkIn: appointmentDate || undefined,
         timeSlot: timeSlot || undefined,
       });
@@ -199,7 +200,7 @@ const Grooming = () => {
           <div className="flex flex-col lg:flex-row gap-8">
             {/* Filters Sidebar */}
             <aside className={`lg:w-72 shrink-0 ${showFilters ? 'block' : 'hidden lg:block'}`}>
-              <div className="bg-card rounded-2xl p-6 shadow-soft sticky top-24 border">
+              <div className="bg-card rounded-2xl p-6 shadow-soft">
                 <div className="flex items-center justify-between mb-6">
                   <h3 className="font-semibold text-lg">Filters</h3>
                   <Button
@@ -220,11 +221,14 @@ const Grooming = () => {
                       <button
                         key={pet}
                         onClick={() => {
-                          setPetType(pet);
-                          if (pet !== "Dog") setDogSize("Small");
+                          setPetTypes(prev =>
+                            prev.includes(pet)
+                              ? prev.filter(p => p !== pet)
+                              : [...prev, pet]
+                          );
                         }}
                         className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium border transition-all duration-200 active:scale-95 ${
-                          petType === pet
+                          petTypes.includes(pet)
                             ? "bg-primary text-primary-foreground border-primary shadow-sm"
                             : "bg-background text-foreground border-border hover:border-foreground/40 hover:bg-muted"
                         }`}
@@ -236,16 +240,20 @@ const Grooming = () => {
                 </div>
 
                 {/* Dog Size */}
-                {petType === "Dog" && (
+                {petTypes.includes("Dog") && (
                   <div className="pb-6 border-b border-border/50">
                     <label className="text-sm font-semibold text-foreground mb-3 block">Dog Size</label>
                     <div className="flex flex-wrap gap-2">
                       {["Small", "Medium", "Large", "Giant"].map((size) => (
                         <button
                           key={size}
-                          onClick={() => setDogSize(size)}
+                          onClick={() => setDogSizes(prev =>
+                            prev.includes(size)
+                              ? prev.filter(s => s !== size)
+                              : [...prev, size]
+                          )}
                           className={`flex-1 px-4 py-2 rounded-lg text-sm font-medium border transition-all duration-200 active:scale-95 ${
-                            dogSize === size
+                            dogSizes.includes(size)
                               ? "bg-primary text-primary-foreground border-primary shadow-sm"
                               : "bg-background text-foreground border-border hover:border-foreground/40 hover:bg-muted"
                           }`}
@@ -384,7 +392,17 @@ const Grooming = () => {
                 <Button
                   variant="hero"
                   className="w-full mt-6"
-                  onClick={loadGrooming}
+                  onClick={() => {
+                    loadGrooming();
+                    setTimeout(() => {
+                      const el = resultsRef.current;
+                      if (!el) return;
+                      const header = document.querySelector('header');
+                      const offset = (header?.clientHeight ?? 0) + 8;
+                      const y = el.getBoundingClientRect().top + window.scrollY - offset;
+                      window.scrollTo({ top: y, behavior: 'smooth' });
+                    }, 120);
+                  }}
                   disabled={Boolean(dateError)}
                 >
                   Apply Filters
@@ -393,7 +411,7 @@ const Grooming = () => {
             </aside>
 
             {/* Main Content */}
-            <div className="flex-1">
+            <div className="flex-1" ref={resultsRef}>
               {/* Controls */}
               <div className="flex items-center justify-between mb-6">
                 <Button 
