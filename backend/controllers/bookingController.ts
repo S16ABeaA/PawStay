@@ -1323,3 +1323,417 @@ export const adminDeleteBooking = async (req: Request, res: Response) => {
     return res.status(500).json({ error: "Failed to delete booking.", details: err?.message || err });
   }
 };
+
+/**
+ * GET /api/bookings/revenue/total
+ * Returns the total revenue from all service fees in the bookings table (paid bookings only).
+ * Super admin only.
+ */
+export const getTotalRevenue = async (req: Request, res: Response) => {
+  try {
+    const userRole = (req as any).user?.role;
+    
+    // Only super_admin can access this
+    if (userRole !== "super_admin") {
+      return res.status(403).json({ error: "Access denied. Super admin only." });
+    }
+
+    // Query the database to sum all service fees from paid bookings only
+    const { data, error } = await supabaseAdmin
+      .from("bookings")
+      .select("service_fee")
+      .eq("is_deleted", false)
+      .eq("payment_status", "paid");
+
+    if (error) throw error;
+
+    // Calculate total by summing up all service fees
+    const totalRevenue = (data ?? []).reduce((sum: number, booking: any) => {
+      return sum + (parseFloat(booking.service_fee) || 0);
+    }, 0);
+
+    return res.json({ 
+      totalRevenue: totalRevenue,
+      count: data?.length || 0,
+      currency: "PHP"
+    });
+  } catch (err: any) {
+    console.error("getTotalRevenue error:", err);
+    return res.status(500).json({ error: "Failed to get total revenue.", details: err?.message || err });
+  }
+};
+
+/**
+ * GET /api/bookings/revenue/by-service-type
+ * Returns revenue breakdown by service type (boarding, grooming, veterinary, daycare, transport).
+ * Only includes paid bookings.
+ * Super admin only.
+ */
+export const getRevenueByServiceType = async (req: Request, res: Response) => {
+  try {
+    const userRole = (req as any).user?.role;
+    
+    if (userRole !== "super_admin") {
+      return res.status(403).json({ error: "Access denied. Super admin only." });
+    }
+
+    const { data, error } = await supabaseAdmin
+      .from("bookings")
+      .select("service_type, service_fee")
+      .eq("is_deleted", false)
+      .eq("payment_status", "paid");
+
+    if (error) throw error;
+
+    // Group by service type and sum service fees
+    const revenueByType: Record<string, { total: number; count: number }> = {};
+    
+    (data ?? []).forEach((booking: any) => {
+      const serviceType = booking.service_type || "Unknown";
+      const fee = parseFloat(booking.service_fee) || 0;
+      
+      if (!revenueByType[serviceType]) {
+        revenueByType[serviceType] = { total: 0, count: 0 };
+      }
+      revenueByType[serviceType].total += fee;
+      revenueByType[serviceType].count += 1;
+    });
+
+    // Convert to array and sort by revenue descending
+    const breakdown = Object.entries(revenueByType)
+      .map(([serviceType, { total, count }]) => ({
+        serviceType,
+        revenue: total,
+        count,
+      }))
+      .sort((a, b) => b.revenue - a.revenue);
+
+    return res.json({ breakdown, currency: "PHP" });
+  } catch (err: any) {
+    console.error("getRevenueByServiceType error:", err);
+    return res.status(500).json({ error: "Failed to get revenue by service type.", details: err?.message || err });
+  }
+};
+
+/**
+ * GET /api/bookings/revenue/by-property
+ * Returns revenue breakdown by property (paid bookings only).
+ * Super admin only.
+ */
+export const getRevenueByProperty = async (req: Request, res: Response) => {
+  try {
+    const userRole = (req as any).user?.role;
+    
+    if (userRole !== "super_admin") {
+      return res.status(403).json({ error: "Access denied. Super admin only." });
+    }
+
+    // Query bookings with property details (paid bookings only)
+    const { data, error } = await supabaseAdmin
+      .from("bookings")
+      .select("property_id, service_fee, properties:property_id(name)")
+      .eq("is_deleted", false)
+      .eq("payment_status", "paid");
+
+    if (error) throw error;
+
+    // Group by property and sum service fees
+    const revenueByProperty: Record<string, { propertyName: string; total: number; count: number }> = {};
+    
+    (data ?? []).forEach((booking: any) => {
+      const propertyId = booking.property_id;
+      const propertyName = booking.properties?.name || "Unknown Property";
+      const fee = parseFloat(booking.service_fee) || 0;
+      
+      if (!revenueByProperty[propertyId]) {
+        revenueByProperty[propertyId] = { propertyName, total: 0, count: 0 };
+      }
+      revenueByProperty[propertyId].total += fee;
+      revenueByProperty[propertyId].count += 1;
+    });
+
+    // Convert to array and sort by revenue descending
+    const breakdown = Object.entries(revenueByProperty)
+      .map(([propertyId, { propertyName, total, count }]) => ({
+        propertyId,
+        propertyName,
+        revenue: total,
+        count,
+      }))
+      .sort((a, b) => b.revenue - a.revenue);
+
+    return res.json({ breakdown, currency: "PHP" });
+  } catch (err: any) {
+    console.error("getRevenueByProperty error:", err);
+    return res.status(500).json({ error: "Failed to get revenue by property.", details: err?.message || err });
+  }
+};
+
+/**
+ * GET /api/bookings/revenue/by-location
+ * Returns revenue breakdown by location/city (paid bookings only).
+ * Super admin only.
+ */
+export const getRevenueByLocation = async (req: Request, res: Response) => {
+  try {
+    const userRole = (req as any).user?.role;
+    
+    if (userRole !== "super_admin") {
+      return res.status(403).json({ error: "Access denied. Super admin only." });
+    }
+
+    // Query bookings with property location (paid bookings only)
+    const { data, error } = await supabaseAdmin
+      .from("bookings")
+      .select("service_fee, properties:property_id(city)")
+      .eq("is_deleted", false)
+      .eq("payment_status", "paid");
+
+    if (error) throw error;
+
+    // Group by city and sum service fees
+    const revenueByLocation: Record<string, { total: number; count: number }> = {};
+    
+    (data ?? []).forEach((booking: any) => {
+      const city = booking.properties?.city || "Unknown Location";
+      const fee = parseFloat(booking.service_fee) || 0;
+      
+      if (!revenueByLocation[city]) {
+        revenueByLocation[city] = { total: 0, count: 0 };
+      }
+      revenueByLocation[city].total += fee;
+      revenueByLocation[city].count += 1;
+    });
+
+    // Convert to array and sort by revenue descending
+    const breakdown = Object.entries(revenueByLocation)
+      .map(([city, { total, count }]) => ({
+        city,
+        revenue: total,
+        count,
+      }))
+      .sort((a, b) => b.revenue - a.revenue);
+
+    return res.json({ breakdown, currency: "PHP" });
+  } catch (err: any) {
+    console.error("getRevenueByLocation error:", err);
+    return res.status(500).json({ error: "Failed to get revenue by location.", details: err?.message || err });
+  }
+};
+
+/**
+ * GET /api/bookings/revenue/by-time-period
+ * Returns revenue breakdown by time period (daily, weekly, monthly).
+ * Only includes paid bookings.
+ * Super admin only.
+ */
+export const getRevenueByTimePeriod = async (req: Request, res: Response) => {
+  try {
+    const userRole = (req as any).user?.role;
+    
+    if (userRole !== "super_admin") {
+      return res.status(403).json({ error: "Access denied. Super admin only." });
+    }
+
+    // Query all paid bookings with created_at timestamp
+    const { data, error } = await supabaseAdmin
+      .from("bookings")
+      .select("service_fee, created_at")
+      .eq("is_deleted", false)
+      .eq("payment_status", "paid")
+      .order("created_at", { ascending: false });
+
+    if (error) throw error;
+
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const startOfWeek = new Date(today);
+    startOfWeek.setDate(today.getDate() - today.getDay()); // Sunday
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+    let dailyRevenue = 0;
+    let dailyCount = 0;
+    let weeklyRevenue = 0;
+    let weeklyCount = 0;
+    let monthlyRevenue = 0;
+    let monthlyCount = 0;
+
+    (data ?? []).forEach((booking: any) => {
+      const fee = parseFloat(booking.service_fee) || 0;
+      const createdAt = new Date(booking.created_at);
+
+      // Daily (today)
+      if (createdAt >= today) {
+        dailyRevenue += fee;
+        dailyCount += 1;
+      }
+
+      // Weekly (this week)
+      if (createdAt >= startOfWeek) {
+        weeklyRevenue += fee;
+        weeklyCount += 1;
+      }
+
+      // Monthly (this month)
+      if (createdAt >= startOfMonth) {
+        monthlyRevenue += fee;
+        monthlyCount += 1;
+      }
+    });
+
+    return res.json({
+      daily: {
+        revenue: dailyRevenue,
+        count: dailyCount,
+        period: "Today"
+      },
+      weekly: {
+        revenue: weeklyRevenue,
+        count: weeklyCount,
+        period: "This Week"
+      },
+      monthly: {
+        revenue: monthlyRevenue,
+        count: monthlyCount,
+        period: "This Month"
+      },
+      currency: "PHP"
+    });
+  } catch (err: any) {
+    console.error("getRevenueByTimePeriod error:", err);
+    return res.status(500).json({ error: "Failed to get revenue by time period.", details: err?.message || err });
+  }
+};
+
+/**
+ * GET /api/bookings/revenue/period-comparison
+ * Returns revenue comparison between current and previous periods (monthly, quarterly, yearly).
+ * Shows percentage change between periods.
+ * Only includes paid bookings.
+ * Super admin only.
+ */
+export const getRevenuePeriodComparison = async (req: Request, res: Response) => {
+  try {
+    const userRole = (req as any).user?.role;
+    
+    if (userRole !== "super_admin") {
+      return res.status(403).json({ error: "Access denied. Super admin only." });
+    }
+
+    // Query all paid bookings with created_at timestamp
+    const { data, error } = await supabaseAdmin
+      .from("bookings")
+      .select("service_fee, created_at")
+      .eq("is_deleted", false)
+      .eq("payment_status", "paid")
+      .order("created_at", { ascending: false });
+
+    if (error) throw error;
+
+    const now = new Date();
+
+    // MONTHLY COMPARISON
+    const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const previousMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const previousMonthEnd = new Date(currentMonthStart);
+
+    let currentMonthRevenue = 0;
+    let previousMonthRevenue = 0;
+
+    (data ?? []).forEach((booking: any) => {
+      const createdAt = new Date(booking.created_at);
+      const fee = parseFloat(booking.service_fee) || 0;
+
+      if (createdAt >= currentMonthStart) {
+        currentMonthRevenue += fee;
+      } else if (createdAt >= previousMonthStart && createdAt < previousMonthEnd) {
+        previousMonthRevenue += fee;
+      }
+    });
+
+    const monthlyPercentageChange =
+      previousMonthRevenue > 0
+        ? ((currentMonthRevenue - previousMonthRevenue) / previousMonthRevenue) * 100
+        : currentMonthRevenue > 0
+          ? 100
+          : 0;
+
+    // QUARTERLY COMPARISON
+    const currentQuarter = Math.floor(now.getMonth() / 3);
+    const currentQuarterStart = new Date(now.getFullYear(), currentQuarter * 3, 1);
+    const previousQuarterStart = new Date(now.getFullYear(), (currentQuarter - 1) * 3, 1);
+    const previousQuarterEnd = new Date(currentQuarterStart);
+
+    let currentQuarterRevenue = 0;
+    let previousQuarterRevenue = 0;
+
+    (data ?? []).forEach((booking: any) => {
+      const createdAt = new Date(booking.created_at);
+      const fee = parseFloat(booking.service_fee) || 0;
+
+      if (createdAt >= currentQuarterStart) {
+        currentQuarterRevenue += fee;
+      } else if (createdAt >= previousQuarterStart && createdAt < previousQuarterEnd) {
+        previousQuarterRevenue += fee;
+      }
+    });
+
+    const quarterlyPercentageChange =
+      previousQuarterRevenue > 0
+        ? ((currentQuarterRevenue - previousQuarterRevenue) / previousQuarterRevenue) * 100
+        : currentQuarterRevenue > 0
+          ? 100
+          : 0;
+
+    // YEARLY COMPARISON
+    const currentYearStart = new Date(now.getFullYear(), 0, 1);
+    const previousYearStart = new Date(now.getFullYear() - 1, 0, 1);
+    const previousYearEnd = new Date(currentYearStart);
+
+    let currentYearRevenue = 0;
+    let previousYearRevenue = 0;
+
+    (data ?? []).forEach((booking: any) => {
+      const createdAt = new Date(booking.created_at);
+      const fee = parseFloat(booking.service_fee) || 0;
+
+      if (createdAt >= currentYearStart) {
+        currentYearRevenue += fee;
+      } else if (createdAt >= previousYearStart && createdAt < previousYearEnd) {
+        previousYearRevenue += fee;
+      }
+    });
+
+    const yearlyPercentageChange =
+      previousYearRevenue > 0
+        ? ((currentYearRevenue - previousYearRevenue) / previousYearRevenue) * 100
+        : currentYearRevenue > 0
+          ? 100
+          : 0;
+
+    return res.json({
+      monthly: {
+        current: currentMonthRevenue,
+        previous: previousMonthRevenue,
+        percentageChange: monthlyPercentageChange,
+        period: "Monthly"
+      },
+      quarterly: {
+        current: currentQuarterRevenue,
+        previous: previousQuarterRevenue,
+        percentageChange: quarterlyPercentageChange,
+        period: "Quarterly"
+      },
+      yearly: {
+        current: currentYearRevenue,
+        previous: previousYearRevenue,
+        percentageChange: yearlyPercentageChange,
+        period: "Yearly"
+      },
+      currency: "PHP"
+    });
+  } catch (err: any) {
+    console.error("getRevenuePeriodComparison error:", err);
+    return res.status(500).json({ error: "Failed to get revenue period comparison.", details: err?.message || err });
+  }
+};
