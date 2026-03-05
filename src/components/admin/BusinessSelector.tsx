@@ -26,7 +26,7 @@ const BusinessSelector = () => {
       return (
         <div className="flex items-center gap-2 text-sm">
           <Building2 className="h-4 w-4 text-primary" />
-          <span className="font-medium text-foreground truncate max-w-[200px]">
+          <span className="font-medium text-foreground truncate max-w-[200px] whitespace-nowrap">
             {properties[0].name}
           </span>
         </div>
@@ -39,16 +39,16 @@ const BusinessSelector = () => {
     <div className="flex items-center gap-2">
       <Building2 className="h-4 w-4 text-primary shrink-0" />
       <Select value={selectedPropertyId ?? ""} onValueChange={setSelectedPropertyId}>
-        <SelectTrigger className="w-[220px] h-9 text-sm font-medium">
+        <SelectTrigger className="w-[220px] h-9 text-sm font-medium truncate overflow-hidden whitespace-nowrap">
           <SelectValue placeholder="Select business" />
         </SelectTrigger>
         <SelectContent>
           {properties.map((p) => (
             <SelectItem key={p.id} value={p.id}>
-              <div className="flex items-center gap-2">
-                <span className="truncate">{p.name}</span>
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="truncate flex-1 min-w-0">{p.name}</span>
                 {p.city && (
-                  <span className="text-xs text-muted-foreground">— {p.city}</span>
+                  <span className="text-xs text-muted-foreground flex-shrink-0 ml-2 whitespace-nowrap">— {p.city}</span>
                 )}
               </div>
             </SelectItem>

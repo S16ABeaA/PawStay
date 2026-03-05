@@ -16,9 +16,9 @@ const AdminLayout = ({ children, title, subtitle }: AdminLayoutProps) => {
       <main className="flex-1 overflow-auto">
         <div className="p-6 md:p-8">
           {/* Business selector bar */}
-          <div className="mb-4 flex items-center justify-between gap-4 pb-4 border-b border-border">
-            <BusinessSelector />
+          <div className="mb-4 flex items-center justify-end gap-8 pb-4 border-b border-border">
             <NotificationBell />
+            <BusinessSelector />
           </div>
           <div className="mb-8">
             <h1 className="text-2xl md:text-3xl font-display font-bold text-foreground">

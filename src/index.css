@@ -3,9 +3,10 @@
 
 /* ─── Super Admin Panel ─── */
 
-/* Font override — Inter everywhere including Radix portals */
+/* Previously forced Inter across the SA panel (overrode Tailwind font utilities).
+   Use `inherit` on the panel root so font utility classes (e.g. `font-display`) work. */
 .sa-panel, .sa-panel * {
-  font-family: 'Inter', system-ui, sans-serif;
+  font-family: inherit;
 }
 
 /* Custom dark scrollbar */

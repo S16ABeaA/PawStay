@@ -22,11 +22,6 @@ router.post('/:id/services', authMiddleware, propertyController.createService);
 router.patch('/:id/services/:serviceId', authMiddleware, propertyController.updateService);
 router.delete('/:id/services/:serviceId', authMiddleware, propertyController.deleteService);
 
-// Protected routes for proprietor
-router.get('/mine', authMiddleware, propertyController.myProperties);
-router.post('/mine/seed', authMiddleware, propertyController.seedMyProperty);
-router.get('/mine/stats', authMiddleware, propertyController.dashboardStats);
-
 // Service management routes
 router.get('/:id/services', propertyController.getServices);
 router.post('/:id/services', authMiddleware, propertyController.createService);

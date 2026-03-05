@@ -102,7 +102,7 @@ const AdminDashboard = () => {
             iconColor="text-primary"
           />
         </div>
-        <div onClick={() => navigate('/admin/settings')} className="cursor-pointer">
+        <div onClick={() => navigate('/admin/bookings')} className="cursor-pointer">
           <StatsCard
             title="Revenue"
             value={loadingStats ? '...' : `₱${Number(stats.revenue || 0).toFixed(2)}`}
@@ -116,13 +116,13 @@ const AdminDashboard = () => {
           <StatsCard
             title="Avg. Rating"
             value={loadingStats ? '...' : String(stats.avgRating)}
-            change={loadingStats ? '' : `Based on ratings`}
+            change=""
             changeType="neutral"
             icon={Star}
             iconColor="text-rating"
           />
         </div>
-        <div onClick={() => navigate('/admin/services')} className="cursor-pointer">
+        <div onClick={() => navigate('/admin/calendar')} className="cursor-pointer">
           <StatsCard
             title="Occupancy"
             value={loadingStats ? '...' : `${stats.occupancy}%`}
@@ -212,7 +212,7 @@ const AdminDashboard = () => {
                 <div className="text-sm text-muted-foreground">No check-ins for today.</div>
               )}
             </div>
-            <Link to="/admin/bookings">
+            <Link to="/admin/calendar?view=day">
               <Button variant="outline" className="w-full mt-4">
                 View Full Schedule
               </Button>

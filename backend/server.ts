@@ -18,6 +18,7 @@ import reviewsRoutes from './routes/reviewsRoute';
 import settingsRoutes from './routes/settingsRoute';
 import notificationRoutes from './routes/notificationRoute';
 import supportRoutes from './routes/supportRoute';
+import dashboardRoute from './routes/dashboardRoute';
  
 dotenv.config({ path: '../.env' });
 dotenv.config();
@@ -88,6 +89,7 @@ app.use('/api', (_req, res, next) => {
 // Routes
 app.use('/api/auth', authRoute);
 app.use('/api/admin/properties', adminPropertyRoute);
+app.use('/api/admin/dashboard', dashboardRoute);
 app.post('/api/submit-property', apiLimiter, authMiddleware, submitProperty);
 app.use("/api/properties", searchRoutes);
 app.use("/api/amenities", amenitiesRoutes);

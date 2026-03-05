@@ -1,4 +1,5 @@
 import { useState, useMemo, useRef, useEffect, useCallback } from "react";
+import { useLocation } from "react-router-dom";
 import AdminLayout from "@/components/admin/AdminLayout";
 import { useAdminProperty } from "@/hooks/useAdminProperty";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -151,6 +152,7 @@ function bookingToEvent(b: AdminCalendarBooking): CalendarEvent {
 const AdminCalendar = () => {
   const calendarRef = useRef<FullCalendar>(null);
   const { toast } = useToast();
+  const location = useLocation();
   const { selectedPropertyId, setSelectedPropertyId, loading: propCtxLoading } = useAdminProperty();
 
   // Data from API
@@ -221,6 +223,26 @@ const AdminCalendar = () => {
   useEffect(() => {
     fetchCalendarData();
   }, [fetchCalendarData]);
+
+  // If navigated with a `view` query param (e.g. ?view=day), set the view accordingly
+  useEffect(() => {
+    try {
+      const qp = new URLSearchParams(location.search);
+      const v = qp.get("view");
+      if (v === "day") {
+        setCurrentView("timeGridDay");
+        // if calendar API ready, change it too
+        setTimeout(() => {
+          calendarRef.current?.getApi().changeView("timeGridDay");
+        }, 50);
+      } else if (v === "week") {
+        setCurrentView("timeGridWeek");
+        setTimeout(() => calendarRef.current?.getApi().changeView("timeGridWeek"), 50);
+      }
+    } catch (err) {
+      // ignore
+    }
+  }, [location.search]);
 
   // Sync with AdminPropertyProvider context
   useEffect(() => {
@@ -842,7 +864,7 @@ const AdminCalendar = () => {
               listPlugin,
               ...(GOOGLE_CALENDAR_API_KEY ? [googleCalendarPlugin] : []),
             ]}
-            initialView="dayGridMonth"
+            initialView={currentView}
             headerToolbar={false}
             editable
             selectable
