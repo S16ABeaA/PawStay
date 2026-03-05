@@ -23,24 +23,7 @@ import { DollarSign, TrendingUp, CreditCard, ArrowUpRight, ArrowDownRight, Downl
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { bookingApi } from "@/services/bookingApi";
 
-const revenueStats = [
-  { label: "Total Revenue", value: "₱284,520", change: "+18.2%", trend: "up", icon: DollarSign },
-  { label: "Platform Fees", value: "₱28,452", change: "+15.8%", trend: "up", icon: TrendingUp },
-  { label: "Pending Payouts", value: "₱12,340", change: "-5.2%", trend: "down", icon: CreditCard },
-  { label: "Active Properties", value: "156", change: "+8", trend: "up", icon: Building2 },
-];
-
-// transactions will be fetched for superadmin via bookingApi.getAdminCalendar()
-
-const payouts = [
-  { id: "PAY-001", property: "Paws Paradise Hotel", amount: 4250, amountDisplay: "₱4,250", status: "Processing", date: "2024-01-16" },
-  { id: "PAY-002", property: "Happy Tails Resort", amount: 3180, amountDisplay: "₱3,180", status: "Scheduled", date: "2024-01-17" },
-  { id: "PAY-003", property: "Luxury Pet Suites", amount: 8920, amountDisplay: "₱8,920", status: "Scheduled", date: "2024-01-17" },
-  { id: "PAY-004", property: "Pet Haven Grooming", amount: 1560, amountDisplay: "₱1,560", status: "Processing", date: "2024-01-16" },
-];
-
-  // Transactions state (populated from admin calendar endpoint)
-  // (moved into component to obey Hooks rules)
+// (Static placeholder arrays removed — all data is fetched from the API)
 
 const SuperAdminRevenue = () => {
   const [totalRevenue, setTotalRevenue] = useState<number | null>(null);
@@ -62,7 +45,6 @@ const SuperAdminRevenue = () => {
   const [monthlySeries, setMonthlySeries] = useState<Array<{ year: number; month: number; label: string; revenue: number }>>([]);
   // Transactions state (populated from admin calendar endpoint)
   const [transactions, setTransactions] = useState<Array<any>>([]);
-  const [txnServiceTypes, setTxnServiceTypes] = useState<string[]>([]);
   const [txnFilterType, setTxnFilterType] = useState<string>("all");
   const [txnSearch, setTxnSearch] = useState<string>("");
 
@@ -104,10 +86,8 @@ const SuperAdminRevenue = () => {
             status: b.payment_status === 'paid' ? 'Completed' : (b.payment_status === 'refunded' ? 'Refunded' : (b.status || 'Pending')),
             amountDisplay: b.total_price != null ? `₱${Number(b.total_price).toLocaleString('en-US')}` : '₱0',
             feeDisplay: b.service_fee != null ? `₱${Number(b.service_fee).toLocaleString('en-US')}` : '₱0',
-            raw: b,
           }));
           setTransactions(mapped);
-          setTxnServiceTypes(Array.isArray(calRes?.serviceTypes) ? calRes.serviceTypes : []);
         } catch (e) {
           console.error('Failed to fetch admin calendar for transactions', e);
         }
@@ -129,7 +109,8 @@ const SuperAdminRevenue = () => {
   // Export a breakdown array to CSV and trigger download
   const exportCSV = (rows: any[], filename = "export.csv") => {
     if (!rows || rows.length === 0) return;
-    const keys = Object.keys(rows[0]);
+    // Exclude internal `raw` field from CSV output
+    const keys = Object.keys(rows[0]).filter(k => k !== 'raw');
     const csv = [keys.join(','), ...rows.map(r => keys.map(k => {
       const v = (r as any)[k];
       if (typeof v === 'string') return `"${v.replace(/"/g, '""')}"`;
@@ -312,18 +293,25 @@ const SuperAdminRevenue = () => {
                 </TableRow>
               </TableHeader>
               <TableBody>
+                {filteredTransactions.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={5} className="text-center text-white/40 py-8">
+                      {txnSearch || txnFilterType !== 'all' ? 'No transactions match your filters.' : 'No transactions found.'}
+                    </TableCell>
+                  </TableRow>
+                )}
                 {filteredTransactions.map((txn) => (
                   <TableRow key={txn.id} className="border-white/[0.06] hover:bg-white/[0.04]">
                     <TableCell>
                       <div>
-                        <p className="font-medium text-white">{txn.id}</p>
+                        <p className="font-medium text-white font-mono text-sm">{String(txn.id).slice(0, 8)}…</p>
                         <p className="text-xs text-[#808080]">{txn.date}</p>
                       </div>
                     </TableCell>
                     <TableCell>
                       <div>
                         <p className="text-white/80">{txn.property}</p>
-                        <p className="text-xs text-[#808080]">{txn.type}</p>
+                        <p className="text-xs text-[#808080] capitalize">{txn.type}</p>
                       </div>
                     </TableCell>
                     <TableCell className="text-white font-medium">{txn.amountDisplay || `₱${txn.amount}`}</TableCell>
@@ -724,9 +712,15 @@ const SuperAdminRevenue = () => {
       {/* Revenue Breakdown by Location */}
       <div className="mt-8 sa-slide-in" style={{ animationDelay: '320ms' }}>
         <Card className="bg-[#292929] border-white/[0.07] sa-card">
-          <CardHeader>
-            <CardTitle className="text-white">Revenue by Location</CardTitle>
-          </CardHeader>
+          <CardHeader className="relative">
+              <CardTitle className="text-white">Revenue by Location</CardTitle>
+              <div className="absolute right-4 top-3 flex items-center gap-2">
+                <Button variant="outline" size="sm" className="gap-2 border-white/10 text-[#808080] hover:bg-white/5 hover:text-white" onClick={() => exportCSV(locationBreakdown, 'revenue_by_location.csv')} disabled={loading || locationBreakdown.length === 0}>
+                  <Download className="h-4 w-4" />
+                  Export
+                </Button>
+              </div>
+            </CardHeader>
           <CardContent>
             <div className="space-y-3">
               {loading ? (
