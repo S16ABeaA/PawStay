@@ -1,4 +1,4 @@
-import { PawPrint, Facebook, Twitter, Instagram, Youtube } from "lucide-react";
+import { Facebook, Twitter, Instagram, Youtube } from "lucide-react";
 
 const Footer = () => {
   const footerLinks = {
@@ -34,10 +34,12 @@ const Footer = () => {
         <div className="grid grid-cols-2 md:grid-cols-6 gap-8">
           {/* Brand */}
           <div className="col-span-2">
-            <a href="/" className="flex items-center gap-2 mb-4">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-hero">
-                <PawPrint className="h-5 w-5 text-primary-foreground" />
-              </div>
+            <a href="/" className="flex items-center gap-3 mb-4">
+              <img
+                src="/PawStay%20Logo.jpg"
+                alt="PawStay"
+                className="h-10 w-10 rounded-xl object-cover shadow-sm"
+              />
               <span className="font-display text-xl font-bold">PawStay</span>
             </a>
             <p className="text-background/70 text-sm mb-6 max-w-xs">

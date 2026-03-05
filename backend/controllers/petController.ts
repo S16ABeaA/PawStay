@@ -19,7 +19,8 @@ export const listPets = async (req: Request, res: Response) => {
             ...pet,
             serviceHistory: history.map((h) => ({
               id: h.id,
-              type: h.service_type as "grooming" | "checkup",
+              bookingId: h.booking_id,
+              type: h.service_type,
               serviceName: h.service_name,
               date: h.performed_at,
               notes: h.notes,

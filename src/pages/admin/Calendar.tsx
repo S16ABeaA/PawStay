@@ -1,5 +1,6 @@
 import { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import AdminLayout from "@/components/admin/AdminLayout";
+import { useAdminProperty } from "@/hooks/useAdminProperty";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -150,6 +151,7 @@ function bookingToEvent(b: AdminCalendarBooking): CalendarEvent {
 const AdminCalendar = () => {
   const calendarRef = useRef<FullCalendar>(null);
   const { toast } = useToast();
+  const { selectedPropertyId, setSelectedPropertyId, loading: propCtxLoading } = useAdminProperty();
 
   // Data from API
   const [loading, setLoading] = useState(true);
@@ -184,7 +186,7 @@ const AdminCalendar = () => {
 
   // Filters
   const [statusFilter, setStatusFilter] = useState<string>("all");
-  const [propertyFilter, setPropertyFilter] = useState<string>("all");
+  const [propertyFilter, setPropertyFilter] = useState<string>(selectedPropertyId ?? "all");
   const [serviceTypeFilter, setServiceTypeFilter] = useState<string>("all");
 
   // -----------------------------------------------------------------------
@@ -220,12 +222,14 @@ const AdminCalendar = () => {
     fetchCalendarData();
   }, [fetchCalendarData]);
 
-  // If there are properties and no property is selected, default to the first property
+  // Sync with AdminPropertyProvider context
   useEffect(() => {
-    if (properties.length > 0 && propertyFilter === "all") {
+    if (selectedPropertyId && propertyFilter !== selectedPropertyId) {
+      setPropertyFilter(selectedPropertyId);
+    } else if (!selectedPropertyId && properties.length > 0 && propertyFilter === "all") {
       setPropertyFilter(properties[0].id);
     }
-  }, [properties, propertyFilter]);
+  }, [selectedPropertyId, properties, propertyFilter]);
 
   const currentPropertyName = useMemo(
     () => properties.find((p) => p.id === propertyFilter)?.name ?? "",
@@ -719,7 +723,7 @@ const AdminCalendar = () => {
           <div className="flex flex-wrap items-center gap-3">
             {/* Property filter */}
             {properties.length > 0 && (
-              <Select value={propertyFilter} onValueChange={setPropertyFilter}>
+              <Select value={propertyFilter} onValueChange={(val) => { setPropertyFilter(val); setSelectedPropertyId(val); }}>
                 <SelectTrigger className="w-[170px] h-9">
                   <SelectValue placeholder="Property" />
                 </SelectTrigger>
@@ -757,11 +761,9 @@ const AdminCalendar = () => {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Statuses</SelectItem>
-                <SelectItem value="confirmed">Confirmed</SelectItem>
                 <SelectItem value="pending">Pending</SelectItem>
+                <SelectItem value="confirmed">Confirmed</SelectItem>
                 <SelectItem value="cancelled">Cancelled</SelectItem>
-                <SelectItem value="checked_in">Checked In</SelectItem>
-                <SelectItem value="completed">Completed</SelectItem>
               </SelectContent>
             </Select>
 
@@ -919,8 +921,6 @@ const AdminCalendar = () => {
                       ? "rgb(16 185 129 / 0.1)"
                       : selectedEvent.extendedProps.status === "cancelled"
                       ? "rgb(239 68 68 / 0.1)"
-                      : selectedEvent.extendedProps.status === "checked_in"
-                      ? "rgb(59 130 246 / 0.1)"
                       : "rgb(245 158 11 / 0.1)",
                 }}
               >
@@ -1020,26 +1020,7 @@ const AdminCalendar = () => {
                     Confirm
                   </Button>
                 )}
-                {selectedEvent.extendedProps.status === "confirmed" && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => handleUpdateStatus(selectedEvent.id, "checked_in", "Checked In")}
-                  >
-                    <CheckCircle2 className="h-4 w-4 mr-1" />
-                    Check In
-                  </Button>
-                )}
-                {selectedEvent.extendedProps.status === "checked_in" && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => handleUpdateStatus(selectedEvent.id, "completed", "Completed")}
-                  >
-                    <CheckCircle2 className="h-4 w-4 mr-1" />
-                    Complete
-                  </Button>
-                )}
+
                 <div className="flex-1" />
                 <Button
                   size="sm"

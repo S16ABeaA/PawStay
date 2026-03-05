@@ -33,12 +33,14 @@ export interface SettingsData {
 }
 
 export const settingsApi = {
-  /** Load all settings for the logged-in owner */
-  getSettings: async (): Promise<SettingsData> =>
-    authHelper.get(`${API_BASE_URL}/api/settings`),
+  /** Load all settings for the logged-in owner (optionally for a specific property) */
+  getSettings: async (propertyId?: string | null): Promise<SettingsData> => {
+    const qs = propertyId ? `?property_id=${propertyId}` : "";
+    return authHelper.get(`${API_BASE_URL}/api/settings${qs}`);
+  },
 
   /** Update business info */
-  updateBusiness: async (data: Partial<SettingsData["business"]>) =>
+  updateBusiness: async (data: Partial<SettingsData["business"]> & { property_id?: string }) =>
     authHelper.put(`${API_BASE_URL}/api/settings/business`, data),
 
   /** Update notification preferences */
@@ -46,10 +48,10 @@ export const settingsApi = {
     authHelper.put(`${API_BASE_URL}/api/settings/notifications`, data),
 
   /** Update availability settings */
-  updateAvailability: async (data: Partial<SettingsData["availability"]>) =>
+  updateAvailability: async (data: Partial<SettingsData["availability"]> & { property_id?: string }) =>
     authHelper.put(`${API_BASE_URL}/api/settings/availability`, data),
 
   /** Update payment settings */
-  updatePayment: async (data: Partial<SettingsData["payment"]>) =>
+  updatePayment: async (data: Partial<SettingsData["payment"]> & { property_id?: string }) =>
     authHelper.put(`${API_BASE_URL}/api/settings/payment`, data),
 };

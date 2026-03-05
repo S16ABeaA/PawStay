@@ -10,7 +10,7 @@ import {
   SlidersHorizontal, ArrowUpDown, Grid3X3, List, 
   Star, Search, MapPin
 } from "lucide-react";
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { fetchProperties } from "@/services/propertyApi";
 import { LocationInput } from "@/components/LocationInput";
 import { fetchAmenities } from "@/services/amenitiesApi";
@@ -44,14 +44,15 @@ const sortLabels: Record<SortOption, string> = {
 };
 
 const SearchResults = () => {
+  const resultsRef = useRef<HTMLDivElement>(null);
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
 
   const [location, setLocation] = useState(searchParams.get("location") || "");
 
   const rawPet = searchParams.get("pet") || "Dog";
-  const defaultPet = rawPet.charAt(0).toUpperCase() + rawPet.slice(1).toLowerCase();
-  const defaultDogSize = searchParams.get("dogSize") || "Small";
+  const defaultPets = rawPet.split(",").map(p => p.charAt(0).toUpperCase() + p.slice(1).toLowerCase());
+  const defaultDogSizes = (searchParams.get("dogSize") || "Small").split(",").map(s => s.charAt(0).toUpperCase() + s.slice(1).toLowerCase());
   const defaultService = (searchParams.get("service") as "hotel" | "grooming" | "vet") || "hotel";
   const defaultMinPrice = Number(searchParams.get("minPrice")) || 0;
   const defaultMaxPrice = Number(searchParams.get("maxPrice")) || 1000;
@@ -65,8 +66,8 @@ const SearchResults = () => {
   // States
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
 
-  const [selectedPet, setSelectedPet] = useState(defaultPet);
-  const [selectedDogSize, setSelectedDogSize] = useState(defaultDogSize);
+  const [selectedPets, setSelectedPets] = useState<string[]>(defaultPets);
+  const [selectedDogSizes, setSelectedDogSizes] = useState<string[]>(defaultDogSizes);
 
   const [selectedService, setSelectedService] = useState<"hotel" | "grooming" | "vet" | null>(defaultService);
   const [priceRange, setPriceRange] = useState([defaultMinPrice, defaultMaxPrice]);
@@ -82,8 +83,8 @@ const SearchResults = () => {
   // Applied filters (only updated on Apply Filters)
   const [appliedFilters, setAppliedFilters] = useState({
     location,
-    pet: defaultPet,
-    dogSize: defaultDogSize,
+    pets: defaultPets,
+    dogSizes: defaultDogSizes,
     service: defaultService,
     priceRange: [defaultMinPrice, defaultMaxPrice] as [number, number],
     rating: defaultRating as number | null,
@@ -145,6 +146,8 @@ const SearchResults = () => {
   const [loading, setLoading] = useState(false);
   
   const [sortBy, setSortBy] = useState<SortOption>("default");
+  const PAGE_SIZE = 9;
+  const [displayCount, setDisplayCount] = useState(PAGE_SIZE);
 
   useEffect(() => {
     setSearchLocation(location);
@@ -157,8 +160,8 @@ const SearchResults = () => {
       try {
         const {
           location: appliedLocation,
-          pet: appliedPet,
-          dogSize: appliedDogSize,
+          pets: appliedPets,
+          dogSizes: appliedDogSizes,
           service: appliedService,
           priceRange: appliedPriceRange,
           rating: appliedRating,
@@ -174,13 +177,11 @@ const SearchResults = () => {
           hotel: "hotel",
           grooming: "grooming",
           vet: "veterinary",
-          veterinary: "veterinary",
         };
         const serviceCategoryMap: Record<string, string> = {
           hotel: "Boarding",
           grooming: "Grooming",
           vet: "Veterinary",
-          veterinary: "Veterinary",
         };
         const mappedPropertyType = appliedService
           ? propertyTypeMap[appliedService.toLowerCase()] || appliedService.toLowerCase()
@@ -193,8 +194,8 @@ const SearchResults = () => {
 
         const results = await fetchProperties({
           location: appliedLocation,
-          petType: appliedPet?.toLowerCase(),
-          dogSize: appliedDogSize,
+          petType: appliedPets.length > 0 ? appliedPets.map(p => p.toLowerCase()) : undefined,
+          dogSize: appliedPets.includes("Dog") && appliedDogSizes.length > 0 ? appliedDogSizes : undefined,
           propertyType: mappedPropertyType,
           serviceCategory: mappedServiceCategory,
           checkIn: appliedCheckIn || undefined,
@@ -239,12 +240,14 @@ const SearchResults = () => {
       }
     };
     runSearch();
+    // reset displayed count when applied filters change
+    setDisplayCount(PAGE_SIZE);
   }, [appliedFilters]);
 
   // Reset all filters
   const handleResetAll = () => {
-    setSelectedPet("Dog");
-    setSelectedDogSize("Small");
+    setSelectedPets(["Dog"]);
+    setSelectedDogSizes(["Small"]);
     setSelectedService("hotel");
     setPriceRange([0, 1000]);
     setSelectedRating(null);
@@ -257,8 +260,8 @@ const SearchResults = () => {
     setSortBy("default");
     setAppliedFilters({
       location,
-      pet: "Dog",
-      dogSize: "Small",
+      pets: ["Dog"],
+      dogSizes: ["Small"],
       service: "hotel",
       priceRange: [0, 1000],
       rating: null,
@@ -278,6 +281,14 @@ const SearchResults = () => {
     setAppliedFilters(buildAppliedFilters());
     setScrollKey((k) => k + 1);
     navigate(`/search?${params.toString()}`);
+    setTimeout(() => {
+      const el = resultsRef.current;
+      if (!el) return;
+      const header = document.querySelector('header');
+      const offset = (header?.clientHeight ?? 0) + 8;
+      const y = el.getBoundingClientRect().top + window.scrollY - offset;
+      window.scrollTo({ top: y, behavior: 'smooth' });
+    }, 120);
   };
 
   const handleSearchSubmit = () => {
@@ -300,9 +311,9 @@ const SearchResults = () => {
     const params = new URLSearchParams();
     const loc = locationOverride ?? searchLocation;
     if (loc) params.set("location", loc);
-    if (selectedPet) params.set("pet", selectedPet);
-    if (selectedPet === "Dog" && selectedDogSize) {
-      params.set("dogSize", selectedDogSize);
+    if (selectedPets.length > 0) params.set("pet", selectedPets.join(","));
+    if (selectedPets.includes("Dog") && selectedDogSizes.length > 0) {
+      params.set("dogSize", selectedDogSizes.join(","));
     }
     if (selectedService) params.set("service", selectedService);
     if (priceRange) {
@@ -320,8 +331,8 @@ const SearchResults = () => {
 
   const buildAppliedFilters = (locationOverride?: string) => ({
     location: locationOverride ?? searchLocation,
-    pet: selectedPet,
-    dogSize: selectedPet === "Dog" ? selectedDogSize : undefined,
+    pets: selectedPets,
+    dogSizes: selectedPets.includes("Dog") ? selectedDogSizes : [],
     service: selectedService,
     priceRange: [priceRange[0], priceRange[1]] as [number, number],
     rating: selectedRating,
@@ -626,7 +637,7 @@ function haversineDistance(
                     {[
                       { value: "hotel" as const, label: "Hotel" },
                       { value: "grooming" as const, label: "Grooming" },
-                      { value: "vet" as const, label: "Veterinary" },
+                      { value: "vet" as const, label: "Vet" },
                     ].map(({ value, label }) => (
                       <button
                         key={value}
@@ -650,27 +661,15 @@ function haversineDistance(
                     {["Dog", "Cat", "Others"].map((pet) => (
                       <button
                         key={pet}
-                        onClick={() => {setSelectedPet(pet);
-                           if (pet !== "Dog") {
-                            // Reset dog size to default but don't include in URL
-                            setSelectedDogSize("Small");
-                            
-                            // Update URL to remove dogSize parameter
-                            const params = new URLSearchParams(searchParams.toString());
-                            params.set("pet", pet);
-                            params.delete("dogSize"); // Remove dogSize from URL
-                            navigate(`/search?${params.toString()}`, { replace: true });
-                          } else {
-                            // Keep dogSize in URL when Dog is selected
-                            const params = new URLSearchParams(searchParams.toString());
-                            params.set("pet", pet);
-                            params.set("dogSize", selectedDogSize);
-                            navigate(`/search?${params.toString()}`, { replace: true });
-                          }
-                        }
-                        }
+                        onClick={() => {
+                          setSelectedPets(prev =>
+                            prev.includes(pet)
+                              ? prev.filter(p => p !== pet)
+                              : [...prev, pet]
+                          );
+                        }}
                         className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium border transition-all duration-200 active:scale-95 ${
-                          selectedPet === pet
+                          selectedPets.includes(pet)
                             ? "bg-primary text-primary-foreground border-primary shadow-sm"
                             : "bg-background text-foreground border-border hover:border-foreground/40 hover:bg-muted"
                         }`}
@@ -682,7 +681,7 @@ function haversineDistance(
                 </div>
 
                  {/* Dog Size */}
-                 {selectedPet === "Dog" && (
+                 {selectedPets.includes("Dog") && (
                 <div className="pb-6 border-b border-border/50">
                   <label className="text-sm font-semibold text-foreground mb-3 block">
                     Dog Size
@@ -692,14 +691,18 @@ function haversineDistance(
                     {["Small", "Medium", "Large", "Giant"].map((dogSize) => (
                       <button
                         key={dogSize}
-                        onClick={() => setSelectedDogSize(dogSize)}
+                        onClick={() => setSelectedDogSizes(prev =>
+                          prev.includes(dogSize)
+                            ? prev.filter(s => s !== dogSize)
+                            : [...prev, dogSize]
+                        )}
                         className={`
                           flex-1 px-4 py-2 rounded-lg text-sm font-medium
                           border transition-all duration-200
                           active:scale-95
                           
                           ${
-                            selectedDogSize === dogSize
+                            selectedDogSizes.includes(dogSize)
                               ? "bg-primary text-primary-foreground border-primary shadow-sm"
                               : "bg-background text-foreground border-border hover:border-foreground/40 hover:bg-muted"
                           }`}
@@ -865,7 +868,7 @@ function haversineDistance(
             </aside>
 
             {/* Main Content */}
-            <div className="flex-1">
+            <div className="flex-1" ref={resultsRef}>
               {/* Controls */}
               <div className="flex items-center justify-between mb-6">
                 <div className="flex items-center gap-2 ml-auto">
@@ -964,21 +967,26 @@ function haversineDistance(
                     </div>
                   </div>
                 ) : (
-                  sortedProperties.map((property, index) => {
-                    const mapped = mapPropertyToHotel(property, index);
-                    return <HotelCard key={mapped.id} hotel={mapped} />;
-                  })
+                    // only render the first `displayCount` items; Load More will increase this
+                    sortedProperties.slice(0, displayCount).map((property, index) => {
+                      const mapped = mapPropertyToHotel(property, index);
+                      return <HotelCard key={mapped.id} hotel={mapped} />;
+                    })
                 )}
               </div>
 
-              {/* Load More */}
-                  {properties.length > 9 && (
-                    <div className="text-center mt-10">
-                      <Button variant="outline" size="lg">
-                        Load More Results
-                      </Button>
-                    </div>
-                  )}
+                {/* Load More */}
+                {sortedProperties.length > displayCount && (
+                  <div className="text-center mt-10">
+                    <Button
+                      variant="outline"
+                      size="lg"
+                      onClick={() => setDisplayCount((c) => Math.min(c + PAGE_SIZE, sortedProperties.length))}
+                    >
+                      Load More Results
+                    </Button>
+                  </div>
+                )}
             </div>
           </div>
         </div>

@@ -147,6 +147,20 @@ export const bookingApi = {
   /** Get a single booking */
   getById: (id: string) => authHelper.get(`${API_BASE_URL}/api/bookings/${id}`),
 
+  /** Check payment status of a booking */
+  checkPaymentStatus: (bookingId: string): Promise<{
+    id: string;
+    payment_status: string;
+    payment_method: string | null;
+    total_price: number | null;
+    paid_at: string | null;
+    booking_status: string;
+  }> => authHelper.get(`${API_BASE_URL}/api/bookings/${bookingId}/payment-status`),
+
+  /** Admin update payment status */
+  updatePaymentStatus: (bookingId: string, payment_status: string) =>
+    authHelper.patch(`${API_BASE_URL}/api/bookings/admin/${bookingId}/payment`, { payment_status }),
+
   /** Check time-slot availability for grooming/vet on a specific date */
   getSlotAvailability: async (
     propertyId: string,

@@ -168,6 +168,7 @@ const HotelCard = ({ hotel }: HotelCardProps) => {
         {/* Price & CTA */}
         <div className="flex items-end justify-between pt-3 border-t border-border">
           <div>
+             <span className="text-xs text-muted-foreground">Starting from</span>
             <div className="flex items-baseline gap-1.5">
               {hotel.originalPrice && (
                 <span className="text-sm text-muted-foreground line-through">
@@ -182,7 +183,6 @@ const HotelCard = ({ hotel }: HotelCardProps) => {
                 <span className="text-sm text-muted-foreground">Contact for price</span>
               )}
             </div>
-            <span className="text-xs text-muted-foreground">depends on service</span>
           </div>
           <Link to={`/hotels/${hotel.id}`}>
             <Button variant="hero" size="sm">

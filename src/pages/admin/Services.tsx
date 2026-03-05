@@ -35,6 +35,7 @@ import { Plus, Edit, Trash2, Bed, Scissors, Stethoscope, Loader2 } from "lucide-
 import { useState, useEffect } from "react";
 import { servicesApi, DBService } from "@/services/servicesApi";
 import { authHelper } from "@/helpers/authHelper";
+import { useAdminProperty } from "@/hooks/useAdminProperty";
 
 const iconMap = {
   Bed: Bed,
@@ -52,7 +53,7 @@ const categoryIconMap: Record<string, keyof typeof iconMap> = {
 const AdminServices = () => {
   const [services, setServices] = useState<DBService[]>([]);
   const [loading, setLoading] = useState(true);
-  const [propertyId, setPropertyId] = useState<string | null>(null);
+  const { selectedPropertyId: propertyId, loading: propLoading } = useAdminProperty();
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
@@ -69,29 +70,32 @@ const AdminServices = () => {
     capacity: "",
   });
 
-  // Fetch property ID and services on mount
+  // Fetch services when selected property changes
   useEffect(() => {
-    const fetchProperty = async () => {
+    let cancelled = false;
+
+    // Clear stale services when property changes
+    setServices([]);
+
+    if (propLoading || !propertyId) return;
+
+    const doFetch = async () => {
       try {
         setLoading(true);
-        const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5001";
-        const data = await authHelper.get(`${API_BASE_URL}/api/properties/mine`);
-        const properties = data.properties || [];
-
-        if (properties.length > 0) {
-          const firstProperty = properties[0];
-          setPropertyId(firstProperty.id);
-          await fetchServices(firstProperty.id);
-        }
+        const data = await servicesApi.getServices(propertyId);
+        if (cancelled) return;
+        setServices(data);
       } catch (err) {
-        console.error("Failed to fetch property", err);
+        console.error("Failed to fetch services", err);
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     };
 
-    fetchProperty();
-  }, []);
+    doFetch();
+
+    return () => { cancelled = true; };
+  }, [propertyId, propLoading]);
 
   const fetchServices = async (propId: string) => {
     try {

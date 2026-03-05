@@ -1,7 +1,7 @@
 export const authHelper = {
   fetchWithAuth: async (url: string, options: RequestInit = {}) => {
     console.log("Fetching with auth:", url, options); // Debug log to see the request details
-    const res = await fetch(url, { ...options, credentials: "include" });
+    const res = await fetch(url, { ...options, credentials: "include", cache: "no-store" });
     const data = await res.json();
     if (!res.ok) throw data;
     return data;

@@ -1,5 +1,5 @@
 import { Request, Response } from "express";
-import { getProperties, getRandomProperties, HotelFilters } from "../services/property.service";
+import { getProperties, getPropertyById, getRandomProperties, HotelFilters } from "../services/property.service";
 import { supabaseAdmin } from "../config/supabaseAdmin";
 
 export const propertyController = {
@@ -19,6 +19,21 @@ export const propertyController = {
         return Number.isFinite(num) ? num : undefined;
       };
 
+      const normalizeStringOrArray = (val: unknown): string | string[] | undefined => {
+        if (!val) return undefined;
+        if (Array.isArray(val)) {
+          const items = val.map((v) => String(v).trim().toLowerCase()).filter(Boolean);
+          return items.length === 1 ? items[0] : items.length > 0 ? items : undefined;
+        }
+        const str = String(val).trim();
+        if (!str) return undefined;
+        if (str.includes(",")) {
+          const items = str.split(",").map((v) => v.trim().toLowerCase()).filter(Boolean);
+          return items.length === 1 ? items[0] : items.length > 0 ? items : undefined;
+        }
+        return str.toLowerCase();
+      };
+
       const normalizeAmenities = (val: unknown): string[] | undefined => {
         if (!val) return undefined;
         if (Array.isArray(val)) {
@@ -36,8 +51,8 @@ export const propertyController = {
         checkin: asString(source.checkin || source.checkIn),
         checkout: asString(source.checkout || source.checkOut),
         timeSlot: asString(source.timeSlot || source.time_slot),
-        petType: asString(source.petType || source.pet)?.toLowerCase(),
-        dogSize: asString(source.dogSize || source.dogsize)?.toLowerCase(),
+        petType: normalizeStringOrArray(source.petType || source.pet),
+        dogSize: normalizeStringOrArray(source.dogSize || source.dogsize),
         propertyType: asString(source.propertyType || source.type)?.toLowerCase(),
         serviceCategory: asString(source.serviceCategory),
         minPrice: asNumber(source.minPrice),
@@ -64,10 +79,102 @@ export const propertyController = {
   randomProperties: async (req: Request, res: Response) => {
     try {
       const limit = Number(req.body?.limit) || 6;
-      const properties = await getRandomProperties(limit);
+      // Use getProperties with no filters to get all, then shuffle and slice
+      const allProperties = await getProperties({});
+      const shuffled = allProperties.sort(() => Math.random() - 0.5);
+      const properties = shuffled.slice(0, limit);
       res.status(200).json({ properties });
     } catch (err: any) {
       res.status(500).json({ message: err.message || "Failed to fetch random properties" });
+    }
+  },
+
+  getById: async (req: Request, res: Response) => {
+    try {
+      const id = req.params.id as string;
+      
+      // Basic UUID validation regex
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!id || !uuidRegex.test(id)) {
+        return res.status(400).json({ message: "Invalid Property ID format" });
+      }
+      
+      const property = await getPropertyById(id);
+      if (!property) {
+        return res.status(404).json({ message: "Property not found" });
+      }
+      res.status(200).json({ property });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message || "Failed to fetch property" });
+    }
+  },
+
+  /**
+   * GET /api/properties/:id/payment
+   * Public endpoint — returns QR codes & accepted payment methods for a property.
+   * Used by the booking page to display correct QR images.
+   */
+  getPaymentOptions: async (req: Request, res: Response) => {
+    try {
+      const id = req.params.id as string;
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!id || !uuidRegex.test(id)) {
+        return res.status(400).json({ message: "Invalid Property ID format" });
+      }
+
+      const { data, error } = await supabaseAdmin
+        .from("property_pricing")
+        .select("payment_options")
+        .eq("property_id", id)
+        .maybeSingle();
+
+      if (error) throw error;
+
+      const paymentOpts = data?.payment_options || {};
+      return res.json({
+        gcashQrUrl: paymentOpts.gcash_qr_url || null,
+        paymayaQrUrl: paymentOpts.paymaya_qr_url || null,
+        acceptedPaymentMethods: paymentOpts.accepted_methods || [],
+        gcashNumber: paymentOpts.gcash_number || null,
+        paymayaNumber: paymentOpts.paymaya_number || null,
+      });
+    } catch (err: any) {
+      console.error("getPaymentOptions error:", err);
+      res.status(500).json({ message: err.message || "Failed to fetch payment options" });
+    }
+  },
+
+  getReviews: async (req: Request, res: Response) => {
+    try {
+      const id = req.params.id as string;
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!id || !uuidRegex.test(id)) {
+        return res.status(400).json({ message: "Invalid Property ID format" });
+      }
+
+      const { data, error } = await supabaseAdmin
+        .from("reviews")
+        .select(`
+          id,
+          rating,
+          comment,
+          service_type,
+          pet_name,
+          created_at,
+          reply,
+          replied_at,
+          profiles(first_name, last_name, avatar_url)
+        `)
+        .eq("property_id", id)
+        .eq("is_deleted", false)
+        .order("created_at", { ascending: false })
+        .limit(20);
+
+      if (error) throw error;
+
+      res.status(200).json({ reviews: data ?? [] });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message || "Failed to fetch reviews" });
     }
   },
 
@@ -179,12 +286,21 @@ export const propertyController = {
       const userId = (req as any).user?.id;
       if (!userId) return res.status(401).json({ message: 'Unauthorized' });
 
+      // Optional: filter by a single property_id
+      const filterPropertyId = req.query.property_id as string | undefined;
+
       // Get user's properties
-      const { data: props, error: propsErr } = await supabaseAdmin
+      let propsQuery = supabaseAdmin
         .from('properties')
         .select('id, capacity')
         .eq('owner_id', userId)
         .eq('is_deleted', false);
+
+      if (filterPropertyId) {
+        propsQuery = propsQuery.eq('id', filterPropertyId);
+      }
+
+      const { data: props, error: propsErr } = await propsQuery;
 
       if (propsErr) throw propsErr;
 

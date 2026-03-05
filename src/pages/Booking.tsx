@@ -115,10 +115,8 @@ const Booking = () => {
 
   // Step 5 fields
   const [referenceNumber, setReferenceNumber] = useState("");
-  const [amountPaid, setAmountPaid] = useState("");
   const [paymentScreenshot, setPaymentScreenshot] = useState<string | null>(null);
   const [paymentScreenshotName, setPaymentScreenshotName] = useState<string>("");
-  const [cashAmountPaid, setCashAmountPaid] = useState("");
 
   // Validation errors
   const [errors, setErrors] = useState<Record<string, boolean>>({});
@@ -151,21 +149,47 @@ const Booking = () => {
     return { basePrice, nights, dogSizeMultiplier, priceWithDogSize, subtotal, serviceFee, total };
   }, [shop, checkInDate, checkOutDate, petType, dogSize]);
 
-  // Parse a currency-like input into a number (handles commas, currency symbols)
-  const parseCurrency = (val: string | undefined | null): number => {
-    if (val == null) return NaN;
-    const cleaned = String(val).replace(/[^0-9.-]+/g, "");
-    const n = parseFloat(cleaned);
-    return Number.isFinite(n) ? n : NaN;
-  };
+  // ── Fetch QR codes directly from API (more reliable than navigation state) ──
+  const [fetchedQR, setFetchedQR] = useState<{
+    gcash: string | null;
+    paymaya: string | null;
+    acceptedMethods: string[];
+  }>({ gcash: null, paymaya: null, acceptedMethods: [] });
+
+  useEffect(() => {
+    const propertyId = shop?.propertyId;
+    if (!propertyId) return;
+    const fetchPaymentOptions = async () => {
+      try {
+        const res = await fetch(`/api/properties/${propertyId}/payment`);
+        if (!res.ok) return;
+        const data = await res.json();
+        setFetchedQR({
+          gcash: data.gcashQrUrl || null,
+          paymaya: data.paymayaQrUrl || null,
+          acceptedMethods: data.acceptedPaymentMethods || [],
+        });
+      } catch (err) {
+        console.error("Failed to fetch payment options:", err);
+      }
+    };
+    fetchPaymentOptions();
+  }, [shop?.propertyId]);
+
+  // Merge: prefer API-fetched QR codes over navigation state
   const shopQRCodes = {
-    gcash: shop?.qrCodeGCash || null,
-    paymaya: shop?.qrCodePayMaya || null,
+    gcash: fetchedQR.gcash || shop?.qrCodeGCash || null,
+    paymaya: fetchedQR.paymaya || shop?.qrCodePayMaya || null,
   };
+
+  // Merge accepted payment methods: prefer API-fetched
+  const mergedAcceptedMethods = fetchedQR.acceptedMethods.length > 0
+    ? fetchedQR.acceptedMethods
+    : (shop?.acceptedPaymentMethods || []);
 
   // Auto-select first accepted payment method
   useEffect(() => {
-    const accepted = shop?.acceptedPaymentMethods || [];
+    const accepted = mergedAcceptedMethods;
     if (accepted.length === 0) return; // no restrictions, keep default
     const methodMap: Record<string, "gcash" | "paymaya" | "cash"> = {
       "GCash": "gcash",
@@ -178,7 +202,7 @@ const Booking = () => {
         return;
       }
     }
-  }, [shop?.acceptedPaymentMethods]);
+  }, [mergedAcceptedMethods]);
 
   // Fetch user's pets on mount
   useEffect(() => {
@@ -450,6 +474,20 @@ const Booking = () => {
     // Intentionally skip client-side payment validation to allow flexible testing/submission.
     // Server-side validation remains authoritative.
     if (paymentMethod === "creditcard") return false;
+    const missing: string[] = [];
+
+    const { total } = calculatePrices();
+
+    if (paymentMethod === "gcash" || paymentMethod === "paymaya") {
+      if (!referenceNumber.trim()) missing.push("referenceNumber");
+      if (!paymentScreenshot) missing.push("paymentScreenshot");
+      if (missing.length > 0) {
+        setError(missing);
+        toast({ title: "Required Fields", description: !paymentScreenshot ? "Please upload a payment screenshot to continue." : "Please enter your payment reference number.", variant: "destructive" });
+        return false;
+      }
+    }
+
     clearErrors();
     return true;
   };
@@ -485,12 +523,8 @@ const Booking = () => {
         return;
       }
 
-      // Normalize amount values for submission
-      const parsedAmount = parseCurrency(amountPaid);
-      const parsedCashAmount = parseCurrency(cashAmountPaid);
-      const amountPaidPayload = paymentMethod === "cash"
-        ? (Number.isFinite(parsedCashAmount) ? parsedCashAmount.toFixed(2) : undefined)
-        : (Number.isFinite(parsedAmount) ? parsedAmount.toFixed(2) : undefined);
+      // Amount is always auto-filled from calculated total
+      const amountPaidPayload = total.toFixed(2);
 
       await bookingApi.create({
         property_id: shop?.propertyId || "",
@@ -1121,7 +1155,7 @@ const Booking = () => {
                     <div className="space-y-3">
                       <Label>Select Payment Method</Label>
                       {(() => {
-                        const accepted = shop?.acceptedPaymentMethods || [];
+                        const accepted = mergedAcceptedMethods;
                         const hasAccepted = accepted.length > 0;
                         const isMethodAccepted = (method: string) => !hasAccepted || accepted.includes(method);
                         const gcashAccepted = isMethodAccepted("GCash");
@@ -1200,9 +1234,9 @@ const Booking = () => {
                         <div className="bg-secondary/30 rounded-xl p-6 flex flex-col items-center gap-4">
                           <div className="bg-white p-4 rounded-lg shadow-sm">
                             {(paymentMethod === "gcash" && shopQRCodes.gcash) || (paymentMethod === "paymaya" && shopQRCodes.paymaya) ? (
-                              <img src={paymentMethod === "gcash" ? shopQRCodes.gcash! : shopQRCodes.paymaya!} alt={`${paymentMethod.toUpperCase()} QR Code`} className="w-48 h-48 object-contain rounded" />
+                              <img src={paymentMethod === "gcash" ? shopQRCodes.gcash! : shopQRCodes.paymaya!} alt={`${paymentMethod.toUpperCase()} QR Code`} className="w-64 h-64 object-contain rounded" />
                             ) : (
-                              <div className="w-48 h-48 flex items-center justify-center border-2 border-dashed border-border rounded">
+                              <div className="w-64 h-64 flex items-center justify-center border-2 border-dashed border-border rounded">
                                 <div className="text-center">
                                   <QrCode className="h-16 w-16 mx-auto mb-2 text-muted-foreground" />
                                   <p className="text-xs text-muted-foreground">
@@ -1214,11 +1248,7 @@ const Booking = () => {
                             )}
                           </div>
                           <div className="text-center">
-                            <p className="text-sm font-medium mb-1">
-                              {paymentMethod === "gcash" && "GCash Number: 0917-123-4567"}
-                              {paymentMethod === "paymaya" && "PayMaya Number: 0917-987-6543"}
-                            </p>
-                            <p className="text-xs text-muted-foreground">Scan the QR code or send payment to the above details</p>
+                            <p className="text-xs text-muted-foreground">Scan the QR code to complete your payment</p>
                           </div>
                         </div>
                       </div>
@@ -1233,9 +1263,8 @@ const Booking = () => {
                         </div>
 
                         <div className="space-y-2">
-                          <Label htmlFor="amountPaid">Amount Paid (₱) *</Label>
-                          <Input id="amountPaid" type="number" step="0.01" min="0" placeholder="0.00" value={amountPaid} onChange={(e) => setAmountPaid(e.target.value)} className={errorClass("amountPaid")} required />
-                          <p className="text-xs text-muted-foreground">Enter the exact total amount: <span className="font-semibold text-foreground">₱{calculatePrices().total.toFixed(2)}</span></p>
+                          <Label htmlFor="amountPaid">Amount to Pay (₱)</Label>
+                          <Input id="amountPaid" type="text" value={`₱${calculatePrices().total.toFixed(2)}`} readOnly className="bg-muted/50 font-semibold cursor-default" />
                         </div>
 
                         <div className="space-y-2">
@@ -1262,9 +1291,8 @@ const Booking = () => {
                           <p className="text-sm text-muted-foreground">Pay in cash at the establishment. Please provide the amount below for record-keeping.</p>
                         </div>
                         <div className="space-y-2">
-                          <Label htmlFor="cashAmountPaid">Amount to Pay (₱) *</Label>
-                          <Input id="cashAmountPaid" type="number" step="0.01" min="0" placeholder="0.00" value={cashAmountPaid} onChange={(e) => setCashAmountPaid(e.target.value)} className={errorClass("cashAmountPaid")} required />
-                          <p className="text-xs text-muted-foreground">Enter the exact total amount: <span className="font-semibold text-foreground">₱{calculatePrices().total.toFixed(2)}</span></p>
+                          <Label htmlFor="cashAmountPaid">Amount to Pay (₱)</Label>
+                          <Input id="cashAmountPaid" type="text" value={`₱${calculatePrices().total.toFixed(2)}`} readOnly className="bg-muted/50 font-semibold cursor-default" />
                         </div>
                         <div className="flex items-center gap-2 p-4 rounded-xl bg-amber-500/10 text-amber-700">
                           <Clock className="h-5 w-5 shrink-0" />

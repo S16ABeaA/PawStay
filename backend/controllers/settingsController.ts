@@ -1,8 +1,24 @@
 import { Request, Response } from "express";
 import { supabaseAdmin } from "../config/supabaseAdmin";
 
-// ─── Helper: get the first property owned by the authenticated user ───
-async function getOwnerProperty(ownerId: string) {
+// ─── Helper: get a specific property (or first) owned by the authenticated user ───
+async function getOwnerProperty(ownerId: string, propertyId?: string | null) {
+  // If a specific property_id is given, verify it belongs to this owner
+  if (propertyId) {
+    const { data, error } = await supabaseAdmin
+      .from("properties")
+      .select("id")
+      .eq("id", propertyId)
+      .eq("owner_id", ownerId)
+      .eq("is_deleted", false)
+      .maybeSingle();
+
+    if (error) throw error;
+    if (data) return data;
+    // Fall through to default if the given id is invalid
+  }
+
+  // Fallback: first property
   const { data, error } = await supabaseAdmin
     .from("properties")
     .select("id")
@@ -34,8 +50,9 @@ export const settingsController = {
 
       if (profileErr) throw profileErr;
 
-      // 2. Property (business info)
-      const property = await getOwnerProperty(user.id);
+      // 2. Property (business info) — respect optional property_id query param
+      const qsPropertyId = req.query.property_id as string | undefined;
+      const property = await getOwnerProperty(user.id, qsPropertyId);
 
       let business: any = null;
       let availability: any = null;
@@ -117,7 +134,8 @@ export const settingsController = {
       const user = (req as any).user;
       if (!user) return res.status(401).json({ error: "Unauthorized" });
 
-      const property = await getOwnerProperty(user.id);
+      const bodyPropertyId = req.body.property_id as string | undefined;
+      const property = await getOwnerProperty(user.id, bodyPropertyId);
       if (!property) return res.status(404).json({ error: "No property found for this account." });
 
       const { name, phone, website, description, address } = req.body;
@@ -184,7 +202,8 @@ export const settingsController = {
       const user = (req as any).user;
       if (!user) return res.status(401).json({ error: "Unauthorized" });
 
-      const property = await getOwnerProperty(user.id);
+      const bodyPropertyId = req.body.property_id as string | undefined;
+      const property = await getOwnerProperty(user.id, bodyPropertyId);
       if (!property) return res.status(404).json({ error: "No property found for this account." });
 
       const { maxCapacity, minStay, checkInTime, checkOutTime, sameDayBookings } = req.body;
@@ -241,7 +260,8 @@ export const settingsController = {
       const user = (req as any).user;
       if (!user) return res.status(401).json({ error: "Unauthorized" });
 
-      const property = await getOwnerProperty(user.id);
+      const bodyPropertyId = req.body.property_id as string | undefined;
+      const property = await getOwnerProperty(user.id, bodyPropertyId);
       if (!property) return res.status(404).json({ error: "No property found for this account." });
 
       const { acceptedMethods, gcashQrUrl, paymayaQrUrl } = req.body;

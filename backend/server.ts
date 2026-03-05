@@ -77,6 +77,14 @@ app.use(cookieParser());
 app.use(express.json({ limit: '20mb' }));
 app.use(express.urlencoded({ extended: true, limit: '20mb' }));
 
+// Prevent browsers from caching API responses so property-switching always gets fresh data
+app.use('/api', (_req, res, next) => {
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.set('Pragma', 'no-cache');
+  res.set('Expires', '0');
+  next();
+});
+
 // Routes
 app.use('/api/auth', authRoute);
 app.use('/api/admin/properties', adminPropertyRoute);

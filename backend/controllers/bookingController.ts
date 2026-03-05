@@ -5,243 +5,6 @@ import { serviceHistoryModel } from "../models/serviceHistoryModel";
 import { supabaseAdmin } from "../config/supabaseAdmin";
 import { notificationModel } from "../models/notificationModel";
 
-/** GET /api/bookings/mine/today — proprietor's today's check-ins */
-export const getTodayCheckInsForOwner = async (req: any, res: any) => {
-  try {
-    const userId = (req as any).user?.id;
-    if (!userId) return res.status(401).json({ error: "Unauthorized" });
-
-    // Get properties owned by user
-    const { data: props, error: propsErr } = await supabaseAdmin
-      .from('properties')
-      .select('id, name')
-      .eq('owner_id', userId)
-      .eq('is_deleted', false);
-
-    if (propsErr) throw propsErr;
-    const propertyIds = (props ?? []).map((p: any) => p.id);
-    if (!propertyIds.length) return res.json({ checkIns: [] });
-
-    const today = new Date().toISOString().slice(0, 10);
-
-    const { data: bookings, error: bookErr } = await supabaseAdmin
-      .from('bookings')
-      .select('id, pet_name, owner_name, time_slot, room_name, service_name, property_id, status')
-      .in('property_id', propertyIds)
-      .eq('is_deleted', false)
-      .eq('checkin', today)
-      .in('status', ['pending', 'confirmed', 'checked_in'])
-      .order('time_slot', { ascending: true });
-
-    if (bookErr) throw bookErr;
-
-    const propMap = new Map((props ?? []).map((p: any) => [p.id, p.name]));
-
-    const checkIns = (bookings ?? []).map((b: any) => ({
-      id: b.id,
-      pet: b.pet_name || 'Unknown',
-      owner: b.owner_name || '',
-      time: b.time_slot ? b.time_slot.slice(0,5) : '',
-      room: b.room_name || propMap.get(b.property_id) || '',
-      service: b.service_name || '',
-      propertyId: b.property_id,
-      status: b.status,
-    }));
-
-    return res.json({ checkIns });
-  } catch (err: any) {
-    console.error('getTodayCheckInsForOwner error:', err);
-    return res.status(500).json({ error: 'Failed to fetch today\'s check-ins.' });
-  }
-};
-
-/** GET /api/bookings/mine/recent — recent bookings for proprietor's properties */
-export const getRecentBookingsForOwner = async (req: any, res: any) => {
-  try {
-    const userId = (req as any).user?.id;
-    if (!userId) return res.status(401).json({ error: "Unauthorized" });
-
-    const { data: props, error: propsErr } = await supabaseAdmin
-      .from('properties')
-      .select('id')
-      .eq('owner_id', userId)
-      .eq('is_deleted', false);
-
-    if (propsErr) throw propsErr;
-    const propertyIds = (props ?? []).map((p: any) => p.id);
-    if (!propertyIds.length) return res.json({ bookings: [] });
-
-    const { data: bookings, error: bookErr } = await supabaseAdmin
-      .from('bookings')
-      .select('id, pet_name, owner_name, service_name, checkin, created_at, status, total_price')
-      .in('property_id', propertyIds)
-      .eq('is_deleted', false)
-      .order('created_at', { ascending: false })
-      .limit(6);
-
-    if (bookErr) throw bookErr;
-
-    const out = (bookings ?? []).map((b: any) => ({
-      id: b.id,
-      pet: b.pet_name || 'Unknown',
-      owner: b.owner_name || '',
-      service: b.service_name || '',
-      date: b.checkin || (b.created_at ? b.created_at.slice(0,10) : ''),
-      status: b.status || '',
-      total_price: b.total_price ?? null,
-    }));
-
-    return res.json({ bookings: out });
-  } catch (err: any) {
-    console.error('getRecentBookingsForOwner error:', err);
-    return res.status(500).json({ error: 'Failed to fetch recent bookings.' });
-  }
-};
-
-/** GET /api/bookings/mine/list — paginated bookings for proprietor's properties */
-export const listBookingsForOwner = async (req: any, res: any) => {
-  try {
-    const userId = (req as any).user?.id;
-    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
-
-    const status = req.query.status as string | undefined;
-    const service = req.query.service as string | undefined;
-    const page = Number(req.query.page) || 1;
-    const limit = Number(req.query.limit) || 50;
-
-    const { data: props, error: propsErr } = await supabaseAdmin
-      .from('properties')
-      .select('id')
-      .eq('owner_id', userId)
-      .eq('is_deleted', false);
-    if (propsErr) throw propsErr;
-    const propertyIds = (props ?? []).map((p: any) => p.id);
-    if (!propertyIds.length) return res.json({ bookings: [], total: 0 });
-
-    // Build a count-aware query
-    let query = supabaseAdmin
-      .from('bookings')
-      .select('id, pet_name, owner_name, service_name, service_type, checkin, checkout, created_at, status, total_price, property_id', { count: 'exact' })
-      .in('property_id', propertyIds)
-      .eq('is_deleted', false)
-      .order('created_at', { ascending: false });
-
-    if (status) query = query.eq('status', status);
-    if (service) query = query.eq('service_type', service);
-
-    const offset = (page - 1) * limit;
-    const { data, error, count } = await query.range(offset, offset + limit - 1);
-    if (error) throw error;
-
-    // Normalize fields to match frontend expectations
-    const normalized = (data ?? []).map((b: any) => ({
-      id: b.id,
-      pet_name: b.pet_name,
-      owner_name: b.owner_name,
-      service_name: b.service_name,
-      service_type: b.service_type,
-      checkin: b.checkin,
-      checkout: b.checkout,
-      created_at: b.created_at,
-      status: b.status,
-      total_price: b.total_price,
-      property_id: b.property_id,
-    }));
-
-    return res.json({ bookings: normalized, total: Number(count ?? normalized.length) });
-  } catch (err: any) {
-    console.error('listBookingsForOwner error:', err);
-    return res.status(500).json({ error: 'Failed to list bookings.' });
-  }
-};
-
-/** POST /api/bookings/:id/status — owner can change booking status (confirm/cancel) */
-export const updateBookingStatusForOwner = async (req: any, res: any) => {
-  try {
-    const userId = (req as any).user?.id;
-    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
-
-    const bookingId = req.params.id as string;
-    const newStatus = req.body?.status as string;
-    if (!bookingId || !newStatus) return res.status(400).json({ error: 'Missing parameters' });
-
-    // Fetch booking and property owner
-    const { data: booking, error: bookErr } = await supabaseAdmin
-      .from('bookings')
-      .select('id, property_id, status')
-      .eq('id', bookingId)
-      .eq('is_deleted', false)
-      .single();
-    if (bookErr) throw bookErr;
-
-    const { data: prop, error: propErr } = await supabaseAdmin
-      .from('properties')
-      .select('id, owner_id')
-      .eq('id', booking.property_id)
-      .single();
-    if (propErr) throw propErr;
-
-    if (String(prop.owner_id) !== String(userId)) {
-      return res.status(403).json({ error: 'Forbidden' });
-    }
-
-    // Only allow certain transitions
-    const allowed = ['confirmed', 'cancelled'];
-    if (!allowed.includes(newStatus)) return res.status(400).json({ error: 'Invalid status' });
-
-    const { data: updated, error: updErr } = await supabaseAdmin
-      .from('bookings')
-      .update({ status: newStatus })
-      .eq('id', bookingId)
-      .select()
-      .single();
-
-    if (updErr) throw updErr;
-
-    // ── Notify the customer about the status change ──
-    try {
-      const customerId = updated.user_id;
-      if (customerId) {
-        const svcLabel = updated.service_name || updated.service_type || 'your service';
-        const dateStr = new Date(updated.checkin).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-
-        const STATUS_NOTIF_MAP: Record<string, { type: string; title: string; message: string }> = {
-          confirmed: {
-            type: 'booking_confirmed',
-            title: 'Booking Confirmed',
-            message: `Your booking for ${svcLabel} on ${dateStr} has been confirmed by the property.`,
-          },
-          cancelled: {
-            type: 'booking_cancelled',
-            title: 'Booking Cancelled',
-            message: `Your booking for ${svcLabel} on ${dateStr} has been cancelled by the property.`,
-          },
-        };
-
-        const notif = STATUS_NOTIF_MAP[newStatus];
-        if (notif) {
-          await notificationModel.create({
-            user_id: customerId,
-            type: notif.type,
-            title: notif.title,
-            message: notif.message,
-            link: '/my-bookings',
-            reference_id: bookingId,
-            reference_type: 'booking',
-          });
-        }
-      }
-    } catch (notifErr) {
-      console.error('Failed to create status-change notification:', notifErr);
-    }
-
-    return res.json({ booking: updated });
-  } catch (err: any) {
-    console.error('updateBookingStatusForOwner error:', err);
-    return res.status(500).json({ error: 'Failed to update booking status.' });
-  }
-};
-
 /**
  * GET /api/bookings/admin/calendar
  * Returns bookings for all properties owned by the current user (proprietor / admin).
@@ -537,6 +300,299 @@ export const adminCreateWalkin = async (req: Request, res: Response) => {
   }
 };
 
+/** GET /api/bookings/mine/today — proprietor's today's check-ins */
+export const getTodayCheckInsForOwner = async (req: any, res: any) => {
+  try {
+    const userId = (req as any).user?.id;
+    if (!userId) return res.status(401).json({ error: "Unauthorized" });
+
+    // Get properties owned by user
+    const { data: props, error: propsErr } = await supabaseAdmin
+      .from('properties')
+      .select('id, name')
+      .eq('owner_id', userId)
+      .eq('is_deleted', false);
+
+    if (propsErr) throw propsErr;
+    const propertyIds = (props ?? []).map((p: any) => p.id);
+    if (!propertyIds.length) return res.json({ checkIns: [] });
+
+    const today = new Date().toISOString().slice(0, 10);
+
+    const { data: bookings, error: bookErr } = await supabaseAdmin
+      .from('bookings')
+      .select('id, pet_name, owner_name, time_slot, room_name, service_name, property_id, status')
+      .in('property_id', propertyIds)
+      .eq('is_deleted', false)
+      .eq('checkin', today)
+      .in('status', ['pending', 'confirmed'])
+      .order('time_slot', { ascending: true });
+
+    if (bookErr) throw bookErr;
+
+    const propMap = new Map((props ?? []).map((p: any) => [p.id, p.name]));
+
+    const checkIns = (bookings ?? []).map((b: any) => ({
+      id: b.id,
+      pet: b.pet_name || 'Unknown',
+      owner: b.owner_name || '',
+      time: b.time_slot ? b.time_slot.slice(0,5) : '',
+      room: b.room_name || propMap.get(b.property_id) || '',
+      service: b.service_name || '',
+      propertyId: b.property_id,
+      status: b.status,
+    }));
+
+    return res.json({ checkIns });
+  } catch (err: any) {
+    console.error('getTodayCheckInsForOwner error:', err);
+    return res.status(500).json({ error: 'Failed to fetch today\'s check-ins.' });
+  }
+};
+
+/** GET /api/bookings/mine/recent — recent bookings for proprietor's properties */
+export const getRecentBookingsForOwner = async (req: any, res: any) => {
+  try {
+    const userId = (req as any).user?.id;
+    if (!userId) return res.status(401).json({ error: "Unauthorized" });
+
+    const { data: props, error: propsErr } = await supabaseAdmin
+      .from('properties')
+      .select('id')
+      .eq('owner_id', userId)
+      .eq('is_deleted', false);
+
+    if (propsErr) throw propsErr;
+    const propertyIds = (props ?? []).map((p: any) => p.id);
+    if (!propertyIds.length) return res.json({ bookings: [] });
+
+    const { data: bookings, error: bookErr } = await supabaseAdmin
+      .from('bookings')
+      .select('id, pet_name, owner_name, service_name, checkin, created_at, status, total_price')
+      .in('property_id', propertyIds)
+      .eq('is_deleted', false)
+      .order('created_at', { ascending: false })
+      .limit(6);
+
+    if (bookErr) throw bookErr;
+
+    const out = (bookings ?? []).map((b: any) => ({
+      id: b.id,
+      pet: b.pet_name || 'Unknown',
+      owner: b.owner_name || '',
+      service: b.service_name || '',
+      date: b.checkin || (b.created_at ? b.created_at.slice(0,10) : ''),
+      status: b.status || '',
+      total_price: b.total_price ?? null,
+    }));
+
+    return res.json({ bookings: out });
+  } catch (err: any) {
+    console.error('getRecentBookingsForOwner error:', err);
+    return res.status(500).json({ error: 'Failed to fetch recent bookings.' });
+  }
+};
+
+/** GET /api/bookings/mine/:id — fetch a single booking's full details for property owner */
+export const getBookingForOwner = async (req: any, res: any) => {
+  try {
+    const userId = (req as any).user?.id;
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+
+    const bookingId = req.params.id as string;
+    if (!bookingId) return res.status(400).json({ error: 'Missing booking ID' });
+
+    // Get booking
+    const { data: booking, error: bookErr } = await supabaseAdmin
+      .from('bookings')
+      .select('*')
+      .eq('id', bookingId)
+      .eq('is_deleted', false)
+      .single();
+
+    if (bookErr || !booking) {
+      return res.status(404).json({ error: 'Booking not found' });
+    }
+
+    // Verify the owner has access to this booking's property
+    const { data: prop, error: propErr } = await supabaseAdmin
+      .from('properties')
+      .select('id, owner_id')
+      .eq('id', booking.property_id)
+      .single();
+
+    if (propErr || !prop || String(prop.owner_id) !== String(userId)) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    return res.json({
+      booking: {
+        id: booking.id,
+        pet_name: booking.pet_name,
+        owner_name: booking.owner_name,
+        owner_email: booking.owner_email,
+        owner_phone: booking.owner_phone,
+        service_name: booking.service_name,
+        service_type: booking.service_type,
+        checkin: booking.checkin,
+        checkout: booking.checkout,
+        status: booking.status,
+        total_price: booking.total_price,
+        payment_method: booking.payment_method,
+        reference_number: booking.reference_number,
+        payment_screenshot_url: booking.payment_screenshot_url,
+        vaccine_record_url: booking.vaccine_record_url,
+        med_cert_url: booking.med_cert_url,
+        special_requirements: booking.special_requirements,
+        pet_type: booking.pet_type,
+        pet_breed: booking.pet_breed,
+        pet_age: booking.pet_age,
+        pet_weight: booking.pet_weight,
+        created_at: booking.created_at,
+      },
+    });
+  } catch (err: any) {
+    console.error('getBookingForOwner error:', err);
+    return res.status(500).json({ error: 'Failed to fetch booking details.' });
+  }
+};
+
+/** GET /api/bookings/mine/list — paginated bookings for proprietor's properties */
+export const listBookingsForOwner = async (req: any, res: any) => {
+  try {
+    const userId = (req as any).user?.id;
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+
+    const status = req.query.status as string | undefined;
+    const service = req.query.service as string | undefined;
+    const page = Number(req.query.page) || 1;
+    const limit = Number(req.query.limit) || 50;
+
+    const { data: props, error: propsErr } = await supabaseAdmin
+      .from('properties')
+      .select('id')
+      .eq('owner_id', userId)
+      .eq('is_deleted', false);
+    if (propsErr) throw propsErr;
+    const propertyIds = (props ?? []).map((p: any) => p.id);
+    if (!propertyIds.length) return res.json({ bookings: [], total: 0 });
+
+    // Build a count-aware query
+    let query = supabaseAdmin
+      .from('bookings')
+      .select('id, user_id, pet_name, owner_name, owner_email, owner_phone, service_name, service_type, checkin, checkout, created_at, status, total_price, property_id, payment_method, reference_number, payment_screenshot_url, vaccine_record_url, med_cert_url', { count: 'exact' })
+      .in('property_id', propertyIds)
+      .eq('is_deleted', false)
+      .order('created_at', { ascending: false });
+
+    if (status) query = query.eq('status', status);
+    if (service) query = query.eq('service_type', service);
+
+    const offset = (page - 1) * limit;
+    const { data, error, count } = await query.range(offset, offset + limit - 1);
+    if (error) throw error;
+
+    // Collect user IDs from bookings that are missing email/phone so we can fill from profiles
+    const missingInfoUserIds = Array.from(new Set(
+      (data ?? [])
+        .filter((b: any) => !b.owner_email || !b.owner_phone)
+        .map((b: any) => b.user_id)
+        .filter(Boolean)
+    ));
+
+    const profileMap = new Map<string, { email: string; phone: string }>();
+    if (missingInfoUserIds.length) {
+      const { data: profiles } = await supabaseAdmin
+        .from('profiles')
+        .select('id, email, phone')
+        .in('id', missingInfoUserIds);
+      for (const p of profiles ?? []) {
+        profileMap.set(String(p.id), { email: p.email || '', phone: p.phone || '' });
+      }
+    }
+
+    // Normalize fields to match frontend expectations
+    const normalized = (data ?? []).map((b: any) => {
+      const profile = profileMap.get(String(b.user_id));
+      return {
+        id: b.id,
+        pet_name: b.pet_name,
+        owner_name: b.owner_name,
+        owner_email: b.owner_email || profile?.email || '',
+        owner_phone: b.owner_phone || profile?.phone || '',
+        service_name: b.service_name,
+        service_type: b.service_type,
+        checkin: b.checkin,
+        checkout: b.checkout,
+        created_at: b.created_at,
+        status: b.status,
+        total_price: b.total_price,
+        property_id: b.property_id,
+        payment_method: b.payment_method,
+        reference_number: b.reference_number,
+        payment_screenshot_url: b.payment_screenshot_url,
+        vaccine_record_url: b.vaccine_record_url,
+        med_cert_url: b.med_cert_url,
+      };
+    });
+
+    return res.json({ bookings: normalized, total: Number(count ?? normalized.length) });
+  } catch (err: any) {
+    console.error('listBookingsForOwner error:', err);
+    return res.status(500).json({ error: 'Failed to list bookings.' });
+  }
+};
+
+/** POST /api/bookings/:id/status — owner can change booking status (confirm/cancel) */
+export const updateBookingStatusForOwner = async (req: any, res: any) => {
+  try {
+    const userId = (req as any).user?.id;
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+
+    const bookingId = req.params.id as string;
+    const newStatus = req.body?.status as string;
+    if (!bookingId || !newStatus) return res.status(400).json({ error: 'Missing parameters' });
+
+    // Fetch booking and property owner
+    const { data: booking, error: bookErr } = await supabaseAdmin
+      .from('bookings')
+      .select('id, property_id, status')
+      .eq('id', bookingId)
+      .eq('is_deleted', false)
+      .single();
+    if (bookErr) throw bookErr;
+
+    const { data: prop, error: propErr } = await supabaseAdmin
+      .from('properties')
+      .select('id, owner_id')
+      .eq('id', booking.property_id)
+      .single();
+    if (propErr) throw propErr;
+
+    if (String(prop.owner_id) !== String(userId)) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    // Only allow certain transitions
+    const allowed = ['confirmed', 'cancelled'];
+    if (!allowed.includes(newStatus)) return res.status(400).json({ error: 'Invalid status' });
+
+    const { data: updated, error: updErr } = await supabaseAdmin
+      .from('bookings')
+      .update({ status: newStatus })
+      .eq('id', bookingId)
+      .select()
+      .single();
+
+    if (updErr) throw updErr;
+
+    return res.json({ booking: updated });
+  } catch (err: any) {
+    console.error('updateBookingStatusForOwner error:', err);
+    return res.status(500).json({ error: 'Failed to update booking status.' });
+  }
+};
+
 /** POST /api/bookings — create a new booking */
 export const createBooking = async (req: Request, res: Response) => {
   try {
@@ -593,7 +649,8 @@ export const createBooking = async (req: Request, res: Response) => {
       if (checkoutDate.getTime() < checkinDate.getTime()) {
         return res.status(400).json({ error: "Checkout (end) cannot be before checkin (start)." });
       }
-      
+    }
+
     // ── Validate & sanitize price fields ──
     const parsedSubtotal = subtotal != null ? Number(subtotal) : null;
     const parsedServiceFee = service_fee != null ? Number(service_fee) : null;
@@ -683,13 +740,25 @@ export const createBooking = async (req: Request, res: Response) => {
         capacity = prop?.capacity ?? 5;
       }
     } else {
-      // Appointment: use property-level capacity
-      const { data: prop } = await supabaseAdmin
-        .from("properties")
+      // Appointment: check service-level capacity for grooming/vet first, then property-level
+      const { data: appointmentServices } = await supabaseAdmin
+        .from("property_services")
         .select("capacity")
-        .eq("id", resolvedPropertyId)
-        .single();
-      capacity = prop?.capacity ?? 5;
+        .eq("property_id", resolvedPropertyId)
+        .eq("is_active", true)
+        .eq("is_deleted", false)
+        .in("category", ["Grooming", "Veterinary"]);
+
+      if (appointmentServices && appointmentServices.length > 0) {
+        capacity = appointmentServices.reduce((sum: number, s: any) => sum + (s.capacity ?? 1), 0);
+      } else {
+        const { data: prop } = await supabaseAdmin
+          .from("properties")
+          .select("capacity")
+          .eq("id", resolvedPropertyId)
+          .single();
+        capacity = prop?.capacity ?? 5;
+      }
     }
 
     // ── Server-side price verification ──
@@ -728,45 +797,45 @@ export const createBooking = async (req: Request, res: Response) => {
         : null;
       expectedBasePrice = Number((exactMatch ?? matchedServices[0]).price);
     }
-    //error is here
 
-    // if (expectedBasePrice != null && !isNaN(expectedBasePrice)) {
-    //   // Compute expected prices using the same formula as the frontend
-    //   const dogSizeMultiplier =
-    //     serviceCategory === "Grooming" && pet_type === "dog" && dog_size
-    //       ? ({ small: 1.0, medium: 1.15, large: 1.30, giant: 1.50 } as Record<string, number>)[dog_size] ?? 1.0
-    //       : 1.0;
+    // ── Server-side price verification ──
+    if (expectedBasePrice != null && !isNaN(expectedBasePrice)) {
+      // Compute expected prices using the same formula as the frontend
+      const dogSizeMultiplier =
+        serviceCategory === "Grooming" && pet_type === "dog" && dog_size
+          ? ({ small: 1.0, medium: 1.15, large: 1.30, giant: 1.50 } as Record<string, number>)[dog_size] ?? 1.0
+          : 1.0;
 
-    //   const priceWithDogSize = expectedBasePrice * dogSizeMultiplier;
+      const priceWithDogSize = expectedBasePrice * dogSizeMultiplier;
 
-    //   let nights = 1;
-    //   if (isBoarding && checkin && checkout) {
-    //     const checkinMs = new Date(checkin).getTime();
-    //     const checkoutMs = new Date(checkout).getTime();
-    //     nights = Math.max(1, Math.ceil((checkoutMs - checkinMs) / (1000 * 60 * 60 * 24)));
-    //   }
+      let nights = 1;
+      if (isBoarding && checkin && checkout) {
+        const checkinMs = new Date(checkin).getTime();
+        const checkoutMs = new Date(checkout).getTime();
+        nights = Math.max(1, Math.ceil((checkoutMs - checkinMs) / (1000 * 60 * 60 * 24)));
+      }
 
-    //   const expectedSubtotal = isBoarding ? priceWithDogSize * nights : priceWithDogSize;
-    //   const expectedServiceFee = Math.round(expectedSubtotal * 0.10 * 100) / 100;
-    //   const expectedTotal = Math.round((expectedSubtotal + expectedServiceFee) * 100) / 100;
+      const expectedSubtotal = isBoarding ? priceWithDogSize * nights : priceWithDogSize;
+      const expectedServiceFee = Math.round(expectedSubtotal * 0.10 * 100) / 100;
+      const expectedTotal = Math.round((expectedSubtotal + expectedServiceFee) * 100) / 100;
 
-    //   // Compare using integer cents to avoid floating-point drift
-    //   if (parsedTotalPrice != null && Math.round(parsedTotalPrice * 100) !== Math.round(expectedTotal * 100)) {
-    //     return res.status(400).json({
-    //       error: "Price mismatch: the total price you submitted does not match the expected price. Please refresh and try again.",
-    //       expected_total: expectedTotal,
-    //       submitted_total: parsedTotalPrice,
-    //     });
-    //   }
+      // Compare using integer cents to avoid floating-point drift
+      if (parsedTotalPrice != null && Math.round(parsedTotalPrice * 100) !== Math.round(expectedTotal * 100)) {
+        return res.status(400).json({
+          error: "Price mismatch: the total price you submitted does not match the expected price. Please refresh and try again.",
+          expected_total: expectedTotal,
+          submitted_total: parsedTotalPrice,
+        });
+      }
 
-    //   if (parsedSubtotal != null && Math.round(parsedSubtotal * 100) !== Math.round(expectedSubtotal * 100)) {
-    //     return res.status(400).json({
-    //       error: "Price mismatch: the subtotal you submitted does not match the expected subtotal. Please refresh and try again.",
-    //       expected_subtotal: expectedSubtotal,
-    //       submitted_subtotal: parsedSubtotal,
-    //     });
-    //   }
-    // }
+      if (parsedSubtotal != null && Math.round(parsedSubtotal * 100) !== Math.round(expectedSubtotal * 100)) {
+        return res.status(400).json({
+          error: "Price mismatch: the subtotal you submitted does not match the expected subtotal. Please refresh and try again.",
+          expected_subtotal: expectedSubtotal,
+          submitted_subtotal: parsedSubtotal,
+        });
+      }
+    }
 
     // Compute final price fields (use server-computed values when possible)
     const finalSubtotal = parsedSubtotal;
@@ -823,6 +892,7 @@ export const createBooking = async (req: Request, res: Response) => {
           service_fee: finalServiceFee,
           total_price: finalTotalPrice,
           payment_method: payment_method || null,
+          reference_number: reference_number || null,
           payment_screenshot_url: payment_screenshot_url || null,
           notes: null,
           source: "web",
@@ -846,7 +916,7 @@ export const createBooking = async (req: Request, res: Response) => {
     // Create a service history entry for the pet if we have a pet ID and service info
     if (resolvedPetId && service_type) {
       const serviceTypeMap: Record<string, string> = {
-        boarding: "other",
+        boarding: "boarding",
         grooming: "grooming",
         veterinary: "checkup",
         daycare: "other",
@@ -907,10 +977,123 @@ export const createBooking = async (req: Request, res: Response) => {
     }
 
     return res.status(201).json({ booking });
-  }
-  }catch (err: any) {
+  } catch (err: any) {
     console.error("createBooking error:", err);
     return res.status(500).json({ error: "Failed to create booking.", details: err?.message || err });
+  }
+};
+
+/** GET /api/bookings/:id/payment-status — check payment status of a booking */
+export const checkPaymentStatus = async (req: Request, res: Response) => {
+  try {
+    const userId = (req as any).user?.id;
+    if (!userId) return res.status(401).json({ error: "Unauthorized" });
+
+    const bookingId = req.params.id as string;
+    if (!bookingId) return res.status(400).json({ error: "Missing booking id" });
+
+    const { data: booking, error } = await supabaseAdmin
+      .from("bookings")
+      .select("id, payment_status, payment_method, total_price, paid_at, status")
+      .eq("id", bookingId)
+      .eq("user_id", userId)
+      .eq("is_deleted", false)
+      .single();
+
+    if (error && error.code !== "PGRST116") throw error;
+    if (!booking) return res.status(404).json({ error: "Booking not found." });
+
+    return res.json({
+      id: booking.id,
+      payment_status: booking.payment_status,
+      payment_method: booking.payment_method,
+      total_price: booking.total_price,
+      paid_at: booking.paid_at,
+      booking_status: booking.status,
+    });
+  } catch (err: any) {
+    console.error("checkPaymentStatus error:", err);
+    return res.status(500).json({ error: "Failed to check payment status." });
+  }
+};
+
+/** PATCH /api/bookings/admin/:id/payment — update payment status (admin/owner) */
+export const adminUpdatePaymentStatus = async (req: Request, res: Response) => {
+  try {
+    const userId = (req as any).user?.id;
+    const userRole = (req as any).user?.role;
+    if (!userId) return res.status(401).json({ error: "Unauthorized" });
+
+    if (!["admin", "proprietor", "super_admin"].includes(userRole)) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
+
+    const bookingId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+    if (!bookingId) return res.status(400).json({ error: "Missing booking id" });
+
+    const { payment_status } = req.body;
+    const validStatuses = ["unpaid", "paid", "refunded", "partially_refunded"];
+    if (!payment_status || !validStatuses.includes(payment_status)) {
+      return res.status(400).json({ error: `Invalid payment_status. Must be one of: ${validStatuses.join(", ")}` });
+    }
+
+    // Verify ownership (unless super_admin)
+    if (userRole !== "super_admin") {
+      const { data: booking } = await supabaseAdmin
+        .from("bookings")
+        .select("property_id, properties:property_id(owner_id)")
+        .eq("id", bookingId)
+        .single();
+
+      if (!booking || (booking as any).properties?.owner_id !== userId) {
+        return res.status(403).json({ error: "You do not own this booking's property." });
+      }
+    }
+
+    const updateData: Record<string, any> = { payment_status };
+    if (payment_status === "paid") {
+      updateData.paid_at = new Date().toISOString();
+    }
+
+    const { data: updated, error } = await supabaseAdmin
+      .from("bookings")
+      .update(updateData)
+      .eq("id", bookingId)
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    // Notify customer about payment status change
+    try {
+      const { data: bookingData } = await supabaseAdmin
+        .from("bookings")
+        .select("user_id, service_name, service_type")
+        .eq("id", bookingId)
+        .single();
+
+      if (bookingData?.user_id) {
+        const svcLabel = bookingData.service_name || bookingData.service_type || "your service";
+        const statusLabel = payment_status === "paid" ? "confirmed" : payment_status === "refunded" ? "refunded" : payment_status;
+
+        await notificationModel.create({
+          user_id: bookingData.user_id,
+          type: payment_status === "paid" ? "payment_received" : "info",
+          title: `Payment ${statusLabel.charAt(0).toUpperCase() + statusLabel.slice(1)}`,
+          message: `Your payment for ${svcLabel} has been marked as ${statusLabel}.`,
+          link: "/my-bookings",
+          reference_id: bookingId,
+          reference_type: "booking",
+        });
+      }
+    } catch (notifErr) {
+      console.error("Failed to create payment notification:", notifErr);
+    }
+
+    return res.json({ booking: updated });
+  } catch (err: any) {
+    console.error("adminUpdatePaymentStatus error:", err);
+    return res.status(500).json({ error: "Failed to update payment status.", details: err?.message || err });
   }
 };
 
@@ -937,7 +1120,18 @@ export const getBooking = async (req: Request, res: Response) => {
     const booking = await bookingModel.getById(req.params.id as string, userId);
     if (!booking) return res.status(404).json({ error: "Booking not found." });
 
-    return res.json({ booking });
+    // Fetch property name for display
+    let propertyName: string | null = null;
+    if (booking.property_id) {
+      const { data: prop } = await supabaseAdmin
+        .from("properties")
+        .select("name")
+        .eq("id", booking.property_id)
+        .single();
+      propertyName = prop?.name ?? null;
+    }
+
+    return res.json({ booking: { ...booking, property_name: propertyName } });
   } catch (err: any) {
     console.error("getBooking error:", err);
     return res.status(500).json({ error: "Failed to fetch booking." });
@@ -981,17 +1175,11 @@ export const checkAvailability = async (req: Request, res: Response) => {
       return res.status(400).json({ error: "Missing date parameter." });
     }
 
-    const bookedSlots = await bookingModel.getBookedTimeSlotsForDate(propertyId, date);
     const capacityInfo = await bookingModel.getCapacityForDate(propertyId, date);
+    const slotCounts = await bookingModel.getSlotCountsForDate(propertyId, date);
 
     // All time slots
     const allSlots = ["9:00", "10:00", "11:00", "14:00", "15:00", "16:00"];
-
-    // Count bookings per slot
-    const slotCounts: Record<string, number> = {};
-    for (const slot of bookedSlots) {
-      slotCounts[slot] = (slotCounts[slot] || 0) + 1;
-    }
 
     // A slot is unavailable if the number of bookings for that slot >= capacity
     const unavailableSlots = allSlots.filter(
@@ -1005,6 +1193,9 @@ export const checkAvailability = async (req: Request, res: Response) => {
       date,
       capacity: capacityInfo.capacity,
       totalBooked: capacityInfo.booked,
+      slotsRemaining: Object.fromEntries(
+        allSlots.map((slot) => [slot, Math.max(0, capacityInfo.capacity - (slotCounts[slot] || 0))])
+      ),
       unavailableSlots,
       availableSlots,
     });
@@ -1033,7 +1224,7 @@ export const adminUpdateBookingStatus = async (req: Request, res: Response) => {
     if (!bookingId) return res.status(400).json({ error: "Missing booking id" });
     const { status } = req.body;
 
-    const validStatuses = ["pending", "confirmed", "checked_in", "checked_out", "completed", "cancelled"];
+    const validStatuses = ["pending", "confirmed", "cancelled"];
     if (!status || !validStatuses.includes(status)) {
       return res.status(400).json({ error: `Invalid status. Must be one of: ${validStatuses.join(", ")}` });
     }
@@ -1068,9 +1259,6 @@ export const adminUpdateBookingStatus = async (req: Request, res: Response) => {
 
         const STATUS_NOTIF: Record<string, { type: string; title: string; message: string }> = {
           confirmed:   { type: 'booking_confirmed',  title: 'Booking Confirmed',  message: `Your booking for ${svcLabel} on ${dateStr} has been confirmed.` },
-          checked_in:  { type: 'booking_confirmed',  title: 'Checked In',          message: `You have been checked in for ${svcLabel} on ${dateStr}.` },
-          checked_out: { type: 'booking_completed',  title: 'Checked Out',         message: `You have been checked out from ${svcLabel}. Thank you!` },
-          completed:   { type: 'booking_completed',  title: 'Booking Completed',   message: `Your booking for ${svcLabel} on ${dateStr} has been completed. Thank you!` },
           cancelled:   { type: 'booking_cancelled',  title: 'Booking Cancelled',   message: `Your booking for ${svcLabel} on ${dateStr} has been cancelled.` },
         };
 

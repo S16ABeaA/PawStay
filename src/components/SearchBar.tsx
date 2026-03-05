@@ -6,7 +6,7 @@ import { LocationInput } from "./LocationInput";
 
 
 const SearchBar = () => {
-  const [petType, setPetType] = useState("dog");
+  const [petTypes, setPetTypes] = useState<string[]>(["dog"]);
   const [location, setLocation] = useState("");
   const [checkIn, setCheckIn] = useState<string>("");
   const [checkOut, setCheckOut] = useState<string>("");
@@ -17,7 +17,7 @@ const SearchBar = () => {
 
 
 
-  const petTypes = [
+  const petTypeOptions = [
     { id: "dog", icon: Dog, label: "Dog" },
     { id: "cat", icon: Cat, label: "Cat" },
     { id: "others", icon: Rabbit, label: "Others" },
@@ -188,7 +188,7 @@ const SearchBar = () => {
 
     const params = new URLSearchParams();
     params.set("location", location);
-    params.set("pet", petType);
+    params.set("pet", petTypes.join(","));
     params.set("checkIn", checkIn);
     if (checkOut) params.set("checkOut", checkOut);
 
@@ -326,12 +326,16 @@ const SearchBar = () => {
             <div className="px-4 py-2">
               <p className="text-xs font-medium text-muted-foreground mb-2">Pet Type</p>
               <div className="flex gap-1">
-                {petTypes.map((pet) => (
+                {petTypeOptions.map((pet) => (
                   <button
                     key={pet.id}
-                    onClick={() => setPetType(pet.id)}
+                    onClick={() => setPetTypes(prev =>
+                      prev.includes(pet.id)
+                        ? prev.filter(p => p !== pet.id)
+                        : [...prev, pet.id]
+                    )}
                     className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                      petType === pet.id
+                      petTypes.includes(pet.id)
                         ? "bg-primary text-primary-foreground"
                         : "bg-secondary text-secondary-foreground hover:bg-secondary/80"
                     }`}
