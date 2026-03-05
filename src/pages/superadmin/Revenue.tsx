@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import SuperAdminLayout from "@/components/superadmin/SuperAdminLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -20,6 +20,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { DollarSign, TrendingUp, CreditCard, ArrowUpRight, ArrowDownRight, Download, Filter, Building2 } from "lucide-react";
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { bookingApi } from "@/services/bookingApi";
 
 const revenueStats = [
@@ -29,16 +30,7 @@ const revenueStats = [
   { label: "Active Properties", value: "156", change: "+8", trend: "up", icon: Building2 },
 ];
 
-const transactions = [
-  { id: "TXN-001", property: "Paws Paradise Hotel", type: "Booking", amount: 450, fee: 45, date: "2024-01-15", status: "Completed", amountDisplay: "₱450", feeDisplay: "₱45" },
-  { id: "TXN-002", property: "Happy Tails Resort", type: "Booking", amount: 320, fee: 32, date: "2024-01-15", status: "Completed", amountDisplay: "₱320", feeDisplay: "₱32" },
-  { id: "TXN-003", property: "Pet Haven Grooming", type: "Service", amount: 85, fee: 8.50, date: "2024-01-14", status: "Completed", amountDisplay: "₱85", feeDisplay: "₱8.50" },
-  { id: "TXN-004", property: "VetCare Plus", type: "Service", amount: 150, fee: 15, date: "2024-01-14", status: "Pending", amountDisplay: "₱150", feeDisplay: "₱15" },
-  { id: "TXN-005", property: "Luxury Pet Suites", type: "Booking", amount: 890, fee: 89, date: "2024-01-13", status: "Completed", amountDisplay: "₱890", feeDisplay: "₱89" },
-  { id: "TXN-006", property: "City Paws Hotel", type: "Booking", amount: 275, fee: 27.50, date: "2024-01-13", status: "Refunded", amountDisplay: "₱275", feeDisplay: "₱27.50" },
-  { id: "TXN-007", property: "Pampered Pets Spa", type: "Service", amount: 120, fee: 12, date: "2024-01-12", status: "Completed", amountDisplay: "₱120", feeDisplay: "₱12" },
-  { id: "TXN-008", property: "Cozy Kennels", type: "Booking", amount: 180, fee: 18, date: "2024-01-12", status: "Completed", amountDisplay: "₱180", feeDisplay: "₱18" },
-];
+// transactions will be fetched for superadmin via bookingApi.getAdminCalendar()
 
 const payouts = [
   { id: "PAY-001", property: "Paws Paradise Hotel", amount: 4250, amountDisplay: "₱4,250", status: "Processing", date: "2024-01-16" },
@@ -46,6 +38,9 @@ const payouts = [
   { id: "PAY-003", property: "Luxury Pet Suites", amount: 8920, amountDisplay: "₱8,920", status: "Scheduled", date: "2024-01-17" },
   { id: "PAY-004", property: "Pet Haven Grooming", amount: 1560, amountDisplay: "₱1,560", status: "Processing", date: "2024-01-16" },
 ];
+
+  // Transactions state (populated from admin calendar endpoint)
+  // (moved into component to obey Hooks rules)
 
 const SuperAdminRevenue = () => {
   const [totalRevenue, setTotalRevenue] = useState<number | null>(null);
@@ -58,11 +53,18 @@ const SuperAdminRevenue = () => {
     weekly: { revenue: number; count: number; period: string };
     monthly: { revenue: number; count: number; period: string };
   } | null>(null);
+  const [range, setRange] = useState<string>("this_period");
   const [periodComparison, setPeriodComparison] = useState<{
     monthly: { current: number; previous: number; percentageChange: number; period: string };
     quarterly: { current: number; previous: number; percentageChange: number; period: string };
     yearly: { current: number; previous: number; percentageChange: number; period: string };
   } | null>(null);
+  const [monthlySeries, setMonthlySeries] = useState<Array<{ year: number; month: number; label: string; revenue: number }>>([]);
+  // Transactions state (populated from admin calendar endpoint)
+  const [transactions, setTransactions] = useState<Array<any>>([]);
+  const [txnServiceTypes, setTxnServiceTypes] = useState<string[]>([]);
+  const [txnFilterType, setTxnFilterType] = useState<string>("all");
+  const [txnSearch, setTxnSearch] = useState<string>("");
 
   useEffect(() => {
     const fetchRevenueData = async () => {
@@ -70,13 +72,14 @@ const SuperAdminRevenue = () => {
         setLoading(true);
         
         // Fetch all revenue data in parallel
-        const [totalRes, serviceRes, propertyRes, locationRes, timePeriodRes, comparisonRes] = await Promise.all([
+        const [totalRes, serviceRes, propertyRes, locationRes, timePeriodRes, comparisonRes, monthlyRes] = await Promise.all([
           bookingApi.getTotalRevenue(),
           bookingApi.getRevenueByServiceType(),
           bookingApi.getRevenueByProperty(),
           bookingApi.getRevenueByLocation(),
           bookingApi.getRevenueByTimePeriod(),
-          bookingApi.getRevenuePeriodComparison(),
+            bookingApi.getRevenuePeriodComparison(),
+            bookingApi.getRevenueMonthlySeries(),
         ]);
 
         setTotalRevenue(totalRes.totalRevenue);
@@ -85,6 +88,29 @@ const SuperAdminRevenue = () => {
         setLocationBreakdown(locationRes.breakdown);
         setTimePeriodBreakdown(timePeriodRes);
         setPeriodComparison(comparisonRes);
+        setMonthlySeries((monthlyRes as any)?.series || []);
+        // fetch recent transactions (admin calendar) for the transactions table
+        try {
+          const calRes = await bookingApi.getAdminCalendar();
+          const incoming = (calRes?.bookings || []) as any[];
+          // normalize to transaction-like rows
+          const mapped = incoming.map((b: any) => ({
+            id: b.id,
+            property: b.property_name || (b.property_id || "") as string,
+            type: b.service_type || (b.service_name ? "Service" : "Booking"),
+            amount: b.total_price ?? 0,
+            fee: b.service_fee ?? 0,
+            date: b.checkin || (b.created_at ? b.created_at.slice(0,10) : ''),
+            status: b.payment_status === 'paid' ? 'Completed' : (b.payment_status === 'refunded' ? 'Refunded' : (b.status || 'Pending')),
+            amountDisplay: b.total_price != null ? `₱${Number(b.total_price).toLocaleString('en-US')}` : '₱0',
+            feeDisplay: b.service_fee != null ? `₱${Number(b.service_fee).toLocaleString('en-US')}` : '₱0',
+            raw: b,
+          }));
+          setTransactions(mapped);
+          setTxnServiceTypes(Array.isArray(calRes?.serviceTypes) ? calRes.serviceTypes : []);
+        } catch (e) {
+          console.error('Failed to fetch admin calendar for transactions', e);
+        }
       } catch (error) {
         console.error("Error fetching revenue data:", error);
       } finally {
@@ -100,22 +126,115 @@ const SuperAdminRevenue = () => {
     return `₱${amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   };
 
-  // Update stats with real data
+  // Export a breakdown array to CSV and trigger download
+  const exportCSV = (rows: any[], filename = "export.csv") => {
+    if (!rows || rows.length === 0) return;
+    const keys = Object.keys(rows[0]);
+    const csv = [keys.join(','), ...rows.map(r => keys.map(k => {
+      const v = (r as any)[k];
+      if (typeof v === 'string') return `"${v.replace(/"/g, '""')}"`;
+      return v ?? '';
+    }).join(','))].join('\n');
+
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  // Export all visible breakdowns as separate CSV files
+  const exportAll = () => {
+    if (!loading) {
+      if (serviceTypeBreakdown && serviceTypeBreakdown.length > 0) exportCSV(serviceTypeBreakdown, 'revenue_by_service_type.csv');
+      if (propertyBreakdown && propertyBreakdown.length > 0) exportCSV(propertyBreakdown, 'revenue_by_property.csv');
+      if (monthlySeries && monthlySeries.length > 0) exportCSV(monthlySeries, 'revenue_monthly_series.csv');
+      const timeChartData = timePeriodBreakdown
+        ? [
+            { period: timePeriodBreakdown.daily.period, revenue: timePeriodBreakdown.daily.revenue },
+            { period: timePeriodBreakdown.weekly.period, revenue: timePeriodBreakdown.weekly.revenue },
+            { period: timePeriodBreakdown.monthly.period, revenue: timePeriodBreakdown.monthly.revenue },
+          ]
+        : [];
+      if (timeChartData.length > 0) exportCSV(timeChartData, 'revenue_time_period.csv');
+    }
+  };
+
+  // Compute useful derived metrics for stat cards
+  const totalBookings = (serviceTypeBreakdown && serviceTypeBreakdown.length > 0)
+    ? serviceTypeBreakdown.reduce((s, i) => s + (i.count || 0), 0)
+    : (propertyBreakdown && propertyBreakdown.length > 0)
+      ? propertyBreakdown.reduce((s, i) => s + (i.count || 0), 0)
+      : 0;
+
+  const avgServiceFee = (totalBookings > 0 && totalRevenue) ? (totalRevenue / totalBookings) : 0;
+
+  const activeProperties = propertyBreakdown && propertyBreakdown.length ? propertyBreakdown.length : 0;
+
+  // Update stats with real data (more actionable metrics)
   const stats = [
-    { 
-      label: "Total Revenue (Service Fees)", 
+    {
+      label: "Total Revenue (Service Fees)",
       value: loading ? "Loading..." : (totalRevenue !== null ? formatCurrency(totalRevenue) : "₱0.00"),
-      change: "+18.2%", 
-      trend: "up", 
-      icon: DollarSign 
+      previous: periodComparison?.monthly?.previous ?? null,
+      change: periodComparison?.monthly?.percentageChange !== undefined ? `${periodComparison!.monthly.percentageChange.toFixed(1)}%` : undefined,
+      trend: periodComparison?.monthly?.percentageChange && periodComparison.monthly.percentageChange >= 0 ? "up" : "down",
+      icon: DollarSign,
     },
-    { label: "Platform Fees", value: "₱28,452", change: "+15.8%", trend: "up", icon: TrendingUp },
-    { label: "Pending Payouts", value: "₱12,340", change: "-5.2%", trend: "down", icon: CreditCard },
-    { label: "Active Properties", value: "156", change: "+8", trend: "up", icon: Building2 },
+    {
+      label: "Total Bookings",
+      value: loading ? "Loading..." : `${totalBookings}`,
+      change: undefined,
+      trend: "up",
+      icon: TrendingUp,
+    },
+    {
+      label: "Avg Service Fee / Booking",
+      value: loading ? "Loading..." : formatCurrency(avgServiceFee),
+      change: undefined,
+      trend: "up",
+      icon: CreditCard,
+    },
+    {
+      label: "Active Properties",
+      value: loading ? "Loading..." : `${activeProperties}`,
+      change: undefined,
+      trend: "up",
+      icon: Building2,
+    },
   ];
+
+  // Prepare small chart data from the time period breakdown (daily/weekly/monthly)
+  const timeChartData = timePeriodBreakdown
+    ? [
+        { period: timePeriodBreakdown.daily.period, revenue: timePeriodBreakdown.daily.revenue },
+        { period: timePeriodBreakdown.weekly.period, revenue: timePeriodBreakdown.weekly.revenue },
+        { period: timePeriodBreakdown.monthly.period, revenue: timePeriodBreakdown.monthly.revenue },
+      ]
+    : [];
+
+  // Filtered transactions based on search and selected service type
+  const filteredTransactions = useMemo(() => {
+    const q = txnSearch.trim().toLowerCase();
+    return transactions.filter((t) => {
+      if (txnFilterType && txnFilterType !== 'all' && String(t.type).toLowerCase() !== String(txnFilterType).toLowerCase()) return false;
+      if (!q) return true;
+      return [t.id, t.property, t.type, t.raw?.owner_name, t.raw?.service_name]
+        .filter(Boolean)
+        .some((v) => String(v).toLowerCase().includes(q));
+    });
+  }, [transactions, txnFilterType, txnSearch]);
 
   return (
     <SuperAdminLayout title="Revenue & Payouts" subtitle="Track platform revenue and manage property payouts">
+      <div className="flex justify-end mb-4">
+        <Button variant="outline" size="sm" className="gap-2 border-white/10 text-[#808080] hover:bg-white/5 hover:text-white" onClick={exportAll} disabled={loading}>
+          <Download className="h-4 w-4" />
+          Export All
+        </Button>
+      </div>
       {/* Stats Grid */}
       <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8 sa-stagger">
         {stats.map((stat) => (
@@ -125,32 +244,48 @@ const SuperAdminRevenue = () => {
                 <div className="p-2 rounded-lg bg-[#ffa31a]/20">
                   <stat.icon className="h-5 w-5 text-[#ffa31a]" />
                 </div>
-                <Badge 
-                  variant="outline" 
-                  className={stat.trend === "up" ? "text-emerald-400 border-emerald-400/30" : "text-red-400 border-red-400/30"}
-                >
-                  {stat.trend === "up" ? <ArrowUpRight className="h-3 w-3 mr-1" /> : <ArrowDownRight className="h-3 w-3 mr-1" />}
-                  {stat.change}
-                </Badge>
+                {stat.change ? (
+                  <Badge
+                    variant="outline"
+                    className={stat.trend === "up" ? "text-emerald-400 border-emerald-400/30" : "text-red-400 border-red-400/30"}
+                  >
+                    {stat.trend === "up" ? <ArrowUpRight className="h-3 w-3 mr-1" /> : <ArrowDownRight className="h-3 w-3 mr-1" />}
+                    {stat.change}
+                  </Badge>
+                ) : null}
               </div>
               <p className="text-2xl font-bold text-white tabular-nums">{stat.value}</p>
+              {stat.previous !== undefined && stat.previous !== null && (
+                <p className="text-xs text-white/60 mt-1">Previous: {formatCurrency(stat.previous)}</p>
+              )}
               <p className="text-sm text-[#808080]">{stat.label}</p>
             </CardContent>
           </Card>
         ))}
       </div>
 
-      <div className="grid lg:grid-cols-3 gap-6 sa-slide-in" style={{ animationDelay: '120ms' }}>
+      <div className="grid lg:grid-cols-2 gap-6 sa-slide-in" style={{ animationDelay: '120ms' }}>
         {/* Transactions Table */}
         <Card className="lg:col-span-2 bg-[#292929] border-white/[0.07] sa-card">
-          <CardHeader className="flex flex-row items-center justify-between">
+          <CardHeader className="relative">
             <CardTitle className="text-white">Recent Transactions</CardTitle>
-            <div className="flex gap-2">
-              <Button variant="outline" size="sm" className="border-white/[0.1] text-white/80 hover:bg-white/[0.06]">
+            <div className="absolute right-4 top-3 flex items-center gap-2">
+              <Select defaultValue={txnFilterType} onValueChange={(v) => setTxnFilterType(v)}>
+                <SelectTrigger className="w-44 bg-[#292929] border-white/[0.09] text-white">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="bg-[#292929] border-white/10 text-white">
+                  <SelectItem value="all" className="text-white">All Types</SelectItem>
+                  <SelectItem value="boarding" className="text-white">Boarding</SelectItem>
+                  <SelectItem value="grooming" className="text-white">Grooming</SelectItem>
+                  <SelectItem value="veterinary" className="text-white">Veterinary</SelectItem>
+                </SelectContent>
+              </Select>
+              <Button variant="outline" size="sm" className="border-white/[0.1] text-white/80 hover:bg-white/[0.06]" onClick={() => { setTxnFilterType('all'); setTxnSearch(''); }}>
                 <Filter className="h-4 w-4 mr-2" />
-                Filter
+                Clear
               </Button>
-              <Button variant="outline" size="sm" className="border-white/[0.1] text-white/80 hover:bg-white/[0.06]">
+              <Button variant="outline" size="sm" className="border-white/[0.1] text-white/80 hover:bg-white/[0.06]" onClick={() => exportCSV(filteredTransactions, 'transactions.csv')} disabled={loading || filteredTransactions.length === 0}>
                 <Download className="h-4 w-4 mr-2" />
                 Export
               </Button>
@@ -158,22 +293,15 @@ const SuperAdminRevenue = () => {
           </CardHeader>
           <CardContent>
             <div className="flex gap-3 mb-4">
-              <Input 
-                placeholder="Search transactions..." 
-                className="bg-[#292929] border-white/[0.09] text-white placeholder:text-[#808080]"
+              <Input
+                value={txnSearch}
+                onChange={(e) => setTxnSearch((e.target as HTMLInputElement).value)}
+                placeholder="Search transactions by id, property, owner or service..."
+                className="bg-[#292929] border-white/[0.09] text-white placeholder:text-[#808080] w-full"
               />
-              <Select defaultValue="all">
-                <SelectTrigger className="w-40 bg-[#292929] border-white/[0.09] text-white">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent className="bg-[#292929] border-white/10 text-white">
-                  <SelectItem value="all" className="text-white focus:bg-white/[0.06] focus:text-white">All Types</SelectItem>
-                  <SelectItem value="booking" className="text-white focus:bg-white/[0.06] focus:text-white">Bookings</SelectItem>
-                  <SelectItem value="service" className="text-white focus:bg-white/[0.06] focus:text-white">Services</SelectItem>
-                </SelectContent>
-              </Select>
             </div>
-            <Table>
+            <div className="overflow-auto max-h-72 w-full">
+              <Table className="w-full">
               <TableHeader>
                 <TableRow className="border-white/[0.06] hover:bg-transparent">
                   <TableHead className="text-[#808080]">Transaction</TableHead>
@@ -184,7 +312,7 @@ const SuperAdminRevenue = () => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {transactions.map((txn) => (
+                {filteredTransactions.map((txn) => (
                   <TableRow key={txn.id} className="border-white/[0.06] hover:bg-white/[0.04]">
                     <TableCell>
                       <div>
@@ -215,12 +343,13 @@ const SuperAdminRevenue = () => {
                   </TableRow>
                 ))}
               </TableBody>
-            </Table>
+              </Table>
+            </div>
           </CardContent>
         </Card>
 
         {/* Pending Payouts */}
-        <Card className="bg-[#292929] border-white/[0.07] sa-card">
+        {/* <Card className="bg-[#292929] border-white/[0.07] sa-card">
           <CardHeader>
             <CardTitle className="text-white">Pending Payouts</CardTitle>
           </CardHeader>
@@ -254,14 +383,31 @@ const SuperAdminRevenue = () => {
               </div>
             ))}
           </CardContent>
-        </Card>
+        </Card> */}
       </div>
 
       {/* Revenue by Time Period */}
       <div className="mt-8 sa-slide-in" style={{ animationDelay: '200ms' }}>
         <Card className="bg-[#292929] border-white/[0.07] sa-card">
-          <CardHeader>
+          <CardHeader className="relative">
             <CardTitle className="text-white">Revenue by Time Period</CardTitle>
+            <div className="absolute right-4 top-3 flex items-center gap-2">
+              <Select defaultValue={range} onValueChange={(v) => setRange(v)}>
+                <SelectTrigger className="w-44 bg-[#292929] border-white/[0.09] text-white">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="bg-[#292929] border-white/10 text-white">
+                  <SelectItem value="this_period" className="text-white">This Period</SelectItem>
+                  <SelectItem value="last_7" className="text-white">Last 7 days</SelectItem>
+                  <SelectItem value="last_30" className="text-white">Last 30 days</SelectItem>
+                  <SelectItem value="ytd" className="text-white">Year to date</SelectItem>
+                </SelectContent>
+              </Select>
+              <Button variant="outline" size="sm" className="gap-2 border-white/10 text-[#808080] hover:bg-white/5 hover:text-white" onClick={() => exportCSV(timeChartData, 'revenue_time_period.csv')} disabled={loading || timeChartData.length === 0}>
+                <Download className="h-4 w-4" />
+                Export
+              </Button>
+            </div>
           </CardHeader>
           <CardContent>
             <div className="grid md:grid-cols-3 gap-4">
@@ -309,6 +455,19 @@ const SuperAdminRevenue = () => {
                 <p className="text-white/60 col-span-3">No data available</p>
               )}
             </div>
+            {/* Small bar chart for daily/weekly/monthly */}
+            {timeChartData.length > 0 && (
+              <div className="mt-6" style={{ height: 180 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={timeChartData}>
+                    <XAxis dataKey="period" stroke="#9CA3AF" />
+                    <YAxis stroke="#9CA3AF" />
+                    <Tooltip formatter={(value: any) => (typeof value === 'number' ? formatCurrency(value) : value)} />
+                    <Bar dataKey="revenue" fill="#10B981" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -426,12 +585,51 @@ const SuperAdminRevenue = () => {
         </Card>
       </div>
 
+            {/* Monthly Revenue Trend (historical series) */}
+            <div className="mt-8 sa-slide-in" style={{ animationDelay: '240ms' }}>
+              <Card className="bg-[#292929] border-white/[0.07] sa-card">
+                <CardHeader className="relative">
+                  <CardTitle className="text-white">Monthly Revenue Trend</CardTitle>
+                  <div className="absolute right-4 top-3 flex items-center gap-2">
+                    <Button variant="outline" size="sm" className="gap-2 border-white/10 text-[#808080] hover:bg-white/5 hover:text-white" onClick={() => exportCSV(monthlySeries, 'revenue_monthly_series.csv')} disabled={loading || monthlySeries.length === 0}>
+                      <Download className="h-4 w-4" />
+                      Export
+                    </Button>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  {loading ? (
+                    <p className="text-white/60">Loading...</p>
+                  ) : monthlySeries.length > 0 ? (
+                    <div style={{ height: 280 }}>
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={monthlySeries.map(m => ({ label: m.label, revenue: m.revenue }))}>
+                          <XAxis dataKey="label" stroke="#9CA3AF" />
+                          <YAxis stroke="#9CA3AF" />
+                          <Tooltip formatter={(value: any) => (typeof value === 'number' ? formatCurrency(value) : value)} />
+                          <Bar dataKey="revenue" fill="#60A5FA" />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  ) : (
+                    <p className="text-white/60">No monthly data available</p>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+
       {/* Revenue Breakdown by Service Type */}
       <div className="grid lg:grid-cols-2 gap-6 mt-8 sa-slide-in" style={{ animationDelay: '240ms' }}>
         <Card className="bg-[#292929] border-white/[0.07] sa-card">
-          <CardHeader>
-            <CardTitle className="text-white">Revenue by Service Type</CardTitle>
-          </CardHeader>
+            <CardHeader className="relative">
+                  <CardTitle className="text-white">Revenue by Service Type</CardTitle>
+                  <div className="absolute right-4 top-3 flex items-center gap-2">
+                    <Button variant="outline" size="sm" className="gap-2 border-white/10 text-[#808080] hover:bg-white/5 hover:text-white" onClick={() => exportCSV(serviceTypeBreakdown, 'revenue_by_service_type.csv')} disabled={loading || serviceTypeBreakdown.length === 0}>
+                      <Download className="h-4 w-4" />
+                      Export
+                    </Button>
+                  </div>
+                </CardHeader>
           <CardContent>
             <div className="space-y-3">
               {loading ? (
@@ -489,8 +687,14 @@ const SuperAdminRevenue = () => {
       {/* Revenue Breakdown by Property */}
       <div className="mt-8 sa-slide-in" style={{ animationDelay: '280ms' }}>
         <Card className="bg-[#292929] border-white/[0.07] sa-card">
-          <CardHeader>
+          <CardHeader className="relative">
             <CardTitle className="text-white">Revenue by Property</CardTitle>
+            <div className="absolute right-4 top-3 flex items-center gap-2">
+              <Button variant="outline" size="sm" className="gap-2 border-white/10 text-[#808080] hover:bg-white/5 hover:text-white" onClick={() => exportCSV(propertyBreakdown, 'revenue_by_property.csv')} disabled={loading || propertyBreakdown.length === 0}>
+                <Download className="h-4 w-4" />
+                Export
+              </Button>
+            </div>
           </CardHeader>
           <CardContent>
             <div className="space-y-3">

@@ -1737,3 +1737,58 @@ export const getRevenuePeriodComparison = async (req: Request, res: Response) =>
     return res.status(500).json({ error: "Failed to get revenue period comparison.", details: err?.message || err });
   }
 };
+
+/**
+ * GET /api/bookings/revenue/monthly-series
+ * Returns monthly revenue totals for the last N months (default 12).
+ * Super admin only.
+ */
+export const getRevenueMonthlySeries = async (req: Request, res: Response) => {
+  try {
+    const userRole = (req as any).user?.role;
+    if (userRole !== "super_admin") {
+      return res.status(403).json({ error: "Access denied. Super admin only." });
+    }
+
+    const monthsParam = parseInt((req.query.months as string) || '12', 10);
+    const months = isNaN(monthsParam) ? 12 : Math.max(1, monthsParam);
+
+    const { data, error } = await supabaseAdmin
+      .from('bookings')
+      .select('service_fee, created_at')
+      .eq('is_deleted', false)
+      .eq('payment_status', 'paid')
+      .order('created_at', { ascending: true });
+
+    if (error) throw error;
+
+    const now = new Date();
+    const resultMap: Record<string, number> = {};
+
+    // initialize months keys for the last `months` months
+    for (let i = months - 1; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      resultMap[key] = 0;
+    }
+
+    (data ?? []).forEach((booking: any) => {
+      const fee = parseFloat(booking.service_fee) || 0;
+      const createdAt = new Date(booking.created_at);
+      const key = `${createdAt.getFullYear()}-${String(createdAt.getMonth() + 1).padStart(2, '0')}`;
+      if (key in resultMap) {
+        resultMap[key] += fee;
+      }
+    });
+
+    const series = Object.keys(resultMap).map((k) => {
+      const [y, m] = k.split('-');
+      return { year: parseInt(y, 10), month: parseInt(m, 10), label: `${y}-${m}`, revenue: resultMap[k] };
+    });
+
+    return res.json({ series, currency: 'PHP' });
+  } catch (err: any) {
+    console.error('getRevenueMonthlySeries error:', err);
+    return res.status(500).json({ error: 'Failed to get monthly revenue series.', details: err?.message || err });
+  }
+};

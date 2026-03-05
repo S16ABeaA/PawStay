@@ -22,6 +22,7 @@ import {
   getRevenueByLocation,
   getRevenueByTimePeriod,
   getRevenuePeriodComparison,
+  getRevenueMonthlySeries,
 } from "../controllers/bookingController";
 
 const router = Router();
@@ -39,6 +40,7 @@ router.get("/revenue/by-property", getRevenueByProperty);
 router.get("/revenue/by-location", getRevenueByLocation);
 router.get("/revenue/by-time-period", getRevenueByTimePeriod);
 router.get("/revenue/period-comparison", getRevenuePeriodComparison);
+router.get("/revenue/monthly-series", getRevenueMonthlySeries);
 
 // Admin calendar — returns bookings across all proprietor's properties
 router.get("/admin/calendar", adminCalendar);

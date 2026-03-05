@@ -233,4 +233,8 @@ export const bookingApi = {
   /** Get revenue period comparison - current vs previous period (super admin only) */
   getRevenuePeriodComparison: () =>
     authHelper.get(`${API_BASE_URL}/api/bookings/revenue/period-comparison`),
+
+  /** Get monthly revenue series for historical trends (super admin only) */
+  getRevenueMonthlySeries: () =>
+    authHelper.get(`${API_BASE_URL}/api/bookings/revenue/monthly-series`),
 };
