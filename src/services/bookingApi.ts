@@ -209,4 +209,28 @@ export const bookingApi = {
   /** Admin soft-delete a booking */
   deleteBooking: (bookingId: string) =>
     authHelper.delete(`${API_BASE_URL}/api/bookings/admin/${bookingId}`),
+
+  /** Get total revenue from all service fees (super admin only) */
+  getTotalRevenue: () =>
+    authHelper.get(`${API_BASE_URL}/api/bookings/revenue/total`),
+
+  /** Get revenue breakdown by service type (super admin only) */
+  getRevenueByServiceType: () =>
+    authHelper.get(`${API_BASE_URL}/api/bookings/revenue/by-service-type`),
+
+  /** Get revenue breakdown by property (super admin only) */
+  getRevenueByProperty: () =>
+    authHelper.get(`${API_BASE_URL}/api/bookings/revenue/by-property`),
+
+  /** Get revenue breakdown by location (super admin only) */
+  getRevenueByLocation: () =>
+    authHelper.get(`${API_BASE_URL}/api/bookings/revenue/by-location`),
+
+  /** Get revenue breakdown by time period - daily, weekly, monthly (super admin only) */
+  getRevenueByTimePeriod: () =>
+    authHelper.get(`${API_BASE_URL}/api/bookings/revenue/by-time-period`),
+
+  /** Get revenue period comparison - current vs previous period (super admin only) */
+  getRevenuePeriodComparison: () =>
+    authHelper.get(`${API_BASE_URL}/api/bookings/revenue/period-comparison`),
 };
