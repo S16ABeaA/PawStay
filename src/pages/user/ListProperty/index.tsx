@@ -116,7 +116,11 @@ const ListProperty = () => {
         { key: "country", label: "Country/region" },
         { key: "city", label: "City" },
         { key: "zipCode", label: "Zip code" },
-      ].filter((field) => !formData[field.key as keyof typeof formData]);
+      ].filter((field) => {
+        const value = formData[field.key as keyof typeof formData];
+        if (typeof value === "string") return value.trim() === "";
+        return !value;
+      });
 
       if (missingFields.length > 0) {
         toast({
@@ -129,11 +133,134 @@ const ListProperty = () => {
         return;
       }
 
+      const isValidZipCode = (zip: string) => /^\d{4}$/.test(zip);
+
+      if (!isValidZipCode(formData.zipCode)) {
+        toast({
+          title: "Invalid zip code.",
+          variant: "destructive",
+        });
+        return;
+      }
+
       setCurrentStep(2);
       return;
     }
 
     if (currentStep === 2) {
+      if (propertySetupStep === 1) {
+        if (formData.petTypesAccepted.length === 0) {
+          toast({
+            title: "Please choose a Pet Type",
+            description: "You need to choose at least one pet type to continue.",
+            variant: "destructive",
+          });
+          return;
+        }
+
+        if (formData.petTypesAccepted.includes("Dogs") && formData.dogSizes.length === 0) {
+          toast({
+            title: "Please choose a dog size",
+            description: "You need to choose at least one dog size to continue.",
+            variant: "destructive",
+          });
+          return;
+        }
+
+        if (formData.breedRestrictions && formData.breedRestrictionDetails.trim() === "") {
+          toast({
+            title: "Please fill out the missing fields",
+            description: "You need to detail your breeding restrictions.",
+            variant: "destructive",
+          });
+          return;
+        }
+
+        if (formData.aggressivePolicy && formData.aggressivePolicyDetails.trim() === "") {
+          toast({
+            title: "Please fill out the missing fields",
+            description: "You need to detail your aggressive pet policies.",
+            variant: "destructive",
+          });
+          return;
+        }
+
+        if (formData.unvaccinatedPolicy && formData.unvaccinatedPolicyDetails.trim() === "") {
+          toast({
+            title: "Please fill out the missing fields",
+            description: "You need to detail your vaccination requirements.",
+            variant: "destructive",
+          });
+          return;
+        }
+
+        if (formData.animalCapacity === 0) {
+          toast({
+            title: "Please fill out the missing fields",
+            description: "You need to fill in your total animal capacity.",
+            variant: "destructive",
+          });
+          return;
+        }
+
+        if (!formData.petTypesAccepted.includes("Dogs") && formData.dogSizes.length != 0) {
+          updateForm({ dogSizes: [] });
+        }
+
+        if (!formData.petTypesAccepted.includes("Exotic Pets") && formData.dogSizes.length != 0) {
+          updateForm({ exoticPetTypes: "" });
+        }
+      }
+
+      if (propertySetupStep === 2) {
+        if (formData.facilitiesAmenities.length === 0) {
+          toast({
+            title: "Please choose your Facilities and Amenities",
+            description: "You need to choose at least one facility or amenity to continue.",
+            variant: "destructive",
+          });
+          return;
+        }
+      }
+
+      if (propertySetupStep == 3) {
+        if (formData.sameHoursEveryDay && (formData.dailyOpenTime.trim() === "" || formData.dailyCloseTime.trim() === "")) {
+          toast({
+            title: "Please fill in the missing fields",
+            description: "You need to fill in your open and close times to continue.",
+            variant: "destructive",
+          });
+          return;
+        }
+
+        if (formData.checkInCutoff.trim() === "" || formData.pickupStart.trim() === "" || formData.pickupEnd.trim() === "") {
+          toast({
+            title: "Please fill in the missing fields",
+            description: "You need to fill in your boarding rules to continue.",
+            variant: "destructive",
+          });
+          return;
+        }
+
+        if ((hasGrooming || hasVet) && (formData.appointmentOnly.trim() === "")) {
+          toast({
+            title: "Please select a Booking Type",
+            variant: "destructive",
+          });
+          return;
+        }
+
+        if (formData.sameHoursEveryDay) {
+          updateForm({ weeklyHours: {} });
+        } else {
+          updateForm({ dailyOpenTime: "", dailyCloseTime: "" });
+        }
+
+        if (!(hasGrooming || hasVet)) {
+          updateForm({ appointmentOnly: "" });
+        }
+      }
+
       if (propertySetupStep < 5) {
         setPropertySetupStep((prev) => prev + 1);
       } else {
@@ -159,6 +286,24 @@ const ListProperty = () => {
       const currentIndex = pricingSteps.indexOf(pricingCalendarStep);
       const nextStep = pricingSteps[currentIndex + 1];
 
+      if (pricingCalendarStep === 1) {
+        const missingFields = formData.baseServices.filter(service => 
+          service.name.trim() === "" ||
+          (service.priceType === "Fixed price" && service.price.trim() === "") ||
+          (service.priceType === "Starting from" && service.minPrice.trim() === "") ||
+          (service.priceType === "Starting from" && service.maxPrice.trim() === "") ||
+          service.duration.trim() === ""
+        );
+
+        if (missingFields.length > 0) {
+          toast({
+            title: "Please fill in the missing fields",
+            variant: "destructive",
+          });
+          return;
+        }
+      }
+
       if (nextStep) {
         setPricingCalendarStep(nextStep);
       } else {
@@ -168,6 +313,13 @@ const ListProperty = () => {
     }
 
     if (currentStep === 5) {
+      if (formData.lguPermits.length === 0 || !formData.baiDocument || !formData.contractDocument) {
+        toast({
+          title: "Please upload all required documents",
+          variant: "destructive",
+        });
+        return;
+      }
       setCurrentStep(6);
       return;
     }
@@ -221,6 +373,52 @@ const ListProperty = () => {
   };
 
   const handleSubmit = async () => {
+    const missingFields = [
+      // Entity type
+      { key: "legalEntityType", label: "Legal Entity Type", value: formData.legalEntityType },
+
+      // Contracting party
+      { key: "firstName", label: "First Name", value: formData.contractingParty.firstName },
+      { key: "lastName", label: "Last Name", value: formData.contractingParty.lastName },
+      { key: "email", label: "Email", value: formData.contractingParty.email },
+      { key: "phone", label: "Phone", value: formData.contractingParty.phone },
+      { key: "phoneCountryCode", label: "Phone Country Code", value: formData.contractingParty.phoneCountryCode },
+
+      // Contracting party address
+      { key: "country", label: "Country", value: formData.contractingPartyAddress.country },
+      { key: "streetAddress", label: "Street Address", value: formData.contractingPartyAddress.streetAddress },
+      { key: "city", label: "City", value: formData.contractingPartyAddress.city },
+      { key: "postalCode", label: "Postal Code", value: formData.contractingPartyAddress.postalCode },
+    ].filter(field => {
+      if (typeof field.value === "string") return field.value.trim() === "";
+      return !field.value;
+    });
+
+    // booleans checked separately since false is a meaningful invalid value
+    const missingAgreements = [
+      { key: "termsAccepted", label: "Terms and Conditions", value: formData.legalAgreementAccepted.termsAccepted },
+      { key: "dataProcessing", label: "Data Processing Agreement", value: formData.legalAgreementAccepted.dataProcessing },
+      { key: "finalAgreementAccepted", label: "Final Agreement", value: formData.finalAgreementAccepted },
+    ].filter(field => field.value !== true);
+
+    if (missingFields.length > 0) {
+      toast({
+        title: "Please fill in the missing fields",
+        description: missingFields.map(f => f.label).join(", "),
+        variant: "destructive"
+      });
+      return;
+    }
+
+    if (missingAgreements.length > 0) {
+      toast({
+        title: "Please accept all agreements",
+        description: missingAgreements.map(f => f.label).join(", "),
+        variant: "destructive"
+      });
+      return;
+    }
+
     if (isSubmitting) return;
 
     setIsSubmitting(true);

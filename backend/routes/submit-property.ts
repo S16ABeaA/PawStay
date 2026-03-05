@@ -15,7 +15,6 @@ interface PropertySubmissionData {
   email: string;
   password: string;
   description: string;
-  isPinAccurate: boolean;
   services: string[];
   petTypesAccepted: string[];
   dogSizes: string[];

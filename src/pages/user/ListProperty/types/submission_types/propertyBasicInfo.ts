@@ -17,7 +17,6 @@ export interface PropertyBasicInfo {
   email: string
   password: string
   description: string
-  isPinAccurate: boolean
   
   propertyImages: string[]
 }

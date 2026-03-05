@@ -15,7 +15,6 @@ export const INITIAL_FORM_DATA: PropertyInitalData = {
   password: "",
   confirmPassword: "",
   description: "",
-  isPinAccurate: true,
   services: [],
   petTypesAccepted: [],
   dogSizes: [],

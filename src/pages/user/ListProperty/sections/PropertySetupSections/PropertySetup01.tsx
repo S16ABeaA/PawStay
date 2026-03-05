@@ -214,7 +214,7 @@ const PropertySetup01 = ({ formData, onChange, hasBoarding, hasGrooming }: Props
               </div>
 
               <h4 className="text-sm font-semibold mb-3 text-foreground">
-                Per-service / room-type capacity <span className="font-normal text-muted-foreground">(stored in property_services.capacity)</span>
+                Per-service / room-type capacity
               </h4>
 
               <div className="space-y-3 mb-4">

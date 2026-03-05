@@ -16,7 +16,6 @@ export interface PropertyBasicInfoInitial {
   password: string
   confirmPassword: string
   description: string
-  isPinAccurate: boolean
   
   propertyImages: File[]
 }

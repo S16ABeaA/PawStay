@@ -10,7 +10,6 @@ import {
 } from "react-leaflet";
 import L from "leaflet";
 
-import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
@@ -121,10 +120,10 @@ const EstablishmentInfo02 = ({ formData, onChange, updateAddress }: Props) => {
         </p>
       </div>
       <div className="grid lg:grid-cols-2 gap-4">
-        <div className="rounded-2xl border border-border overflow-hidden h-[420px]">
-            <MapContainer {...mapProps}>
-              <TileLayer {...tileLayerProps} />
-              <Marker {...markerProps} />
+        <div className="rounded-2xl border border-border overflow-hidden h-[420px] relative z-0">
+          <MapContainer {...mapProps}>
+            <TileLayer {...tileLayerProps} />
+            <Marker {...markerProps} />
             <MapClickHandler
               enabled
               onSelect={(lat, lng) => void reverseGeocode(lat, lng)}
@@ -181,22 +180,6 @@ const EstablishmentInfo02 = ({ formData, onChange, updateAddress }: Props) => {
                 value={formData.zipCode}
                 onChange={(e) => onChange({ zipCode: e.target.value })}
               />
-            </div>
-            <div className="md:col-span-2 space-y-2">
-              <div className="flex items-start gap-2">
-                <Checkbox
-                  id="pinAccurate"
-                  checked={formData.isPinAccurate}
-                  onCheckedChange={(checked) => onChange({ isPinAccurate: Boolean(checked) })}
-                  className="mt-1"
-                />
-                <Label
-                  htmlFor="pinAccurate"
-                  className="text-sm cursor-pointer text-muted-foreground"
-                >
-                  Update the address by moving the pin on the map.
-                </Label>
-              </div>
             </div>
           </div>
         </div>

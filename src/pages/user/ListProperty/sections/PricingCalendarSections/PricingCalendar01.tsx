@@ -1,3 +1,5 @@
+import { X } from "lucide-react";
+
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -24,7 +26,17 @@ const PricingCalendar01 = ({ formData, onChange }: Props) => {
 
         <div className="space-y-4 mb-6">
           {formData.baseServices.map((service, index) => (
-            <div key={index} className="bg-secondary/50 rounded-xl p-4 border border-border">
+            <div key={index} className="relative bg-secondary/50 rounded-xl p-4 border border-border">
+              <button
+                type="button"
+                onClick={() => {
+                  const newServices = formData.baseServices.filter((_, i) => i !== index);
+                  onChange({ baseServices: newServices });
+                }}
+                className="absolute top-3 right-3 text-muted-foreground hover:text-destructive transition-colors"
+              >
+                <X className="h-4 w-4" />
+              </button>
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
                 <div className="space-y-2">
                   <Label>Service Name</Label>
