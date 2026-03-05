@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import SuperAdminLayout from "@/components/superadmin/SuperAdminLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -19,6 +20,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { DollarSign, TrendingUp, CreditCard, ArrowUpRight, ArrowDownRight, Download, Filter, Building2 } from "lucide-react";
+import { bookingApi } from "@/services/bookingApi";
 
 const revenueStats = [
   { label: "Total Revenue", value: "₱284,520", change: "+18.2%", trend: "up", icon: DollarSign },
@@ -46,11 +48,77 @@ const payouts = [
 ];
 
 const SuperAdminRevenue = () => {
+  const [totalRevenue, setTotalRevenue] = useState<number | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [serviceTypeBreakdown, setServiceTypeBreakdown] = useState<Array<{ serviceType: string; revenue: number; count: number }>>([]);
+  const [propertyBreakdown, setPropertyBreakdown] = useState<Array<{ propertyId: string; propertyName: string; revenue: number; count: number }>>([]);
+  const [locationBreakdown, setLocationBreakdown] = useState<Array<{ city: string; revenue: number; count: number }>>([]);
+  const [timePeriodBreakdown, setTimePeriodBreakdown] = useState<{
+    daily: { revenue: number; count: number; period: string };
+    weekly: { revenue: number; count: number; period: string };
+    monthly: { revenue: number; count: number; period: string };
+  } | null>(null);
+  const [periodComparison, setPeriodComparison] = useState<{
+    monthly: { current: number; previous: number; percentageChange: number; period: string };
+    quarterly: { current: number; previous: number; percentageChange: number; period: string };
+    yearly: { current: number; previous: number; percentageChange: number; period: string };
+  } | null>(null);
+
+  useEffect(() => {
+    const fetchRevenueData = async () => {
+      try {
+        setLoading(true);
+        
+        // Fetch all revenue data in parallel
+        const [totalRes, serviceRes, propertyRes, locationRes, timePeriodRes, comparisonRes] = await Promise.all([
+          bookingApi.getTotalRevenue(),
+          bookingApi.getRevenueByServiceType(),
+          bookingApi.getRevenueByProperty(),
+          bookingApi.getRevenueByLocation(),
+          bookingApi.getRevenueByTimePeriod(),
+          bookingApi.getRevenuePeriodComparison(),
+        ]);
+
+        setTotalRevenue(totalRes.totalRevenue);
+        setServiceTypeBreakdown(serviceRes.breakdown);
+        setPropertyBreakdown(propertyRes.breakdown);
+        setLocationBreakdown(locationRes.breakdown);
+        setTimePeriodBreakdown(timePeriodRes);
+        setPeriodComparison(comparisonRes);
+      } catch (error) {
+        console.error("Error fetching revenue data:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchRevenueData();
+  }, []);
+
+  // Format currency for display
+  const formatCurrency = (amount: number) => {
+    return `₱${amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  };
+
+  // Update stats with real data
+  const stats = [
+    { 
+      label: "Total Revenue (Service Fees)", 
+      value: loading ? "Loading..." : (totalRevenue !== null ? formatCurrency(totalRevenue) : "₱0.00"),
+      change: "+18.2%", 
+      trend: "up", 
+      icon: DollarSign 
+    },
+    { label: "Platform Fees", value: "₱28,452", change: "+15.8%", trend: "up", icon: TrendingUp },
+    { label: "Pending Payouts", value: "₱12,340", change: "-5.2%", trend: "down", icon: CreditCard },
+    { label: "Active Properties", value: "156", change: "+8", trend: "up", icon: Building2 },
+  ];
+
   return (
     <SuperAdminLayout title="Revenue & Payouts" subtitle="Track platform revenue and manage property payouts">
       {/* Stats Grid */}
       <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8 sa-stagger">
-        {revenueStats.map((stat) => (
+        {stats.map((stat) => (
           <Card key={stat.label} className="bg-[#292929] border-white/[0.07] sa-card sa-slide-in">
             <CardContent className="p-5">
               <div className="flex items-center justify-between mb-3">
@@ -185,6 +253,294 @@ const SuperAdminRevenue = () => {
                 </div>
               </div>
             ))}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Revenue by Time Period */}
+      <div className="mt-8 sa-slide-in" style={{ animationDelay: '200ms' }}>
+        <Card className="bg-[#292929] border-white/[0.07] sa-card">
+          <CardHeader>
+            <CardTitle className="text-white">Revenue by Time Period</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid md:grid-cols-3 gap-4">
+              {loading ? (
+                <p className="text-white/60 col-span-3">Loading...</p>
+              ) : timePeriodBreakdown ? (
+                <>
+                  {/* Daily */}
+                  <div className="p-4 bg-gradient-to-br from-blue-500/10 to-blue-600/5 rounded-lg border border-blue-500/20">
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-sm text-blue-300 font-medium">{timePeriodBreakdown.daily.period}</p>
+                      <Badge variant="outline" className="text-blue-400 border-blue-400/30 text-xs">
+                        {timePeriodBreakdown.daily.count} bookings
+                      </Badge>
+                    </div>
+                    <p className="text-2xl font-bold text-white">{formatCurrency(timePeriodBreakdown.daily.revenue)}</p>
+                    <p className="text-xs text-blue-300/60 mt-1">Service fees collected</p>
+                  </div>
+
+                  {/* Weekly */}
+                  <div className="p-4 bg-gradient-to-br from-purple-500/10 to-purple-600/5 rounded-lg border border-purple-500/20">
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-sm text-purple-300 font-medium">{timePeriodBreakdown.weekly.period}</p>
+                      <Badge variant="outline" className="text-purple-400 border-purple-400/30 text-xs">
+                        {timePeriodBreakdown.weekly.count} bookings
+                      </Badge>
+                    </div>
+                    <p className="text-2xl font-bold text-white">{formatCurrency(timePeriodBreakdown.weekly.revenue)}</p>
+                    <p className="text-xs text-purple-300/60 mt-1">Service fees collected</p>
+                  </div>
+
+                  {/* Monthly */}
+                  <div className="p-4 bg-gradient-to-br from-emerald-500/10 to-emerald-600/5 rounded-lg border border-emerald-500/20">
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-sm text-emerald-300 font-medium">{timePeriodBreakdown.monthly.period}</p>
+                      <Badge variant="outline" className="text-emerald-400 border-emerald-400/30 text-xs">
+                        {timePeriodBreakdown.monthly.count} bookings
+                      </Badge>
+                    </div>
+                    <p className="text-2xl font-bold text-white">{formatCurrency(timePeriodBreakdown.monthly.revenue)}</p>
+                    <p className="text-xs text-emerald-300/60 mt-1">Service fees collected</p>
+                  </div>
+                </>
+              ) : (
+                <p className="text-white/60 col-span-3">No data available</p>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Period-over-Period Comparison */}
+      <div className="mt-8 sa-slide-in" style={{ animationDelay: '220ms' }}>
+        <Card className="bg-[#292929] border-white/[0.07] sa-card">
+          <CardHeader>
+            <CardTitle className="text-white">Growth Comparison</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid md:grid-cols-3 gap-4">
+              {loading ? (
+                <p className="text-white/60 col-span-3">Loading...</p>
+              ) : periodComparison ? (
+                <>
+                  {/* Monthly Comparison */}
+                  <div className="p-4 border border-white/[0.08] rounded-lg bg-black/20">
+                    <div className="mb-3">
+                      <p className="text-sm text-white/60 font-medium">Monthly</p>
+                      <p className="text-xs text-white/40">Current vs Previous</p>
+                    </div>
+                    <div className="space-y-2 mb-3">
+                      <div>
+                        <p className="text-xs text-white/50">Current Month</p>
+                        <p className="text-lg font-bold text-white">{formatCurrency(periodComparison.monthly.current)}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-white/50">Previous Month</p>
+                        <p className="text-sm text-white/70">{formatCurrency(periodComparison.monthly.previous)}</p>
+                      </div>
+                    </div>
+                    <div className={`flex items-center gap-2 p-2 rounded ${periodComparison.monthly.percentageChange >= 0 ? 'bg-emerald-500/10 border border-emerald-500/20' : 'bg-red-500/10 border border-red-500/20'}`}>
+                      {periodComparison.monthly.percentageChange >= 0 ? (
+                        <>
+                          <ArrowUpRight className={`h-4 w-4 text-emerald-400`} />
+                          <span className="text-sm font-bold text-emerald-400">{periodComparison.monthly.percentageChange.toFixed(1)}%</span>
+                        </>
+                      ) : (
+                        <>
+                          <ArrowDownRight className={`h-4 w-4 text-red-400`} />
+                          <span className="text-sm font-bold text-red-400">{periodComparison.monthly.percentageChange.toFixed(1)}%</span>
+                        </>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Quarterly Comparison */}
+                  <div className="p-4 border border-white/[0.08] rounded-lg bg-black/20">
+                    <div className="mb-3">
+                      <p className="text-sm text-white/60 font-medium">Quarterly</p>
+                      <p className="text-xs text-white/40">Current vs Previous</p>
+                    </div>
+                    <div className="space-y-2 mb-3">
+                      <div>
+                        <p className="text-xs text-white/50">Current Quarter</p>
+                        <p className="text-lg font-bold text-white">{formatCurrency(periodComparison.quarterly.current)}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-white/50">Previous Quarter</p>
+                        <p className="text-sm text-white/70">{formatCurrency(periodComparison.quarterly.previous)}</p>
+                      </div>
+                    </div>
+                    <div className={`flex items-center gap-2 p-2 rounded ${periodComparison.quarterly.percentageChange >= 0 ? 'bg-emerald-500/10 border border-emerald-500/20' : 'bg-red-500/10 border border-red-500/20'}`}>
+                      {periodComparison.quarterly.percentageChange >= 0 ? (
+                        <>
+                          <ArrowUpRight className={`h-4 w-4 text-emerald-400`} />
+                          <span className="text-sm font-bold text-emerald-400">{periodComparison.quarterly.percentageChange.toFixed(1)}%</span>
+                        </>
+                      ) : (
+                        <>
+                          <ArrowDownRight className={`h-4 w-4 text-red-400`} />
+                          <span className="text-sm font-bold text-red-400">{periodComparison.quarterly.percentageChange.toFixed(1)}%</span>
+                        </>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Yearly Comparison */}
+                  <div className="p-4 border border-white/[0.08] rounded-lg bg-black/20">
+                    <div className="mb-3">
+                      <p className="text-sm text-white/60 font-medium">Yearly</p>
+                      <p className="text-xs text-white/40">Current vs Previous</p>
+                    </div>
+                    <div className="space-y-2 mb-3">
+                      <div>
+                        <p className="text-xs text-white/50">Current Year</p>
+                        <p className="text-lg font-bold text-white">{formatCurrency(periodComparison.yearly.current)}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-white/50">Previous Year</p>
+                        <p className="text-sm text-white/70">{formatCurrency(periodComparison.yearly.previous)}</p>
+                      </div>
+                    </div>
+                    <div className={`flex items-center gap-2 p-2 rounded ${periodComparison.yearly.percentageChange >= 0 ? 'bg-emerald-500/10 border border-emerald-500/20' : 'bg-red-500/10 border border-red-500/20'}`}>
+                      {periodComparison.yearly.percentageChange >= 0 ? (
+                        <>
+                          <ArrowUpRight className={`h-4 w-4 text-emerald-400`} />
+                          <span className="text-sm font-bold text-emerald-400">{periodComparison.yearly.percentageChange.toFixed(1)}%</span>
+                        </>
+                      ) : (
+                        <>
+                          <ArrowDownRight className={`h-4 w-4 text-red-400`} />
+                          <span className="text-sm font-bold text-red-400">{periodComparison.yearly.percentageChange.toFixed(1)}%</span>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <p className="text-white/60 col-span-3">No data available</p>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Revenue Breakdown by Service Type */}
+      <div className="grid lg:grid-cols-2 gap-6 mt-8 sa-slide-in" style={{ animationDelay: '240ms' }}>
+        <Card className="bg-[#292929] border-white/[0.07] sa-card">
+          <CardHeader>
+            <CardTitle className="text-white">Revenue by Service Type</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {loading ? (
+                <p className="text-white/60">Loading...</p>
+              ) : serviceTypeBreakdown.length > 0 ? (
+                serviceTypeBreakdown.map((item) => (
+                  <div key={item.serviceType} className="flex items-center justify-between p-3 bg-black/20 rounded-lg">
+                    <div className="flex-1">
+                      <p className="text-white font-medium capitalize">{item.serviceType || "Unknown"}</p>
+                      <p className="text-sm text-[#808080]">{item.count} bookings</p>
+                    </div>
+                    <p className="text-white font-bold text-lg">{formatCurrency(item.revenue)}</p>
+                  </div>
+                ))
+              ) : (
+                <p className="text-white/60">No data available</p>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Average Booking Value by Service Type */}
+        <Card className="bg-[#292929] border-white/[0.07] sa-card">
+          <CardHeader>
+            <CardTitle className="text-white">Average Service Fee per Booking</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {loading ? (
+                <p className="text-white/60">Loading...</p>
+              ) : serviceTypeBreakdown.length > 0 ? (
+                serviceTypeBreakdown.map((item) => {
+                  const averageValue = item.count > 0 ? item.revenue / item.count : 0;
+                  return (
+                    <div key={`avg-${item.serviceType}`} className="flex items-center justify-between p-3 bg-black/20 rounded-lg">
+                      <div className="flex-1">
+                        <p className="text-white font-medium capitalize">{item.serviceType || "Unknown"}</p>
+                        <p className="text-sm text-[#808080]">Average from {item.count} bookings</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-white font-bold text-lg">{formatCurrency(averageValue)}</p>
+                        <p className="text-xs text-[#808080]">per booking</p>
+                      </div>
+                    </div>
+                  );
+                })
+              ) : (
+                <p className="text-white/60">No data available</p>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Revenue Breakdown by Property */}
+      <div className="mt-8 sa-slide-in" style={{ animationDelay: '280ms' }}>
+        <Card className="bg-[#292929] border-white/[0.07] sa-card">
+          <CardHeader>
+            <CardTitle className="text-white">Revenue by Property</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {loading ? (
+                <p className="text-white/60">Loading...</p>
+              ) : propertyBreakdown.length > 0 ? (
+                propertyBreakdown.slice(0, 10).map((item) => (
+                  <div key={item.propertyId} className="flex items-center justify-between p-3 bg-black/20 rounded-lg">
+                    <div className="flex-1">
+                      <p className="text-white font-medium truncate">{item.propertyName}</p>
+                      <p className="text-sm text-[#808080]">{item.count} bookings</p>
+                    </div>
+                    <p className="text-white font-bold text-lg">{formatCurrency(item.revenue)}</p>
+                  </div>
+                ))
+              ) : (
+                <p className="text-white/60">No data available</p>
+              )}
+              {propertyBreakdown.length > 10 && (
+                <p className="text-center text-white/60 text-sm py-2">+{propertyBreakdown.length - 10} more properties</p>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Revenue Breakdown by Location */}
+      <div className="mt-8 sa-slide-in" style={{ animationDelay: '320ms' }}>
+        <Card className="bg-[#292929] border-white/[0.07] sa-card">
+          <CardHeader>
+            <CardTitle className="text-white">Revenue by Location</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {loading ? (
+                <p className="text-white/60">Loading...</p>
+              ) : locationBreakdown.length > 0 ? (
+                locationBreakdown.map((item) => (
+                  <div key={item.city} className="flex items-center justify-between p-3 bg-black/20 rounded-lg">
+                    <div className="flex-1">
+                      <p className="text-white font-medium">{item.city}</p>
+                      <p className="text-sm text-[#808080]">{item.count} bookings</p>
+                    </div>
+                    <p className="text-white font-bold text-lg">{formatCurrency(item.revenue)}</p>
+                  </div>
+                ))
+              ) : (
+                <p className="text-white/60">No data available</p>
+              )}
+            </div>
           </CardContent>
         </Card>
       </div>
