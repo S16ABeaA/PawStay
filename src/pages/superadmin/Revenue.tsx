@@ -36,7 +36,7 @@ const SuperAdminRevenue = () => {
     weekly: { revenue: number; count: number; period: string };
     monthly: { revenue: number; count: number; period: string };
   } | null>(null);
-  const [range, setRange] = useState<string>("this_period");
+  
   const [periodComparison, setPeriodComparison] = useState<{
     monthly: { current: number; previous: number; percentageChange: number; period: string };
     quarterly: { current: number; previous: number; percentageChange: number; period: string };
@@ -380,17 +380,6 @@ const SuperAdminRevenue = () => {
           <CardHeader className="relative">
             <CardTitle className="text-white">Revenue by Time Period</CardTitle>
             <div className="absolute right-4 top-3 flex items-center gap-2">
-              <Select defaultValue={range} onValueChange={(v) => setRange(v)}>
-                <SelectTrigger className="w-44 bg-[#292929] border-white/[0.09] text-white">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent className="bg-[#292929] border-white/10 text-white">
-                  <SelectItem value="this_period" className="text-white">This Period</SelectItem>
-                  <SelectItem value="last_7" className="text-white">Last 7 days</SelectItem>
-                  <SelectItem value="last_30" className="text-white">Last 30 days</SelectItem>
-                  <SelectItem value="ytd" className="text-white">Year to date</SelectItem>
-                </SelectContent>
-              </Select>
               <Button variant="outline" size="sm" className="gap-2 border-white/10 text-[#808080] hover:bg-white/5 hover:text-white" onClick={() => exportCSV(timeChartData, 'revenue_time_period.csv')} disabled={loading || timeChartData.length === 0}>
                 <Download className="h-4 w-4" />
                 Export
