@@ -28,6 +28,7 @@ import {
   FileText,
   Eye,
 } from "lucide-react";
+import { PetLoader } from "@/components/ui/PetLoader";
 import { bookingApi } from "@/services/bookingApi";
 import { reviewsApi } from "@/services/reviewsApi";
 import ReviewDialog from "@/components/ReviewDialog";
@@ -211,7 +212,7 @@ const MyBookings = () => {
       <div className="min-h-screen bg-background">
         <Header />
         <main className="py-16 flex items-center justify-center">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          <PetLoader text="Loading bookings..." />
         </main>
         <Footer />
       </div>

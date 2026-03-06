@@ -3,7 +3,8 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import HotelCard from "@/components/HotelCard";
 import { Button } from "@/components/ui/button";
-import { Star, Loader2, ArrowRight, SlidersHorizontal, ArrowUpDown, Grid3X3, List } from "lucide-react";
+import { Star, ArrowRight, SlidersHorizontal, ArrowUpDown, Grid3X3, List } from "lucide-react";
+import { PetLoader } from "@/components/ui/PetLoader";
 import { Link } from "react-router-dom";
 import {
   DropdownMenu,
@@ -466,7 +467,7 @@ const Hotels = () => {
                 </div>
               </div>
               {loading ? (
-                <div className="flex justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
+                <PetLoader className="py-20" />
               ) : hotels.length === 0 ? (
                 <div className="text-center py-20 text-muted-foreground">No hotels found. Try adjusting your filters.</div>
                 ) : (

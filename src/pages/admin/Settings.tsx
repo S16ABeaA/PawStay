@@ -9,7 +9,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { settingsApi, SettingsData } from "@/services/settingsApi";
-import { Building2, Bell, CreditCard, Shield, Clock, Upload, X, QrCode, Smartphone, Wallet, Banknote, Loader2 } from "lucide-react";
+import { Building2, Bell, CreditCard, Shield, Clock, Upload, X, QrCode, Smartphone, Wallet, Banknote } from "lucide-react";
+import { PetLoader } from "@/components/ui/PetLoader";
 import { useEffect, useRef, useState } from "react";
 import { useAdminProperty } from "@/hooks/useAdminProperty";
 
@@ -186,7 +187,7 @@ const AdminSettings = () => {
     return (
       <AdminLayout title="Settings" subtitle="Manage your business preferences">
         <div className="flex items-center justify-center h-96">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          <PetLoader />
         </div>
       </AdminLayout>
     );

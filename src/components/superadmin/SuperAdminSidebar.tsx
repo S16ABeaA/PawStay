@@ -19,6 +19,7 @@ const navItems = [
   { icon: Building2,       label: "Properties",  href: "/superadmin/properties", exact: false },
   { icon: BarChart3,       label: "Analytics",   href: "/superadmin/analytics",  exact: false },
   { icon: DollarSign,      label: "Revenue",     href: "/superadmin/revenue",    exact: false },
+  { icon: PawPrint,        label: "Amenities",    href: "/superadmin/amenities",  exact: false },
   { icon: MessageSquare,   label: "Support",     href: "/superadmin/support",    exact: false },
   { icon: Settings,        label: "Settings",    href: "/superadmin/settings",   exact: false },
 ];

@@ -6,8 +6,9 @@ import { Badge } from "@/components/ui/badge";
 import {
   Star, Heart, MapPin, Wifi, Car, Coffee, Shield,
   ArrowLeft, Share2, Check,
-  Phone, Mail, Clock, Loader2
+  Phone, Mail, Clock
 } from "lucide-react";
+import { PetLoader } from "@/components/ui/PetLoader";
 import { useState, useEffect } from "react";
 import { favoritesApi } from "../services/favoritesApi";
 import { fetchPropertyById, fetchPropertyReviews } from "../services/propertyApi";
@@ -97,9 +98,8 @@ const HotelDetail = () => {
     return (
       <div className="min-h-screen bg-background">
         <Header />
-        <div className="flex flex-col items-center justify-center py-32 gap-4">
-          <Loader2 className="h-12 w-12 animate-spin text-primary" />
-          <p className="text-muted-foreground">Loading hotel details...</p>
+        <div className="flex flex-col items-center justify-center py-32">
+          <PetLoader text="Loading hotel details..." />
         </div>
         <Footer />
       </div>

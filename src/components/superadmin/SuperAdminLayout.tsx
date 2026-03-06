@@ -30,6 +30,7 @@ const BREADCRUMB_MAP: Record<string, string> = {
   "/superadmin/properties": "Properties",
   "/superadmin/analytics": "Analytics",
   "/superadmin/revenue": "Revenue",
+  "/superadmin/amenities": "Amenities",
   "/superadmin/support": "Support",
   "/superadmin/settings": "Settings",
 };

@@ -12,6 +12,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Star, MessageSquare, ThumbsUp, Flag, Send, Loader2 } from "lucide-react";
+import { PetLoader } from "@/components/ui/PetLoader";
 import { useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { reviewsApi, OwnerReview } from "@/services/reviewsApi";
@@ -160,9 +161,7 @@ const AdminReviews = () => {
   return (
     <AdminLayout title="Reviews" subtitle="Monitor and respond to customer feedback">
       {loading ? (
-        <div className="flex items-center justify-center py-16">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        </div>
+        <PetLoader className="py-16" />
       ) : (
       <>
       {/* Stats */}

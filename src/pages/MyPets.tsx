@@ -1,4 +1,5 @@
  import { useState, useEffect } from "react";
+import { PetLoader } from "@/components/ui/PetLoader";
  import { Link } from "react-router-dom";
  import Header from "@/components/Header";
  import Footer from "@/components/Footer";
@@ -652,10 +653,7 @@ interface Pet {
                  {selectedService.bookingId && (
                    <div className="border-t pt-4">
                      {bookingLoading ? (
-                       <div className="flex items-center justify-center py-8">
-                         <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary" />
-                         <span className="ml-2 text-sm text-muted-foreground">Loading booking details...</span>
-                       </div>
+                       <PetLoader text="Loading booking details..." className="py-8" />
                      ) : bookingDetail ? (
                        <div className="space-y-4">
                          <h4 className="font-semibold text-sm flex items-center gap-2">

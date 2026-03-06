@@ -15,6 +15,7 @@ import {
   ArrowLeft,
   Loader2,
 } from "lucide-react";
+import { PetLoader } from "@/components/ui/PetLoader";
 import {
   notificationsApi,
   type Notification,
@@ -329,10 +330,7 @@ const NotificationList = ({
 }: NotificationListProps) => {
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center py-16">
-        <Loader2 className="h-8 w-8 animate-spin text-primary mb-3" />
-        <p className="text-muted-foreground text-sm">Loading notifications…</p>
-      </div>
+      <PetLoader text="Loading notifications…" className="py-16" />
     );
   }
 

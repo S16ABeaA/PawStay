@@ -3,7 +3,7 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import VeterinaryCard from "@/components/VeterinaryCard";
 import { fetchProperties } from "@/services/propertyApi";
-import { Loader2 } from "lucide-react";
+import { PetLoader } from "@/components/ui/PetLoader";
 import { Badge } from "@/components/ui/badge";
 
 const Veterinary = () => {
@@ -48,7 +48,7 @@ const Veterinary = () => {
       <main className="container py-12">
         <h1 className="text-4xl font-bold mb-8">Veterinary Clinics</h1>
         {loading ? (
-          <div className="flex justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
+          <PetLoader className="py-20" />
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {clinics.map((c) => (

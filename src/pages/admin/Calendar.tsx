@@ -34,11 +34,11 @@ import {
   Trash2,
   Edit,
   ExternalLink,
-  Loader2,
   UserPlus,
   CheckCircle2,
   MapPin,
 } from "lucide-react";
+import { PetLoader } from "@/components/ui/PetLoader";
 import { useToast } from "@/hooks/use-toast";
 
 // FullCalendar imports
@@ -852,7 +852,7 @@ const AdminCalendar = () => {
         <CardContent className="p-3 md:p-5 relative">
           {loading && (
             <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/60 rounded-lg">
-              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              <PetLoader text="" className="scale-75" />
             </div>
           )}
           <FullCalendar

@@ -3,7 +3,8 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import GroomingCard from "@/components/GroomingCard";
 import { Button } from "@/components/ui/button";
-import { SlidersHorizontal, ArrowUpDown, Grid3X3, List, MapPin, Star, ArrowRight, Loader2 } from "lucide-react";
+import { SlidersHorizontal, ArrowUpDown, Grid3X3, List, MapPin, Star, ArrowRight } from "lucide-react";
+import { PetLoader } from "@/components/ui/PetLoader";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Slider } from "@/components/ui/slider";
@@ -468,9 +469,7 @@ const Grooming = () => {
 
               {/* Grooming Grid */}
                 {loading ? (
-                <div className="flex justify-center py-20">
-                  <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                </div>
+                <PetLoader className="py-20" />
               ) : shops.length === 0 ? (
                 <div className="text-center py-20 text-muted-foreground">
                   No grooming salons found in this area/price range.

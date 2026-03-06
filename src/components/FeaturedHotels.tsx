@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/popover";
 import { Slider } from "@/components/ui/slider";
 import { fetchRandomProperties } from "@/services/randPropertyApi";
+import { PetLoader } from "./ui/PetLoader";
 
 const BATCH_SIZE = 6;
 const MAX_DISPLAY = 18;
@@ -381,9 +382,8 @@ const FeaturedHotels = () => {
           }`}
         >
           {isLoading ? (
-            <div className="text-muted-foreground col-span-full text-center py-10">
-              Loading properties...
-            </div>
+            <PetLoader text="Loading properties..." className="min-h-[200px]" />
+            
           ) : error ? (
             <div className="text-destructive col-span-full text-center py-10">
               {error}

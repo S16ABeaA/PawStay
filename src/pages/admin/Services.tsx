@@ -32,6 +32,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Plus, Edit, Trash2, Bed, Scissors, Stethoscope, Loader2 } from "lucide-react";
+import { PetLoader } from "@/components/ui/PetLoader";
 import { useState, useEffect } from "react";
 import { servicesApi, DBService } from "@/services/servicesApi";
 import { authHelper } from "@/helpers/authHelper";
@@ -226,7 +227,7 @@ const AdminServices = () => {
     return (
       <AdminLayout title="Services" subtitle="Manage your service offerings and pricing">
         <div className="flex items-center justify-center h-96">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          <PetLoader />
         </div>
       </AdminLayout>
     );

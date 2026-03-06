@@ -47,6 +47,7 @@ import SuperAdminAnalytics from "./pages/superadmin/Analytics";
 import SuperAdminRevenue from "./pages/superadmin/Revenue";
 import SuperAdminSupport from "./pages/superadmin/Support";
 import SuperAdminSettings from "./pages/superadmin/Settings";
+import SuperAdminAmenities from "./pages/superadmin/Amenities";
 
 const queryClient = new QueryClient();
 
@@ -136,6 +137,7 @@ const App = () => (
           <Route path="/superadmin/revenue" element={<RequireSuperAdmin><SuperAdminRevenue /></RequireSuperAdmin>} />
           <Route path="/superadmin/support" element={<RequireSuperAdmin><SuperAdminSupport /></RequireSuperAdmin>} />
           <Route path="/superadmin/settings" element={<RequireSuperAdmin><SuperAdminSettings /></RequireSuperAdmin>} />
+          <Route path="/superadmin/amenities" element={<RequireSuperAdmin><SuperAdminAmenities /></RequireSuperAdmin>} />
           
           <Route path="*" element={<NotFound />} />
         </Routes>

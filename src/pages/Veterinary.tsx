@@ -4,7 +4,8 @@ import Footer from "@/components/Footer";
 import VeterinaryCard from "@/components/VeterinaryCard";
 import { fetchProperties } from "@/services/propertyApi";
 import { fetchAmenities } from "@/services/amenitiesApi";
-import { Loader2, Star, ArrowRight, SlidersHorizontal, ArrowUpDown, Grid3X3, List } from "lucide-react";
+import { Star, ArrowRight, SlidersHorizontal, ArrowUpDown, Grid3X3, List } from "lucide-react";
+import { PetLoader } from "@/components/ui/PetLoader";
 import { Link } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -478,7 +479,7 @@ const Veterinary = () => {
               </div>
               
               {loading ? (
-                <div className="flex justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
+                <PetLoader className="py-20" />
               ) : clinics.length === 0 ? (
                 <div className="text-center py-20 text-muted-foreground">No clinics found. Try adjusting your filters.</div>
               ) : (
