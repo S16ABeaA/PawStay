@@ -30,6 +30,20 @@ export interface SettingsData {
     gcashQrUrl: string | null;
     paymayaQrUrl: string | null;
   };
+  propertySetup: {
+    unvaccinatedPolicy: boolean;
+    unvaccinatedPolicyDetails: string;
+    breedRestrictions: boolean;
+    breedRestrictionsDetails: string;
+    aggressivePolicy: boolean;
+    aggressivePolicyDetails: string;
+    bookingRules: string[];
+    complianceRequirements: string[];
+    vaccinationRequirements: string[];
+    emergencyProcedures: string;
+    vetAvailability: string[];
+    isolationSanitationProtocols: string[];
+  };
 }
 
 export const settingsApi = {
@@ -54,4 +68,9 @@ export const settingsApi = {
   /** Update payment settings */
   updatePayment: async (data: Partial<SettingsData["payment"]> & { property_id?: string }) =>
     authHelper.put(`${API_BASE_URL}/api/settings/payment`, data),
+
+  /** Update property setup */
+  updatePropertySetup: async (data: Partial<SettingsData["propertySetup"]> & { property_id?: string }) =>
+    authHelper.put(`${API_BASE_URL}/api/settings/property-setup`, data),
 };
+
