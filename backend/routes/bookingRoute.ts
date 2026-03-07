@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { authMiddleware } from "../middleware/authMiddleware";
+import { requireSuperAdmin } from "../middleware/requireSuperAdmin";
 import {
   createBooking,
   listBookings,
@@ -23,6 +24,7 @@ import {
   getRevenueByTimePeriod,
   getRevenuePeriodComparison,
   getRevenueMonthlySeries,
+  getReceivables,
 } from "../controllers/bookingController";
 
 const router = Router();
@@ -33,14 +35,17 @@ router.get("/availability/:propertyId", checkAvailability);
 // All other booking routes require authentication
 router.use(authMiddleware);
 
-// Revenue endpoints - Total revenue from service fees (super admin only)
-router.get("/revenue/total", getTotalRevenue);
-router.get("/revenue/by-service-type", getRevenueByServiceType);
-router.get("/revenue/by-property", getRevenueByProperty);
-router.get("/revenue/by-location", getRevenueByLocation);
-router.get("/revenue/by-time-period", getRevenueByTimePeriod);
-router.get("/revenue/period-comparison", getRevenuePeriodComparison);
-router.get("/revenue/monthly-series", getRevenueMonthlySeries);
+// Revenue endpoints (super admin only — guarded by requireSuperAdmin middleware)
+router.get("/revenue/total", requireSuperAdmin, getTotalRevenue);
+router.get("/revenue/by-service-type", requireSuperAdmin, getRevenueByServiceType);
+router.get("/revenue/by-property", requireSuperAdmin, getRevenueByProperty);
+router.get("/revenue/by-location", requireSuperAdmin, getRevenueByLocation);
+router.get("/revenue/by-time-period", requireSuperAdmin, getRevenueByTimePeriod);
+router.get("/revenue/period-comparison", requireSuperAdmin, getRevenuePeriodComparison);
+router.get("/revenue/monthly-series", requireSuperAdmin, getRevenueMonthlySeries);
+
+// Accounts Receivable per property (super admin only)
+router.get("/receivables", requireSuperAdmin, getReceivables);
 
 // Admin calendar — returns bookings across all proprietor's properties
 router.get("/admin/calendar", adminCalendar);

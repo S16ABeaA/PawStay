@@ -1326,24 +1326,20 @@ export const adminDeleteBooking = async (req: Request, res: Response) => {
 
 /**
  * GET /api/bookings/revenue/total
- * Returns the total revenue from all service fees in the bookings table (paid bookings only).
+ * Returns the total revenue from all service fees in finalized bookings.
+ * Business rule: Revenue = SUM(service_fee) for status in (completed, checked_out), excluding refunded bookings.
  * Super admin only.
  */
 export const getTotalRevenue = async (req: Request, res: Response) => {
   try {
-    const userRole = (req as any).user?.role;
-    
-    // Only super_admin can access this
-    if (userRole !== "super_admin") {
-      return res.status(403).json({ error: "Access denied. Super admin only." });
-    }
-
-    // Query the database to sum all service fees from paid bookings only
+    // Revenue is based on finalized bookings only
     const { data, error } = await supabaseAdmin
       .from("bookings")
       .select("service_fee")
       .eq("is_deleted", false)
-      .eq("payment_status", "paid");
+      .in("status", ["completed", "checked_out"])
+      .neq("payment_status", "refunded")
+      .limit(100000);
 
     if (error) throw error;
 
@@ -1366,22 +1362,18 @@ export const getTotalRevenue = async (req: Request, res: Response) => {
 /**
  * GET /api/bookings/revenue/by-service-type
  * Returns revenue breakdown by service type (boarding, grooming, veterinary, daycare, transport).
- * Only includes paid bookings.
+ * Only includes finalized bookings.
  * Super admin only.
  */
 export const getRevenueByServiceType = async (req: Request, res: Response) => {
   try {
-    const userRole = (req as any).user?.role;
-    
-    if (userRole !== "super_admin") {
-      return res.status(403).json({ error: "Access denied. Super admin only." });
-    }
-
     const { data, error } = await supabaseAdmin
       .from("bookings")
       .select("service_type, service_fee")
       .eq("is_deleted", false)
-      .eq("payment_status", "paid");
+      .in("status", ["completed", "checked_out"])
+      .neq("payment_status", "refunded")
+      .limit(100000);
 
     if (error) throw error;
 
@@ -1417,23 +1409,18 @@ export const getRevenueByServiceType = async (req: Request, res: Response) => {
 
 /**
  * GET /api/bookings/revenue/by-property
- * Returns revenue breakdown by property (paid bookings only).
+ * Returns revenue breakdown by property (finalized bookings only).
  * Super admin only.
  */
 export const getRevenueByProperty = async (req: Request, res: Response) => {
   try {
-    const userRole = (req as any).user?.role;
-    
-    if (userRole !== "super_admin") {
-      return res.status(403).json({ error: "Access denied. Super admin only." });
-    }
-
-    // Query bookings with property details (paid bookings only)
     const { data, error } = await supabaseAdmin
       .from("bookings")
       .select("property_id, service_fee, properties:property_id(name)")
       .eq("is_deleted", false)
-      .eq("payment_status", "paid");
+      .in("status", ["completed", "checked_out"])
+      .neq("payment_status", "refunded")
+      .limit(100000);
 
     if (error) throw error;
 
@@ -1471,23 +1458,18 @@ export const getRevenueByProperty = async (req: Request, res: Response) => {
 
 /**
  * GET /api/bookings/revenue/by-location
- * Returns revenue breakdown by location/city (paid bookings only).
+ * Returns revenue breakdown by location/city (finalized bookings only).
  * Super admin only.
  */
 export const getRevenueByLocation = async (req: Request, res: Response) => {
   try {
-    const userRole = (req as any).user?.role;
-    
-    if (userRole !== "super_admin") {
-      return res.status(403).json({ error: "Access denied. Super admin only." });
-    }
-
-    // Query bookings with property location (paid bookings only)
     const { data, error } = await supabaseAdmin
       .from("bookings")
       .select("service_fee, properties:property_id(city)")
       .eq("is_deleted", false)
-      .eq("payment_status", "paid");
+      .in("status", ["completed", "checked_out"])
+      .neq("payment_status", "refunded")
+      .limit(100000);
 
     if (error) throw error;
 
@@ -1524,23 +1506,18 @@ export const getRevenueByLocation = async (req: Request, res: Response) => {
 /**
  * GET /api/bookings/revenue/by-time-period
  * Returns revenue breakdown by time period (daily, weekly, monthly).
- * Only includes paid bookings.
+ * Only includes finalized bookings.
  * Super admin only.
  */
 export const getRevenueByTimePeriod = async (req: Request, res: Response) => {
   try {
-    const userRole = (req as any).user?.role;
-    
-    if (userRole !== "super_admin") {
-      return res.status(403).json({ error: "Access denied. Super admin only." });
-    }
-
-    // Query all paid bookings with created_at timestamp
     const { data, error } = await supabaseAdmin
       .from("bookings")
       .select("service_fee, created_at")
       .eq("is_deleted", false)
-      .eq("payment_status", "paid")
+      .in("status", ["completed", "checked_out"])
+      .neq("payment_status", "refunded")
+      .limit(100000)
       .order("created_at", { ascending: false });
 
     if (error) throw error;
@@ -1609,125 +1586,82 @@ export const getRevenueByTimePeriod = async (req: Request, res: Response) => {
  * GET /api/bookings/revenue/period-comparison
  * Returns revenue comparison between current and previous periods (monthly, quarterly, yearly).
  * Shows percentage change between periods.
- * Only includes paid bookings.
+ * Only includes finalized bookings.
  * Super admin only.
  */
 export const getRevenuePeriodComparison = async (req: Request, res: Response) => {
   try {
-    const userRole = (req as any).user?.role;
-    
-    if (userRole !== "super_admin") {
-      return res.status(403).json({ error: "Access denied. Super admin only." });
-    }
-
-    // Query all paid bookings with created_at timestamp
     const { data, error } = await supabaseAdmin
       .from("bookings")
       .select("service_fee, created_at")
       .eq("is_deleted", false)
-      .eq("payment_status", "paid")
+      .in("status", ["completed", "checked_out"])
+      .neq("payment_status", "refunded")
+      .limit(100000)
       .order("created_at", { ascending: false });
 
     if (error) throw error;
 
     const now = new Date();
 
-    // MONTHLY COMPARISON
+    // MONTHLY
     const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
     const previousMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
     const previousMonthEnd = new Date(currentMonthStart);
 
-    let currentMonthRevenue = 0;
-    let previousMonthRevenue = 0;
-
-    (data ?? []).forEach((booking: any) => {
-      const createdAt = new Date(booking.created_at);
-      const fee = parseFloat(booking.service_fee) || 0;
-
-      if (createdAt >= currentMonthStart) {
-        currentMonthRevenue += fee;
-      } else if (createdAt >= previousMonthStart && createdAt < previousMonthEnd) {
-        previousMonthRevenue += fee;
-      }
-    });
-
-    const monthlyPercentageChange =
-      previousMonthRevenue > 0
-        ? ((currentMonthRevenue - previousMonthRevenue) / previousMonthRevenue) * 100
-        : currentMonthRevenue > 0
-          ? 100
-          : 0;
-
-    // QUARTERLY COMPARISON
+    // QUARTERLY
     const currentQuarter = Math.floor(now.getMonth() / 3);
     const currentQuarterStart = new Date(now.getFullYear(), currentQuarter * 3, 1);
     const previousQuarterStart = new Date(now.getFullYear(), (currentQuarter - 1) * 3, 1);
     const previousQuarterEnd = new Date(currentQuarterStart);
 
-    let currentQuarterRevenue = 0;
-    let previousQuarterRevenue = 0;
-
-    (data ?? []).forEach((booking: any) => {
-      const createdAt = new Date(booking.created_at);
-      const fee = parseFloat(booking.service_fee) || 0;
-
-      if (createdAt >= currentQuarterStart) {
-        currentQuarterRevenue += fee;
-      } else if (createdAt >= previousQuarterStart && createdAt < previousQuarterEnd) {
-        previousQuarterRevenue += fee;
-      }
-    });
-
-    const quarterlyPercentageChange =
-      previousQuarterRevenue > 0
-        ? ((currentQuarterRevenue - previousQuarterRevenue) / previousQuarterRevenue) * 100
-        : currentQuarterRevenue > 0
-          ? 100
-          : 0;
-
-    // YEARLY COMPARISON
+    // YEARLY
     const currentYearStart = new Date(now.getFullYear(), 0, 1);
     const previousYearStart = new Date(now.getFullYear() - 1, 0, 1);
     const previousYearEnd = new Date(currentYearStart);
 
-    let currentYearRevenue = 0;
-    let previousYearRevenue = 0;
+    let currentMonthRevenue = 0, previousMonthRevenue = 0;
+    let currentQuarterRevenue = 0, previousQuarterRevenue = 0;
+    let currentYearRevenue = 0, previousYearRevenue = 0;
 
+    // Single pass over all bookings
     (data ?? []).forEach((booking: any) => {
       const createdAt = new Date(booking.created_at);
       const fee = parseFloat(booking.service_fee) || 0;
 
-      if (createdAt >= currentYearStart) {
-        currentYearRevenue += fee;
-      } else if (createdAt >= previousYearStart && createdAt < previousYearEnd) {
-        previousYearRevenue += fee;
-      }
+      // Monthly
+      if (createdAt >= currentMonthStart) currentMonthRevenue += fee;
+      else if (createdAt >= previousMonthStart && createdAt < previousMonthEnd) previousMonthRevenue += fee;
+
+      // Quarterly
+      if (createdAt >= currentQuarterStart) currentQuarterRevenue += fee;
+      else if (createdAt >= previousQuarterStart && createdAt < previousQuarterEnd) previousQuarterRevenue += fee;
+
+      // Yearly
+      if (createdAt >= currentYearStart) currentYearRevenue += fee;
+      else if (createdAt >= previousYearStart && createdAt < previousYearEnd) previousYearRevenue += fee;
     });
 
-    const yearlyPercentageChange =
-      previousYearRevenue > 0
-        ? ((currentYearRevenue - previousYearRevenue) / previousYearRevenue) * 100
-        : currentYearRevenue > 0
-          ? 100
-          : 0;
+    const pctChange = (current: number, previous: number) =>
+      previous > 0 ? ((current - previous) / previous) * 100 : current > 0 ? 100 : 0;
 
     return res.json({
       monthly: {
         current: currentMonthRevenue,
         previous: previousMonthRevenue,
-        percentageChange: monthlyPercentageChange,
+        percentageChange: pctChange(currentMonthRevenue, previousMonthRevenue),
         period: "Monthly"
       },
       quarterly: {
         current: currentQuarterRevenue,
         previous: previousQuarterRevenue,
-        percentageChange: quarterlyPercentageChange,
+        percentageChange: pctChange(currentQuarterRevenue, previousQuarterRevenue),
         period: "Quarterly"
       },
       yearly: {
         current: currentYearRevenue,
         previous: previousYearRevenue,
-        percentageChange: yearlyPercentageChange,
+        percentageChange: pctChange(currentYearRevenue, previousYearRevenue),
         period: "Yearly"
       },
       currency: "PHP"
@@ -1745,11 +1679,6 @@ export const getRevenuePeriodComparison = async (req: Request, res: Response) =>
  */
 export const getRevenueMonthlySeries = async (req: Request, res: Response) => {
   try {
-    const userRole = (req as any).user?.role;
-    if (userRole !== "super_admin") {
-      return res.status(403).json({ error: "Access denied. Super admin only." });
-    }
-
     const monthsParam = parseInt((req.query.months as string) || '12', 10);
     const months = isNaN(monthsParam) ? 12 : Math.max(1, monthsParam);
 
@@ -1757,7 +1686,9 @@ export const getRevenueMonthlySeries = async (req: Request, res: Response) => {
       .from('bookings')
       .select('service_fee, created_at')
       .eq('is_deleted', false)
-      .eq('payment_status', 'paid')
+      .in('status', ['completed', 'checked_out'])
+      .neq('payment_status', 'refunded')
+      .limit(100000)
       .order('created_at', { ascending: true });
 
     if (error) throw error;
@@ -1790,5 +1721,201 @@ export const getRevenueMonthlySeries = async (req: Request, res: Response) => {
   } catch (err: any) {
     console.error('getRevenueMonthlySeries error:', err);
     return res.status(500).json({ error: 'Failed to get monthly revenue series.', details: err?.message || err });
+  }
+};
+
+/* ================================================================== */
+/*  Payables per Property (super_admin only)                          */
+/* ================================================================== */
+
+/**
+ * GET /api/bookings/receivables
+ * Returns per-property payables data:
+ *   - summary: total payables, outstanding payables, # properties with balance, # finalized bookings
+ *   - properties: array of { propertyId, propertyName, ownerName, totalPayable,
+ *       bookingCount, oldestFinalized, bookings[] }
+ * Optional query params:
+ *   - status  ("all" | "completed" | "checked_out") default: all finalized
+ *   - search  — filter by property name or owner name
+ *   - sort    ("amount_desc" | "amount_asc" | "oldest" | "name")
+ */
+export const getReceivables = async (req: Request, res: Response) => {
+  try {
+    const statusFilter = (req.query.status as string) || "all";
+    const searchQuery  = ((req.query.search as string) || "").trim().toLowerCase();
+    const sortBy       = (req.query.sort as string) || "amount_desc";
+
+    // 1) Base query: finalized bookings only. Payables are based on service_fee.
+    let query = supabaseAdmin
+      .from("bookings")
+      .select(`
+        id, property_id, checkin, checkout, service_fee,
+        status, payment_status, payment_method, service_type, created_at,
+        pet_name, pet_type,
+        properties:property_id ( name, owner_id, profiles:owner_id ( first_name, last_name, email ) )
+      `)
+      .eq("is_deleted", false)
+      .in("status", ["completed", "checked_out"])
+      .neq("payment_status", "refunded");
+
+    if (statusFilter === "completed") {
+      query = query.eq("status", "completed");
+    } else if (statusFilter === "checked_out") {
+      query = query.eq("status", "checked_out");
+    }
+
+    const { data: bookings, error } = await query.order("checkin", { ascending: true });
+    if (error) throw error;
+
+    // 2) Fetch all completed settlements to subtract from outstanding
+    const allBookingIds = (bookings ?? []).map((b: any) => b.id);
+    let settledByBooking: Record<string, number> = {};
+    if (allBookingIds.length > 0) {
+      // Fetch settlement_bookings for these bookings
+      const { data: sbData } = await supabaseAdmin
+        .from("settlement_bookings")
+        .select("booking_id, amount, proprietor_settlements!inner(status)")
+        .in("booking_id", allBookingIds);
+      (sbData ?? []).forEach((sb: any) => {
+        if ((sb as any).proprietor_settlements?.status === "completed") {
+          const bid = sb.booking_id;
+          settledByBooking[bid] = (settledByBooking[bid] || 0) + (parseFloat(sb.amount) || 0);
+        }
+      });
+    }
+
+    // 3) Group by property
+    const propertyMap: Record<string, {
+      propertyId: string;
+      propertyName: string;
+      ownerId: string;
+      ownerName: string;
+      ownerEmail: string;
+      totalPayable: number;
+      outstandingPayable: number;
+      totalServiceFee: number;
+      totalSettled: number;
+      bookingCount: number;
+      oldestFinalized: string | null;
+      bookings: any[];
+    }> = {};
+
+    (bookings ?? []).forEach((b: any) => {
+      const propId = b.property_id;
+      const propName = b.properties?.name || "Unknown Property";
+      const profile = b.properties?.profiles;
+      const ownerFirst = profile?.first_name || "";
+      const ownerLast  = profile?.last_name || "";
+      const ownerName  = [ownerFirst, ownerLast].filter(Boolean).join(" ") || "Unknown";
+      const ownerEmail = profile?.email || "";
+
+      const ownerId = b.properties?.owner_id || "";
+
+      if (!propertyMap[propId]) {
+        propertyMap[propId] = {
+          propertyId: propId,
+          propertyName: propName,
+          ownerId,
+          ownerName,
+          ownerEmail,
+          totalPayable: 0,
+          outstandingPayable: 0,
+          totalServiceFee: 0,
+          totalSettled: 0,
+          bookingCount: 0,
+          oldestFinalized: null,
+          bookings: [],
+        };
+      }
+
+      const entry = propertyMap[propId];
+      const fee    = parseFloat(b.service_fee) || 0;
+      const settled = settledByBooking[b.id] || 0;
+
+      entry.totalPayable += fee;
+      entry.totalServiceFee += fee;
+      entry.totalSettled += settled;
+      entry.outstandingPayable += Math.max(0, fee - settled);
+      entry.bookingCount += 1;
+
+      if (!entry.oldestFinalized || b.checkin < entry.oldestFinalized) {
+        entry.oldestFinalized = b.checkin;
+      }
+
+      entry.bookings.push({
+        id: b.id,
+        checkin: b.checkin,
+        checkout: b.checkout,
+        serviceFee: fee,
+        settledAmount: settled,
+        outstandingAmount: Math.max(0, fee - settled),
+        status: b.status,
+        paymentStatus: b.payment_status,
+        paymentMethod: b.payment_method,
+        serviceType: b.service_type,
+        petName: b.pet_name,
+        petType: b.pet_type,
+        createdAt: b.created_at,
+      });
+    });
+
+    let properties = Object.values(propertyMap);
+
+    // 4. Search filter
+    if (searchQuery) {
+      properties = properties.filter(
+        (p) =>
+          p.propertyName.toLowerCase().includes(searchQuery) ||
+          p.ownerName.toLowerCase().includes(searchQuery) ||
+          p.ownerEmail.toLowerCase().includes(searchQuery)
+      );
+    }
+
+    // 5) Sort
+    switch (sortBy) {
+      case "amount_asc":
+        properties.sort((a, b) => a.totalPayable - b.totalPayable);
+        break;
+      case "oldest":
+        properties.sort((a, b) => {
+          if (!a.oldestFinalized) return 1;
+          if (!b.oldestFinalized) return -1;
+          return a.oldestFinalized.localeCompare(b.oldestFinalized);
+        });
+        break;
+      case "name":
+        properties.sort((a, b) => a.propertyName.localeCompare(b.propertyName));
+        break;
+      default: // amount_desc
+        properties.sort((a, b) => b.totalPayable - a.totalPayable);
+    }
+
+    // 6) Summary
+    const totalPayables = properties.reduce((s, p) => s + p.totalPayable, 0);
+    const outstandingPayables = properties.reduce((s, p) => s + p.outstandingPayable, 0);
+    const totalFees = properties.reduce((s, p) => s + p.totalServiceFee, 0);
+    const totalSettled = properties.reduce((s, p) => s + p.totalSettled, 0);
+    const totalFinalizedBookings = properties.reduce((s, p) => s + p.bookingCount, 0);
+    const propertiesWithOutstanding = properties.filter((p) => p.outstandingPayable > 0).length;
+
+    return res.json({
+      summary: {
+        totalPayables,
+        outstandingPayables,
+        totalSettled,
+        totalFees,
+        propertiesWithBalance: propertiesWithOutstanding,
+        totalFinalizedBookings,
+
+        // Backward-compat fields used by current UI
+        totalOutstanding: outstandingPayables,
+        totalUnpaidBookings: totalFinalizedBookings,
+      },
+      properties,
+      currency: "PHP",
+    });
+  } catch (err: any) {
+    console.error("getReceivables error:", err);
+    return res.status(500).json({ error: "Failed to get receivables.", details: err?.message || err });
   }
 };

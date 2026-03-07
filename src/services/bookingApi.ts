@@ -237,4 +237,67 @@ export const bookingApi = {
   /** Get monthly revenue series for historical trends (super admin only) */
   getRevenueMonthlySeries: () =>
     authHelper.get(`${API_BASE_URL}/api/bookings/revenue/monthly-series`),
+
+  /** Get accounts receivable per property (super admin only) */
+  getReceivables: (params?: { status?: string; search?: string; sort?: string }) => {
+    const qs = new URLSearchParams();
+    if (params?.status) qs.set("status", params.status);
+    if (params?.search) qs.set("search", params.search);
+    if (params?.sort) qs.set("sort", params.sort);
+    const query = qs.toString();
+    return authHelper.get(`${API_BASE_URL}/api/bookings/receivables${query ? "?" + query : ""}`);
+  },
+
+  /* ── Settlement / Receivable endpoints ── */
+
+  /** Get monthly receivables breakdown (super admin only) */
+  getMonthlyReceivables: (params?: { months?: number; proprietorId?: string; propertyId?: string }) => {
+    const qs = new URLSearchParams();
+    if (params?.months) qs.set("months", String(params.months));
+    if (params?.proprietorId) qs.set("proprietorId", params.proprietorId);
+    if (params?.propertyId) qs.set("propertyId", params.propertyId);
+    const query = qs.toString();
+    return authHelper.get(`${API_BASE_URL}/api/settlements/monthly-receivables${query ? "?" + query : ""}`);
+  },
+
+  /** Get receivable summary totals (super admin only) */
+  getReceivableSummary: () =>
+    authHelper.get(`${API_BASE_URL}/api/settlements/summary`),
+
+  /** List settlements (super admin only) */
+  listSettlements: (params?: { proprietorId?: string; propertyId?: string; status?: string; from?: string; to?: string }) => {
+    const qs = new URLSearchParams();
+    if (params?.proprietorId) qs.set("proprietorId", params.proprietorId);
+    if (params?.propertyId) qs.set("propertyId", params.propertyId);
+    if (params?.status) qs.set("status", params.status);
+    if (params?.from) qs.set("from", params.from);
+    if (params?.to) qs.set("to", params.to);
+    const query = qs.toString();
+    return authHelper.get(`${API_BASE_URL}/api/settlements${query ? "?" + query : ""}`);
+  },
+
+  /** Create a new settlement (super admin only) */
+  createSettlement: (data: {
+    proprietorId: string;
+    propertyId: string;
+    amount: number;
+    bookingIds?: string[];
+    method?: string;
+    referenceNo?: string;
+    notes?: string;
+    periodMonth?: string;
+    settledAt?: string;
+  }) => authHelper.post(`${API_BASE_URL}/api/settlements`, data),
+
+  /** Update settlement status (super admin only) */
+  updateSettlementStatus: (id: string, status: string) =>
+    authHelper.patch(`${API_BASE_URL}/api/settlements/${id}/status`, { status }),
+
+  /** Delete a settlement (only pending/failed) */
+  deleteSettlement: (id: string) =>
+    authHelper.delete(`${API_BASE_URL}/api/settlements/${id}`),
+
+  /** Get settlement history for a specific property */
+  getPropertySettlements: (propertyId: string) =>
+    authHelper.get(`${API_BASE_URL}/api/settlements/property/${propertyId}`),
 };

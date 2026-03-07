@@ -141,6 +141,7 @@ const App = () => (
           <Route path="/superadmin/settings" element={<RequireSuperAdmin><SuperAdminSettings /></RequireSuperAdmin>} />
           <Route path="/superadmin/amenities" element={<RequireSuperAdmin><SuperAdminAmenities /></RequireSuperAdmin>} />
           
+          
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
