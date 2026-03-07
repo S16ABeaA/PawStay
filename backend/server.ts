@@ -15,6 +15,7 @@ import petRoutes from './routes/petRoute';
 import bookingRoutes from './routes/bookingRoute';
 import favoritesRoutes from './routes/favoritesRoute';
 import supportRoutes from './routes/supportRoute';
+import analyticsRoutes from './routes/analyticsRoute';
  
 dotenv.config({ path: '../.env' });
 dotenv.config();
@@ -85,6 +86,7 @@ app.use("/api/pets", petRoutes);
 app.use("/api/bookings", bookingRoutes);
 app.use('/api/favorites', favoritesRoutes);
 app.use('/api/support', supportRoutes);
+app.use('/api/analytics', analyticsRoutes);
 
 // Simple health/root route
 app.get('/', (_req, res) => {
