@@ -22,4 +22,7 @@ router.put("/availability", settingsController.updateAvailability);
 // PUT  /api/settings/payment       — update payment settings
 router.put("/payment", settingsController.updatePayment);
 
+// PUT  /api/settings/property-setup — update property setup
+router.put("/property-setup", settingsController.updatePropertySetup);
+
 export default router;
