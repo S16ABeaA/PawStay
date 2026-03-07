@@ -7,12 +7,61 @@ import { Switch } from "@/components/ui/switch";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { settingsApi, SettingsData } from "@/services/settingsApi";
-import { Building2, Bell, CreditCard, Shield, Clock, Upload, X, QrCode, Smartphone, Wallet, Banknote } from "lucide-react";
-import { PetLoader } from "@/components/ui/PetLoader";
+import { Building2, Bell, CreditCard, Shield, Clock, Upload, X, QrCode, Smartphone, Wallet, Banknote, Loader2, FileText, CheckCircle2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useAdminProperty } from "@/hooks/useAdminProperty";
+
+// Property Setup Options
+const bookingRuleOptions = [
+  { name: "Advance booking required", description: "Set minimum notice period" },
+  { name: "Same-day booking allowed", description: "Accept last-minute bookings" },
+  { name: "Minimum stay requirements", description: "Set minimum nights/days" },
+  { name: "Maximum stay limits", description: "Set maximum stay duration" },
+  { name: "Deposit required", description: "Require payment to secure booking" },
+  { name: "Full payment upfront", description: "Require full payment at booking" },
+];
+
+const complianceOptions = [
+  { name: "Health certificate required", description: "Vet health check certificate" },
+  { name: "Vaccination records required", description: "Proof of up-to-date vaccinations", required: true },
+  { name: "Parasite prevention proof", description: "Flea/tick/heartworm prevention" },
+  { name: "Microchip identification", description: "Pet must have microchip ID" },
+  { name: "Breed-specific restrictions apply", description: "Certain breeds not accepted" },
+  { name: "Age restrictions apply", description: "Minimum/maximum pet age" }
+];
+
+const vaccinationOptions = [
+  { name: "Rabies vaccination required" },
+  { name: "DHPP/FVRCP vaccination required" },
+  { name: "Bordetella vaccination required" },
+  { name: "Flea prevention required" },
+  { name: "Tick prevention required" },
+  { name: "Heartworm prevention required" },
+  { name: "Proof of vaccination at check-in" },
+];
+
+const vetAvailabilityOptions = [
+  { name: "Licensed veterinarian on-call 24/7" },
+  { name: "Partnership with veterinary clinic" },
+  { name: "Daily health checks for all animals" },
+  { name: "Medication administration available" },
+  { name: "Emergency care available" },
+  { name: "Preventive care services available" },
+  { name: "Dental services available" },
+];
+
+const sanitationOptions = [
+  { name: "Full facility sanitization daily" },
+  { name: "Separate isolation area for sick animals" },
+  { name: "Medical-grade disinfectants used" },
+  { name: "Individual bedding laundered daily" },
+  { name: "Sick animals isolated from healthy animals" },
+  { name: "Staff hand-washing between animal interactions" },
+  { name: "Separate areas for different species" },
+];
 
 const AdminSettings = () => {
   const { toast } = useToast();
@@ -48,6 +97,22 @@ const AdminSettings = () => {
   const gcashInputRef = useRef<HTMLInputElement>(null);
   const paymayaInputRef = useRef<HTMLInputElement>(null);
 
+  // Property setup state - restructured for checkbox/select inputs
+  const [propertySetup, setPropertySetup] = useState({
+    unvaccinatedPolicy: false,
+    unvaccinatedPolicyDetails: "",
+    breedRestrictions: false,
+    breedRestrictionsDetails: "",
+    aggressivePolicy: false,
+    aggressivePolicyDetails: "",
+    bookingRules: [] as string[],
+    complianceRequirements: [] as string[],
+    vaccinationRequirements: [] as string[],
+    emergencyProcedures: "",
+    vetAvailability: [] as string[],
+    isolationSanitationProtocols: [] as string[],
+  });
+
   useEffect(() => {
     if (propLoading) return;
 
@@ -65,6 +130,24 @@ const AdminSettings = () => {
         setAcceptedMethods(data.payment.acceptedMethods || []);
         setQrCodeGCash(data.payment.gcashQrUrl || null);
         setQrCodePayMaya(data.payment.paymayaQrUrl || null);
+        
+        // Deserialize property setup data
+        if (data.propertySetup) {
+          setPropertySetup({
+            unvaccinatedPolicy: data.propertySetup.unvaccinatedPolicy || false,
+            unvaccinatedPolicyDetails: data.propertySetup.unvaccinatedPolicyDetails || "",
+            breedRestrictions: data.propertySetup.breedRestrictions || false,
+            breedRestrictionsDetails: data.propertySetup.breedRestrictionsDetails || "",
+            aggressivePolicy: data.propertySetup.aggressivePolicy || false,
+            aggressivePolicyDetails: data.propertySetup.aggressivePolicyDetails || "",
+            bookingRules: Array.isArray(data.propertySetup.bookingRules) ? data.propertySetup.bookingRules : [],
+            complianceRequirements: Array.isArray(data.propertySetup.complianceRequirements) ? data.propertySetup.complianceRequirements : [],
+            vaccinationRequirements: Array.isArray(data.propertySetup.vaccinationRequirements) ? data.propertySetup.vaccinationRequirements : [],
+            emergencyProcedures: data.propertySetup.emergencyProcedures || "",
+            vetAvailability: Array.isArray(data.propertySetup.vetAvailability) ? data.propertySetup.vetAvailability : [],
+            isolationSanitationProtocols: Array.isArray(data.propertySetup.isolationSanitationProtocols) ? data.propertySetup.isolationSanitationProtocols : [],
+          });
+        }
       } catch (err) {
         console.error("Failed to load settings", err);
         toast({
@@ -183,11 +266,42 @@ const AdminSettings = () => {
     }
   };
 
+  const handleSavePropertySetup = async () => {
+    try {
+      await settingsApi.updatePropertySetup({
+        unvaccinatedPolicy: propertySetup.unvaccinatedPolicy,
+        unvaccinatedPolicyDetails: propertySetup.unvaccinatedPolicyDetails,
+        breedRestrictions: propertySetup.breedRestrictions,
+        breedRestrictionsDetails: propertySetup.breedRestrictionsDetails,
+        aggressivePolicy: propertySetup.aggressivePolicy,
+        aggressivePolicyDetails: propertySetup.aggressivePolicyDetails,
+        bookingRules: propertySetup.bookingRules,
+        complianceRequirements: propertySetup.complianceRequirements,
+        vaccinationRequirements: propertySetup.vaccinationRequirements,
+        emergencyProcedures: propertySetup.emergencyProcedures,
+        vetAvailability: propertySetup.vetAvailability,
+        isolationSanitationProtocols: propertySetup.isolationSanitationProtocols,
+        property_id: selectedPropertyId || undefined,
+      } as any);
+      toast({
+        title: "Property setup saved",
+        description: "Your property policies and requirements have been updated.",
+      });
+    } catch (err) {
+      console.error("Failed to update property setup", err);
+      toast({
+        title: "Update failed",
+        description: "Unable to save property setup.",
+        variant: "destructive",
+      });
+    }
+  };
+
   if (loading) {
     return (
       <AdminLayout title="Settings" subtitle="Manage your business preferences">
         <div className="flex items-center justify-center h-96">
-          <PetLoader />
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
         </div>
       </AdminLayout>
     );
@@ -212,6 +326,10 @@ const AdminSettings = () => {
           <TabsTrigger value="payment" className="gap-2">
             <QrCode className="h-4 w-4" />
             Payment & QR
+          </TabsTrigger>
+          <TabsTrigger value="property-setup" className="gap-2">
+            <FileText className="h-4 w-4" />
+            Property Setup
           </TabsTrigger>
           <TabsTrigger value="billing" className="gap-2">
             <CreditCard className="h-4 w-4" />
@@ -572,6 +690,293 @@ const AdminSettings = () => {
             <Button variant="hero" onClick={handleSavePayment} className="w-full md:w-auto">
               Save Payment Settings
             </Button>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="property-setup">
+          <div className="max-w-4xl mx-auto space-y-6">
+            <Card className="bg-card rounded-2xl shadow-elevated">
+              <CardHeader className="pb-4">
+                <CardTitle className="text-2xl">Property Setup & Requirements</CardTitle>
+                <CardDescription>Define your policies, rules, and requirements for pet boarding</CardDescription>
+              </CardHeader>
+              <Separator className="mb-6" />
+              <CardContent className="space-y-8">
+                {/* Policies Section - Dropdowns */}
+                <div className="bg-secondary/30 rounded-xl p-6">
+                  <h3 className="text-lg font-semibold mb-6">Policies</h3>
+                  <div className="space-y-6">
+                    {/* Unvaccinated Pet Policy */}
+                    <div className="space-y-2">
+                      <Label className="text-sm font-medium">Unvaccinated Pet Policy</Label>
+                      <select
+                        className="w-full px-3 py-2 border rounded-md bg-background"
+                        value={propertySetup.unvaccinatedPolicy ? "Yes" : "No"}
+                        onChange={(e) => {
+                          if (e.target.value === "No") {
+                            setPropertySetup((prev) => ({ ...prev, unvaccinatedPolicy: false, unvaccinatedPolicyDetails: "" }));
+                          } else {
+                            setPropertySetup((prev) => ({ ...prev, unvaccinatedPolicy: true }));
+                          }
+                        }}
+                      >
+                        <option value="No">Accept unvaccinated pets</option>
+                        <option value="Yes">Vaccination required</option>
+                      </select>
+                      {propertySetup.unvaccinatedPolicy && (
+                        <Input
+                          placeholder="Describe vaccination requirements (e.g., Rabies and DHPP required, proof at check-in)"
+                          value={propertySetup.unvaccinatedPolicyDetails}
+                          onChange={(e) => setPropertySetup((prev) => ({ ...prev, unvaccinatedPolicyDetails: e.target.value }))}
+                          className="mt-2"
+                        />
+                      )}
+                    </div>
+
+                    {/* Breed Restrictions */}
+                    <div className="space-y-2">
+                      <Label className="text-sm font-medium">Breed Restrictions</Label>
+                      <select
+                        className="w-full px-3 py-2 border rounded-md bg-background"
+                        value={propertySetup.breedRestrictions ? "Yes" : "No"}
+                        onChange={(e) => {
+                          if (e.target.value === "No") {
+                            setPropertySetup((prev) => ({ ...prev, breedRestrictions: false, breedRestrictionsDetails: "" }));
+                          } else {
+                            setPropertySetup((prev) => ({ ...prev, breedRestrictions: true }));
+                          }
+                        }}
+                      >
+                        <option value="No">No restrictions</option>
+                        <option value="Yes">Has restrictions</option>
+                      </select>
+                      {propertySetup.breedRestrictions && (
+                        <Input
+                          placeholder="e.g., No pit bulls, no aggressive breeds"
+                          value={propertySetup.breedRestrictionsDetails}
+                          onChange={(e) => setPropertySetup((prev) => ({ ...prev, breedRestrictionsDetails: e.target.value }))}
+                          className="mt-2"
+                        />
+                      )}
+                    </div>
+
+                    {/* Aggressive Pet Policy */}
+                    <div className="space-y-2">
+                      <Label className="text-sm font-medium">Aggressive Pet Policy</Label>
+                      <select
+                        className="w-full px-3 py-2 border rounded-md bg-background"
+                        value={propertySetup.aggressivePolicy ? "Yes" : "No"}
+                        onChange={(e) => {
+                          if (e.target.value === "No") {
+                            setPropertySetup((prev) => ({ ...prev, aggressivePolicy: false, aggressivePolicyDetails: "" }));
+                          } else {
+                            setPropertySetup((prev) => ({ ...prev, aggressivePolicy: true }));
+                          }
+                        }}
+                      >
+                        <option value="No">Accept all pets</option>
+                        <option value="Yes">Has policy</option>
+                      </select>
+                      {propertySetup.aggressivePolicy && (
+                        <Input
+                          placeholder="Describe your policy for aggressive or anxious pets"
+                          value={propertySetup.aggressivePolicyDetails}
+                          onChange={(e) => setPropertySetup((prev) => ({ ...prev, aggressivePolicyDetails: e.target.value }))}
+                          className="mt-2"
+                        />
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Booking Rules - Checkboxes */}
+                <div className="bg-secondary/30 rounded-xl p-6">
+                  <h3 className="text-lg font-semibold mb-6">Booking Rules</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {bookingRuleOptions.map((rule) => (
+                      <div
+                        key={rule.name}
+                        className="flex items-center justify-between p-3 bg-background rounded-lg border cursor-pointer hover:bg-secondary/30 transition-colors"
+                        onClick={() => {
+                          const newRules = propertySetup.bookingRules.includes(rule.name)
+                            ? propertySetup.bookingRules.filter(r => r !== rule.name)
+                            : [...propertySetup.bookingRules, rule.name];
+                          setPropertySetup((prev) => ({ ...prev, bookingRules: newRules }));
+                        }}
+                      >
+                        <div>
+                          <Label className="text-sm font-medium">{rule.name}</Label>
+                          <p className="text-xs text-muted-foreground">{rule.description}</p>
+                        </div>
+                        <input
+                          type="checkbox"
+                          className="w-5 h-5"
+                          checked={propertySetup.bookingRules.includes(rule.name)}
+                          onChange={() => {}}
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Compliance Requirements - Checkboxes */}
+                <div className="bg-secondary/30 rounded-xl p-6">
+                  <h3 className="text-lg font-semibold mb-6">Compliance Requirements</h3>
+                  <div className="space-y-4">
+                    {complianceOptions.map((requirement) => (
+                      <div
+                        key={requirement.name}
+                        className="flex items-start gap-3 p-3 bg-background rounded-lg border cursor-pointer hover:bg-secondary/30 transition-colors"
+                        onClick={() => {
+                          const newRequirements = propertySetup.complianceRequirements.includes(requirement.name)
+                            ? propertySetup.complianceRequirements.filter(r => r !== requirement.name)
+                            : [...propertySetup.complianceRequirements, requirement.name];
+                          setPropertySetup((prev) => ({ ...prev, complianceRequirements: newRequirements }));
+                        }}
+                      >
+                        <input
+                          type="checkbox"
+                          className="w-4 h-4 mt-1"
+                          checked={propertySetup.complianceRequirements.includes(requirement.name)}
+                          onChange={() => {}}
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <Label className="text-sm font-medium">{requirement.name}</Label>
+                            {requirement.required && <span className="text-red-500 text-xs">*</span>}
+                          </div>
+                          <p className="text-xs text-muted-foreground mt-1">{requirement.description}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Vaccination & Parasite Requirements - Checkboxes */}
+                <div className="bg-secondary/30 rounded-xl p-6">
+                  <h3 className="text-lg font-semibold mb-6">Vaccination & Parasite Requirements</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {vaccinationOptions.map((option) => (
+                      <div
+                        key={option.name}
+                        className="flex items-center gap-3 p-3 bg-background rounded-lg border cursor-pointer hover:bg-secondary/30 transition-colors"
+                        onClick={() => {
+                          const newVaccinations = propertySetup.vaccinationRequirements.includes(option.name)
+                            ? propertySetup.vaccinationRequirements.filter(v => v !== option.name)
+                            : [...propertySetup.vaccinationRequirements, option.name];
+                          setPropertySetup((prev) => ({ ...prev, vaccinationRequirements: newVaccinations }));
+                        }}
+                      >
+                        <input
+                          type="checkbox"
+                          className="w-4 h-4"
+                          checked={propertySetup.vaccinationRequirements.includes(option.name)}
+                          onChange={() => {}}
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                        <Label className="text-sm font-medium flex-1">{option.name}</Label>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Emergency Procedures - Text Field */}
+                <div className="bg-secondary/30 rounded-xl p-6">
+                  <Label className="text-lg font-semibold mb-3 block">Emergency Procedures</Label>
+                  <p className="text-sm text-muted-foreground mb-4">Outline emergency response and safety protocols</p>
+                  <Input
+                    id="emergencyProcedures"
+                    placeholder="e.g., Emergency vet: Animal Medical Center (555-0123). 24/7 on-call vet. Staff trained in pet CPR. Evacuation plan in place."
+                    value={propertySetup.emergencyProcedures}
+                    onChange={(e) => setPropertySetup((prev) => ({ ...prev, emergencyProcedures: e.target.value }))}
+                  />
+                </div>
+
+                {/* Veterinary Availability - Checkboxes */}
+                <div className="bg-secondary/30 rounded-xl p-6">
+                  <h3 className="text-lg font-semibold mb-6">Veterinary Availability</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {vetAvailabilityOptions.map((option) => (
+                      <div
+                        key={option.name}
+                        className="flex items-center gap-3 p-3 bg-background rounded-lg border cursor-pointer hover:bg-secondary/30 transition-colors"
+                        onClick={() => {
+                          const newVetServices = propertySetup.vetAvailability.includes(option.name)
+                            ? propertySetup.vetAvailability.filter(v => v !== option.name)
+                            : [...propertySetup.vetAvailability, option.name];
+                          setPropertySetup((prev) => ({ ...prev, vetAvailability: newVetServices }));
+                        }}
+                      >
+                        <input
+                          type="checkbox"
+                          className="w-4 h-4"
+                          checked={propertySetup.vetAvailability.includes(option.name)}
+                          onChange={() => {}}
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                        <Label className="text-sm font-medium flex-1">{option.name}</Label>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Isolation & Sanitation Protocols - Checkboxes */}
+                <div className="bg-secondary/30 rounded-xl p-6">
+                  <h3 className="text-lg font-semibold mb-6">Isolation & Sanitation Protocols</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {sanitationOptions.map((option) => (
+                      <div
+                        key={option.name}
+                        className="flex items-center gap-3 p-3 bg-background rounded-lg border cursor-pointer hover:bg-secondary/30 transition-colors"
+                        onClick={() => {
+                          const newProtocols = propertySetup.isolationSanitationProtocols.includes(option.name)
+                            ? propertySetup.isolationSanitationProtocols.filter(p => p !== option.name)
+                            : [...propertySetup.isolationSanitationProtocols, option.name];
+                          setPropertySetup((prev) => ({ ...prev, isolationSanitationProtocols: newProtocols }));
+                        }}
+                      >
+                        <input
+                          type="checkbox"
+                          className="w-4 h-4"
+                          checked={propertySetup.isolationSanitationProtocols.includes(option.name)}
+                          onChange={() => {}}
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                        <Label className="text-sm font-medium flex-1">{option.name}</Label>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Save Buttons */}
+                <div className="flex gap-3 pt-4">
+                  <Button variant="hero" size="lg" onClick={handleSavePropertySetup} className="gap-2">
+                    <CheckCircle2 className="h-4 w-4" />
+                    Save Property Setup
+                  </Button>
+                  <Button variant="outline" size="lg" onClick={() => {
+                    setPropertySetup({
+                      unvaccinatedPolicy: false,
+                      unvaccinatedPolicyDetails: "",
+                      breedRestrictions: false,
+                      breedRestrictionsDetails: "",
+                      aggressivePolicy: false,
+                      aggressivePolicyDetails: "",
+                      bookingRules: [],
+                      complianceRequirements: [],
+                      vaccinationRequirements: [],
+                      emergencyProcedures: "",
+                      vetAvailability: [],
+                      isolationSanitationProtocols: [],
+                    });
+                  }}>
+                    Clear All Fields
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
           </div>
         </TabsContent>
 
