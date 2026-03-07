@@ -1,24 +1,19 @@
-import { Facebook, Twitter, Instagram, Youtube } from "lucide-react";
+import { Facebook, Instagram, Mail } from "lucide-react";
 
 const Footer = () => {
   const footerLinks = {
     company: [
       { label: "About Us", href: "/about" },
-      { label: "Careers", href: "#" },
-      { label: "Press", href: "#" },
-      { label: "Blog", href: "#" },
+      { label: "List Your Property", href: "/list-property" },
     ],
     services: [
       { label: "Pet Hotels", href: "/hotels" },
       { label: "Grooming", href: "/grooming" },
-      { label: "Veterinary", href: "/veterinary" }//,
-      //{ label: "Pet Taxi", href: "#" },
+      { label: "Veterinary", href: "/veterinary" },
     ],
     support: [
-      { label: "Help Center", href: "#" },
-      { label: "Safety", href: "#" },
-      { label: "Cancellation", href: "#" },
-      { label: "Contact Us", href: "#" },
+      { label: "Help Center", href: "/faq" },
+      { label: "Contact Us", href: "/help-center" },
     ],
     legal: [
       { label: "Terms", href: "#" },
@@ -32,6 +27,7 @@ const Footer = () => {
       {/* Main Footer */}
       <div className="container py-12 md:py-16">
         <div className="grid grid-cols-2 md:grid-cols-6 gap-8">
+
           {/* Brand */}
           <div className="col-span-2">
             <a href="/" className="flex items-center gap-3 mb-4">
@@ -42,15 +38,17 @@ const Footer = () => {
               />
               <span className="font-display text-xl font-bold">PawStay</span>
             </a>
+
             <p className="text-background/70 text-sm mb-6 max-w-xs">
               The trusted platform for pet care. Find the perfect home away from home for your furry friends.
             </p>
+
+            {/* Social Icons */}
             <div className="flex gap-3">
               {[
                 { Icon: Facebook, href: "https://www.facebook.com/profile.php?id=61587235174522" },
-                { Icon: Twitter, href: "https://twitter.com" },
                 { Icon: Instagram, href: "https://www.instagram.com/pawstay.ph/" },
-                { Icon: Youtube, href: "https://youtube.com" },
+                { Icon: Mail, href: "mailto:pawstayph@gmail.com" },
               ].map(({ Icon, href }, index) => (
                 <a
                   key={index}
@@ -65,13 +63,16 @@ const Footer = () => {
             </div>
           </div>
 
-          {/* Links */}
+          {/* Company */}
           <div>
             <h4 className="font-semibold mb-4">Company</h4>
             <ul className="space-y-3">
               {footerLinks.company.map((link) => (
                 <li key={link.label}>
-                  <a href={link.href} className="text-sm text-background/70 hover:text-background transition-colors">
+                  <a
+                    href={link.href}
+                    className="text-sm text-background/70 hover:text-background transition-colors"
+                  >
                     {link.label}
                   </a>
                 </li>
@@ -79,12 +80,16 @@ const Footer = () => {
             </ul>
           </div>
 
+          {/* Services */}
           <div>
             <h4 className="font-semibold mb-4">Services</h4>
             <ul className="space-y-3">
               {footerLinks.services.map((link) => (
                 <li key={link.label}>
-                  <a href={link.href} className="text-sm text-background/70 hover:text-background transition-colors">
+                  <a
+                    href={link.href}
+                    className="text-sm text-background/70 hover:text-background transition-colors"
+                  >
                     {link.label}
                   </a>
                 </li>
@@ -92,12 +97,16 @@ const Footer = () => {
             </ul>
           </div>
 
+          {/* Support */}
           <div>
             <h4 className="font-semibold mb-4">Support</h4>
             <ul className="space-y-3">
               {footerLinks.support.map((link) => (
                 <li key={link.label}>
-                  <a href={link.href} className="text-sm text-background/70 hover:text-background transition-colors">
+                  <a
+                    href={link.href}
+                    className="text-sm text-background/70 hover:text-background transition-colors"
+                  >
                     {link.label}
                   </a>
                 </li>
@@ -105,18 +114,23 @@ const Footer = () => {
             </ul>
           </div>
 
+          {/* Legal */}
           <div>
             <h4 className="font-semibold mb-4">Legal</h4>
             <ul className="space-y-3">
               {footerLinks.legal.map((link) => (
                 <li key={link.label}>
-                  <a href={link.href} className="text-sm text-background/70 hover:text-background transition-colors">
+                  <a
+                    href={link.href}
+                    className="text-sm text-background/70 hover:text-background transition-colors"
+                  >
                     {link.label}
                   </a>
                 </li>
               ))}
             </ul>
           </div>
+
         </div>
       </div>
 
@@ -126,7 +140,6 @@ const Footer = () => {
           <p className="text-sm text-background/50">
             © 2025 PawStay. All rights reserved.
           </p>
-
         </div>
       </div>
     </footer>

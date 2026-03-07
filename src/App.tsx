@@ -26,6 +26,7 @@ import MyPets from "./pages/MyPets";
 import MyBookings from "./pages/MyBookings";
 import Notifications from "./pages/Notifications";
 import HelpCenter from "./pages/HelpCenter";
+import FAQ from "./pages/FAQ";
 import RequireAuth from "./components/RequireAuth";
 import RequireAdmin from "./components/RequireAdmin";
 import RequireSuperAdmin from "./components/RequireSuperAdmin";
@@ -92,6 +93,7 @@ const App = () => (
           <Route path="/favorites" element={<RequireAuth><Favorites /></RequireAuth>} />
           <Route path="/booking" element={<RequireAuth signUpFirst><Booking /></RequireAuth> } />
           <Route path="/search" element={<SearchResults />} />
+          <Route path="/faq" element={<FAQ />} />
           <Route path="/help-center" element={<HelpCenter />} />
           <Route
             path="/profile"

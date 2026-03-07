@@ -71,7 +71,7 @@ const Header = () => {
           <Link to="/about" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
             About
           </Link>
-          <Link to="/help-center" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1">
+          <Link to="/faq" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1">
             <HelpCircle className="h-4 w-4" />
             Help
           </Link>
@@ -140,7 +140,7 @@ const Header = () => {
             <Link to="/grooming" className="py-2 text-sm font-medium text-foreground" onClick={() => setIsMenuOpen(false)}>Grooming</Link>
             <Link to="/veterinary" className="py-2 text-sm font-medium text-foreground" onClick={() => setIsMenuOpen(false)}>Veterinary</Link>
             <Link to="/about" className="py-2 text-sm font-medium text-foreground" onClick={() => setIsMenuOpen(false)}>About</Link>
-            <Link to="/help-center" className="py-2 text-sm font-medium text-foreground flex items-center gap-1" onClick={() => setIsMenuOpen(false)}>
+            <Link to="/faq" className="py-2 text-sm font-medium text-foreground flex items-center gap-1" onClick={() => setIsMenuOpen(false)}>
               <HelpCircle className="h-4 w-4" /> Help Center
             </Link>
             <hr className="border-border my-2" />
