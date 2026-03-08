@@ -57,6 +57,7 @@ export const settingsController = {
       let business: any = null;
       let availability: any = null;
       let payment: any = null;
+      let propertySetup: any = null;
       let propertyId: string | null = null;
 
       if (property) {
@@ -75,11 +76,12 @@ export const settingsController = {
         // Availability from property_setup
         const { data: setup } = await supabaseAdmin
           .from("property_setup")
-          .select("operating_hours")
+          .select("operating_hours, policies, booking_rules, compliance, health_safety, vet_availability, sanitation_protocols, emergency_contact")
           .eq("property_id", propertyId)
           .maybeSingle();
 
         availability = setup?.operating_hours || {};
+        propertySetup = setup || {};
 
         // Payment from property_pricing
         const { data: pricing } = await supabaseAdmin
@@ -118,6 +120,20 @@ export const settingsController = {
           acceptedMethods: payment?.accepted_methods || payment?.methods || [],
           gcashQrUrl: payment?.gcash_qr_url || null,
           paymayaQrUrl: payment?.paymaya_qr_url || null,
+        },
+        propertySetup: {
+          unvaccinatedPolicy: propertySetup?.policies?.unvaccinatedPolicy || false,
+          unvaccinatedPolicyDetails: propertySetup?.policies?.unvaccinatedPolicyDetails || "",
+          breedRestrictions: propertySetup?.policies?.breedRestrictions || false,
+          breedRestrictionsDetails: propertySetup?.policies?.breedRestrictionsDetails || "",
+          aggressivePolicy: propertySetup?.policies?.aggressivePolicy || false,
+          aggressivePolicyDetails: propertySetup?.policies?.aggressivePolicyDetails || "",
+          bookingRules: Array.isArray(propertySetup?.booking_rules) ? propertySetup.booking_rules : [],
+          complianceRequirements: Array.isArray(propertySetup?.compliance) ? propertySetup.compliance : [],
+          vaccinationRequirements: Array.isArray(propertySetup?.health_safety) ? propertySetup.health_safety : [],
+          emergencyProcedures: propertySetup?.emergency_contact || "",
+          vetAvailability: Array.isArray(propertySetup?.vet_availability) ? propertySetup.vet_availability : [],
+          isolationSanitationProtocols: Array.isArray(propertySetup?.sanitation_protocols) ? propertySetup.sanitation_protocols : [],
         },
       });
     } catch (err: any) {
@@ -296,6 +312,76 @@ export const settingsController = {
       return res.json({ success: true });
     } catch (err: any) {
       console.error("[Settings] updatePayment error:", err.message);
+      return res.status(500).json({ error: err.message });
+    }
+  },
+
+  // ════════════════════════════════════════════════
+  // PUT /api/settings/property-setup — update property setup
+  // ════════════════════════════════════════════════
+  updatePropertySetup: async (req: Request, res: Response) => {
+    try {
+      const user = (req as any).user;
+      if (!user) return res.status(401).json({ error: "Unauthorized" });
+
+      const bodyPropertyId = req.body.property_id as string | undefined;
+      const property = await getOwnerProperty(user.id, bodyPropertyId);
+      if (!property) return res.status(404).json({ error: "No property found for this account." });
+
+      const {
+        unvaccinatedPolicy,
+        unvaccinatedPolicyDetails,
+        breedRestrictions,
+        breedRestrictionsDetails,
+        aggressivePolicy,
+        aggressivePolicyDetails,
+        bookingRules,
+        complianceRequirements,
+        vaccinationRequirements,
+        emergencyProcedures,
+        vetAvailability,
+        isolationSanitationProtocols,
+      } = req.body;
+
+      // Merge with existing columns in property_setup
+      const { data: existing } = await supabaseAdmin
+        .from("property_setup")
+        .select("policies, booking_rules, compliance, health_safety, vet_availability, sanitation_protocols, emergency_contact")
+        .eq("property_id", property.id)
+        .maybeSingle();
+
+      const mergedPolicies = {
+        ...(existing?.policies || {}),
+        unvaccinatedPolicy: unvaccinatedPolicy ?? existing?.policies?.unvaccinatedPolicy ?? false,
+        unvaccinatedPolicyDetails: unvaccinatedPolicyDetails ?? existing?.policies?.unvaccinatedPolicyDetails ?? "",
+        breedRestrictions: breedRestrictions ?? existing?.policies?.breedRestrictions ?? false,
+        breedRestrictionsDetails: breedRestrictionsDetails ?? existing?.policies?.breedRestrictionsDetails ?? "",
+        aggressivePolicy: aggressivePolicy ?? existing?.policies?.aggressivePolicy ?? false,
+        aggressivePolicyDetails: aggressivePolicyDetails ?? existing?.policies?.aggressivePolicyDetails ?? "",
+      };
+
+      const { error } = await supabaseAdmin
+        .from("property_setup")
+        .upsert(
+          {
+            property_id: property.id,
+            policies: mergedPolicies,
+            booking_rules: bookingRules ?? existing?.booking_rules ?? [],
+            compliance: complianceRequirements ?? existing?.compliance ?? [],
+            health_safety: vaccinationRequirements ?? existing?.health_safety ?? [],
+            vet_availability: vetAvailability ?? existing?.vet_availability ?? [],
+            sanitation_protocols: isolationSanitationProtocols ?? existing?.sanitation_protocols ?? [],
+            emergency_contact: emergencyProcedures ?? existing?.emergency_contact ?? "",
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: "property_id" }
+        );
+
+      if (error) throw error;
+
+      return res.json({ success: true });
+    } catch (err: any) {
+      console.error("[Settings] updatePropertySetup error:", err.message);
       return res.status(500).json({ error: err.message });
     }
   },
