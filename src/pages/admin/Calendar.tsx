@@ -34,10 +34,10 @@ import {
   Trash2,
   Edit,
   ExternalLink,
-  Loader2,
   UserPlus,
   CheckCircle2,
   MapPin,
+  Loader2,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -851,8 +851,9 @@ const AdminCalendar = () => {
       <Card>
         <CardContent className="p-3 md:p-5 relative">
           {loading && (
-            <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/60 rounded-lg">
-              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 rounded-lg bg-background/60">
+              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+              <span className="text-sm text-muted-foreground">Loading calendar...</span>
             </div>
           )}
           <FullCalendar

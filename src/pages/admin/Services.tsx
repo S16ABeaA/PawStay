@@ -225,8 +225,9 @@ const AdminServices = () => {
   if (loading) {
     return (
       <AdminLayout title="Services" subtitle="Manage your service offerings and pricing">
-        <div className="flex items-center justify-center h-96">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <div className="flex h-96 flex-col items-center justify-center gap-3">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+          <span className="text-sm text-muted-foreground">Loading services...</span>
         </div>
       </AdminLayout>
     );

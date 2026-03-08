@@ -160,8 +160,9 @@ const AdminReviews = () => {
   return (
     <AdminLayout title="Reviews" subtitle="Monitor and respond to customer feedback">
       {loading ? (
-        <div className="flex items-center justify-center py-16">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <div className="flex flex-col items-center justify-center gap-3 py-16">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+          <span className="text-sm text-muted-foreground">Loading reviews...</span>
         </div>
       ) : (
       <>

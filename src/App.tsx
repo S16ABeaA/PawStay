@@ -26,6 +26,7 @@ import MyPets from "./pages/MyPets";
 import MyBookings from "./pages/MyBookings";
 import Notifications from "./pages/Notifications";
 import HelpCenter from "./pages/HelpCenter";
+import FAQ from "./pages/FAQ";
 import RequireAuth from "./components/RequireAuth";
 import RequireAdmin from "./components/RequireAdmin";
 import RequireSuperAdmin from "./components/RequireSuperAdmin";
@@ -47,6 +48,7 @@ import SuperAdminAnalytics from "./pages/superadmin/Analytics";
 import SuperAdminRevenue from "./pages/superadmin/Revenue";
 import SuperAdminSupport from "./pages/superadmin/Support";
 import SuperAdminSettings from "./pages/superadmin/Settings";
+import SuperAdminAmenities from "./pages/superadmin/Amenities";
 
 const queryClient = new QueryClient();
 
@@ -91,6 +93,7 @@ const App = () => (
           <Route path="/favorites" element={<RequireAuth><Favorites /></RequireAuth>} />
           <Route path="/booking" element={<RequireAuth signUpFirst><Booking /></RequireAuth> } />
           <Route path="/search" element={<SearchResults />} />
+          <Route path="/faq" element={<FAQ />} />
           <Route path="/help-center" element={<HelpCenter />} />
           <Route
             path="/profile"
@@ -136,6 +139,8 @@ const App = () => (
           <Route path="/superadmin/revenue" element={<RequireSuperAdmin><SuperAdminRevenue /></RequireSuperAdmin>} />
           <Route path="/superadmin/support" element={<RequireSuperAdmin><SuperAdminSupport /></RequireSuperAdmin>} />
           <Route path="/superadmin/settings" element={<RequireSuperAdmin><SuperAdminSettings /></RequireSuperAdmin>} />
+          <Route path="/superadmin/amenities" element={<RequireSuperAdmin><SuperAdminAmenities /></RequireSuperAdmin>} />
+          
           
           <Route path="*" element={<NotFound />} />
         </Routes>

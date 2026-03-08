@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/popover";
 import { Slider } from "@/components/ui/slider";
 import { fetchRandomProperties } from "@/services/randPropertyApi";
+import { PetLoaderGate } from "./ui/PetLoader";
 
 const BATCH_SIZE = 6;
 const MAX_DISPLAY = 18;
@@ -380,30 +381,26 @@ const FeaturedHotels = () => {
               : "grid-cols-1"
           }`}
         >
-          {isLoading ? (
-            <div className="text-muted-foreground col-span-full text-center py-10">
-              Loading properties...
-            </div>
-          ) : error ? (
-            <div className="text-destructive col-span-full text-center py-10">
-              {error}
-            </div>
-          ) : displayedHotels.length === 0 ? (
-            <div className="text-muted-foreground col-span-full text-center py-10">
-              {hasActiveFilters
-                ? "No properties match your filters. Try adjusting them."
-                : "No properties found."}
-            </div>
-          ) : (
-            displayedHotels.map((hotel) => (
-              <HotelCard key={hotel.id} hotel={hotel} />
-            ))
-          )}
-        </div>
+          <PetLoaderGate dataLoaded={!isLoading} loaderText="Loading properties..." loaderClassName="min-h-[300px] col-span-full w-full">
+            {error ? (
+              <div className="text-destructive col-span-full text-center py-10">
+                {error}
+              </div>
+            ) : displayedHotels.length === 0 ? (
+              <div className="text-muted-foreground col-span-full text-center py-10">
+                {hasActiveFilters
+                  ? "No properties match your filters. Try adjusting them."
+                  : "No properties found."}
+              </div>
+            ) : (
+              displayedHotels.map((hotel) => (
+                <HotelCard key={hotel.id} hotel={hotel} />
+              ))
+            )}
 
-        {/* Load More / View More */}
+             {/* Load More / View More */}
         {hotels.length > 0 && hasMore && (
-          <div className="text-center mt-10">
+          <div className="col-span-full flex justify-center mt-10">
             {reachedMax ? (
               <Button
                 variant="outline"
@@ -424,6 +421,8 @@ const FeaturedHotels = () => {
             )}
           </div>
         )}
+          </PetLoaderGate>
+        </div>
       </div>
     </section>
   );

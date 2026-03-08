@@ -10,6 +10,7 @@ import {
   SlidersHorizontal, ArrowUpDown, Grid3X3, List, 
   Star, Search, MapPin
 } from "lucide-react";
+import { PetLoader } from "@/components/ui/PetLoader";
 import { useState, useEffect, useMemo, useRef } from "react";
 import { fetchProperties } from "@/services/propertyApi";
 import { LocationInput } from "@/components/LocationInput";
@@ -926,9 +927,8 @@ function haversineDistance(
                 }`}
               >
                 {isLoading ? (
-                  <div className="col-span-full flex flex-col items-center justify-center py-20 gap-3">
-                    <div className="h-10 w-10 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-                    <p className="text-muted-foreground text-sm">Searching for properties...</p>
+                  <div className="col-span-full">
+                    <PetLoader text="Searching for properties..." className="py-20" />
                   </div>
                 ) : loadError ? (
                   <div className="col-span-full flex flex-col items-center justify-center py-20 gap-4 text-center">
