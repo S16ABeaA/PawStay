@@ -120,6 +120,7 @@ const SuperAdminRevenue = () => {
   const [transactions, setTransactions] = useState<Array<any>>([]);
   const [txnFilterType, setTxnFilterType] = useState<string>("all");
   const [txnSearch, setTxnSearch] = useState<string>("");
+  const [txnSort, setTxnSort] = useState<string>("date_desc");
 
   useEffect(() => {
     const fetchRevenueData = async () => {
@@ -426,14 +427,44 @@ const SuperAdminRevenue = () => {
   // Filtered transactions based on search and selected service type
   const filteredTransactions = useMemo(() => {
     const q = txnSearch.trim().toLowerCase();
-    return transactions.filter((t) => {
+    const base = transactions.filter((t) => {
       if (txnFilterType && txnFilterType !== 'all' && String(t.type).toLowerCase() !== String(txnFilterType).toLowerCase()) return false;
       if (!q) return true;
       return [t.id, t.property, t.type, t.ownerName, t.serviceName]
         .filter(Boolean)
         .some((v) => String(v).toLowerCase().includes(q));
     });
-  }, [transactions, txnFilterType, txnSearch]);
+
+    // Sorting
+    const sorted = [...base].sort((a: any, b: any) => {
+      switch (txnSort) {
+        case 'date_asc': {
+          const da = a.date ? new Date(a.date).getTime() : 0;
+          const db = b.date ? new Date(b.date).getTime() : 0;
+          return da - db;
+        }
+        case 'date_desc': {
+          const da = a.date ? new Date(a.date).getTime() : 0;
+          const db = b.date ? new Date(b.date).getTime() : 0;
+          return db - da;
+        }
+        case 'amount_asc': {
+          const aa = Number(a.amount ?? 0);
+          const ab = Number(b.amount ?? 0);
+          return aa - ab;
+        }
+        case 'amount_desc': {
+          const aa = Number(a.amount ?? 0);
+          const ab = Number(b.amount ?? 0);
+          return ab - aa;
+        }
+        default:
+          return 0;
+      }
+    });
+
+    return sorted;
+  }, [transactions, txnFilterType, txnSearch, txnSort]);
 
   return (
     <SuperAdminLayout title="Revenue & Payouts" subtitle="Track platform revenue and manage property payouts">
@@ -478,6 +509,7 @@ const SuperAdminRevenue = () => {
           <CardHeader className="relative">
             <CardTitle className="text-white">Recent Transactions</CardTitle>
             <div className="absolute right-4 top-3 flex items-center gap-2">
+              
               <Select defaultValue={txnFilterType} onValueChange={(v) => setTxnFilterType(v)}>
                 <SelectTrigger className="w-44 bg-[#292929] border-white/[0.09] text-white">
                   <SelectValue />
@@ -489,10 +521,17 @@ const SuperAdminRevenue = () => {
                   <SelectItem value="veterinary" className="text-white">Veterinary</SelectItem>
                 </SelectContent>
               </Select>
-              <Button variant="outline" size="sm" className="border-white/[0.1] text-white/80 hover:bg-white/[0.06]" onClick={() => { setTxnFilterType('all'); setTxnSearch(''); }}>
-                <Filter className="h-4 w-4 mr-2" />
-                Clear
-              </Button>
+              <Select value={txnSort} onValueChange={(v) => setTxnSort(v)}>
+                <SelectTrigger className="w-44 bg-[#292929] border-white/[0.09] text-white">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="bg-[#292929] border-white/10 text-white">
+                  <SelectItem value="date_desc" className="text-white">Date: Newest first</SelectItem>
+                  <SelectItem value="date_asc" className="text-white">Date: Oldest first</SelectItem>
+                  <SelectItem value="amount_desc" className="text-white">Amount: Highest first</SelectItem>
+                  <SelectItem value="amount_asc" className="text-white">Amount: Lowest first</SelectItem>
+                </SelectContent>
+              </Select>
               <Button variant="outline" size="sm" className="border-white/[0.1] text-white/80 hover:bg-white/[0.06]" onClick={() => exportCSV(filteredTransactions, 'transactions.csv')} disabled={loading || filteredTransactions.length === 0}>
                 <Download className="h-4 w-4 mr-2" />
                 Export
