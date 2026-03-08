@@ -180,7 +180,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_mv_monthly_recv_pk
 CREATE OR REPLACE FUNCTION refresh_monthly_receivables()
 RETURNS void LANGUAGE plpgsql AS $$
 BEGIN
-  REFRESH MATERIALIZED VIEW CONCURRENTLY mv_monthly_receivables;
+  REFRESH MATERIALIZED VIEW mv_monthly_receivables;
 END;
 $$;
 

@@ -1,6 +1,5 @@
 import { Router } from "express";
-import { authMiddleware } from "../middleware/authMiddleware";
-import { requireSuperAdmin } from "../middleware/requireSuperAdmin";
+import { authMiddleware, requireSuperAdmin } from "../middleware/authMiddleware";
 import {
   createBooking,
   listBookings,
