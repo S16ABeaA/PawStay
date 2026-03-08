@@ -29,12 +29,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Plus, Search, Sparkles } from "lucide-react";
+import { Plus, Search, Sparkles, Loader2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { adminAmenitiesApi, Amenity } from "@/services/adminAmenitiesApi";
-
-import { PetLoader } from "@/components/ui/PetLoader";
 
 const SERVICE_TYPE_OPTIONS = ["hotel", "grooming", "veterinary"] as const;
 
@@ -163,19 +161,19 @@ const SuperAdminAmenities = () => {
   return (
     <SuperAdminLayout title="Amenities" subtitle="Manage platform amenity choices">
       <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3">
-        <Card className="bg-[#0b1220] border-white/5 text-white">
+        <Card className="bg-[#292929] border-white/5 text-white">
           <CardContent className="pt-6">
             <p className="text-sm font-medium text-[#808080]">Total amenities</p>
             <p className="mt-2 text-3xl font-bold">{stats.total}</p>
           </CardContent>
         </Card>
-        <Card className="bg-[#0b1220] border-white/5 text-white">
+        <Card className="bg-[#292929] border-white/5 text-white">
           <CardContent className="pt-6">
             <p className="text-sm font-medium text-[#808080]">Active choices</p>
             <p className="mt-2 text-3xl font-bold text-emerald-500">{stats.active}</p>
           </CardContent>
         </Card>
-        <Card className="sm:col-span-2 md:col-span-1 bg-[#0b1220] border-white/5 text-white">
+        <Card className="sm:col-span-2 md:col-span-1 bg-[#292929] border-white/5 text-white">
           <CardContent className="pt-6">
             <p className="text-sm font-medium text-[#808080]">Inactive choices</p>
             <p className="mt-2 text-3xl font-bold text-amber-500">{stats.inactive}</p>
@@ -185,7 +183,7 @@ const SuperAdminAmenities = () => {
 
       <div className="mb-4 grid grid-cols-1 gap-4">
         <div>
-          <Card className="bg-[#0b1220] border-white/5 text-white">
+          <Card className="bg-[#292929] border-white/5 text-white">
             <CardHeader className="space-y-4">
               <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                 <CardTitle>All Amenities</CardTitle>
@@ -218,7 +216,10 @@ const SuperAdminAmenities = () => {
             <CardContent>
               <div className="overflow-x-auto">
                 {loading ? (
-                  <PetLoader text="Loading amenities..." className="py-12" />
+                  <div className="flex flex-col items-center justify-center gap-3 py-12">
+                    <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                    <span className="text-sm text-muted-foreground">Loading amenities...</span>
+                  </div>
                 ) : (
                 <table className="w-full min-w-[700px] table-auto text-sm">
                   <thead>
