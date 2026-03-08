@@ -5,7 +5,7 @@ import VeterinaryCard from "@/components/VeterinaryCard";
 import { fetchProperties } from "@/services/propertyApi";
 import { fetchAmenities } from "@/services/amenitiesApi";
 import { Star, ArrowRight, SlidersHorizontal, ArrowUpDown, Grid3X3, List } from "lucide-react";
-import { PetLoader } from "@/components/ui/PetLoader";
+import { PetLoaderGate } from "@/components/ui/PetLoader";
 import { Link } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -478,9 +478,8 @@ const Veterinary = () => {
                 </Button>
               </div>
               
-              {loading ? (
-                <PetLoader className="py-20" />
-              ) : clinics.length === 0 ? (
+              <PetLoaderGate dataLoaded={!loading} loaderClassName="py-20">
+                {clinics.length === 0 ? (
                 <div className="text-center py-20 text-muted-foreground">No clinics found. Try adjusting your filters.</div>
               ) : (
                 <div className={`grid gap-6 ${viewMode === "grid" ? "grid-cols-1 md:grid-cols-2 xl:grid-cols-3" : "grid-cols-1"}`}>
@@ -520,7 +519,7 @@ const Veterinary = () => {
                   })()}
                 </div>
               )}
-              {/* Load More */}
+               {/* Load More */}
               {clinics.length > displayCount && (
                 <div className="text-center mt-10">
                   <Button variant="outline" size="lg" onClick={() => setDisplayCount(c => Math.min(c + PAGE_SIZE, clinics.length))}>
@@ -528,6 +527,7 @@ const Veterinary = () => {
                   </Button>
                 </div>
               )}
+              </PetLoaderGate>
             </div>
           </div>
         </div>

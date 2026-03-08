@@ -1,5 +1,4 @@
 import SuperAdminLayout from "@/components/superadmin/SuperAdminLayout";
-import { PetLoader } from "@/components/ui/PetLoader";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -391,7 +390,8 @@ const SuperAdminSupport = () => {
         <div className="lg:col-span-3 rounded-2xl bg-[#292929] border border-white/[0.07] flex flex-col overflow-hidden min-h-[500px]">
           {detailLoading ? (
             <div className="flex-1 flex flex-col items-center justify-center">
-              <PetLoader text="Loading conversation..." className="py-20" />
+              <Loader2 className="h-8 w-8 animate-spin text-[#808080]" />
+              <p className="mt-3 text-sm text-[#808080]">Loading conversation...</p>
             </div>
           ) : !selectedTicket ? (
             <div className="flex-1 flex flex-col items-center justify-center py-20">

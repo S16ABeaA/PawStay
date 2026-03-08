@@ -19,9 +19,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { DollarSign, TrendingUp, CreditCard, ArrowUpRight, ArrowDownRight, Download, Filter, Building2, AlertCircle, Clock, FileText, User, PawPrint, Calendar, ChevronRight, CheckCircle2 } from "lucide-react";
+import { DollarSign, TrendingUp, CreditCard, ArrowUpRight, ArrowDownRight, Download, Filter, Building2, AlertCircle, Clock, FileText, User, PawPrint, Calendar, ChevronRight, CheckCircle2, Loader2 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { PetLoader } from "@/components/ui/PetLoader";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from 'recharts';
 import { bookingApi } from "@/services/bookingApi";
 import { useToast } from "@/hooks/use-toast";
@@ -647,8 +646,9 @@ const SuperAdminRevenue = () => {
               </div>
             <CardContent>
               {recvLoading ? (
-                <div className="flex justify-center py-12">
-                  <PetLoader text="Loading payables…" />
+                <div className="flex flex-col items-center justify-center gap-3 py-12">
+                  <Loader2 className="h-8 w-8 animate-spin text-[#808080]" />
+                  <span className="text-sm text-[#808080]">Loading payables…</span>
                 </div>
               ) : recvProperties.length === 0 ? (
                 <div className="text-center py-12">

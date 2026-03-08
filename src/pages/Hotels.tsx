@@ -4,7 +4,7 @@ import Footer from "@/components/Footer";
 import HotelCard from "@/components/HotelCard";
 import { Button } from "@/components/ui/button";
 import { Star, ArrowRight, SlidersHorizontal, ArrowUpDown, Grid3X3, List } from "lucide-react";
-import { PetLoader } from "@/components/ui/PetLoader";
+import { PetLoaderGate } from "@/components/ui/PetLoader";
 import { Link } from "react-router-dom";
 import {
   DropdownMenu,
@@ -466,9 +466,8 @@ const Hotels = () => {
                   </div>
                 </div>
               </div>
-              {loading ? (
-                <PetLoader className="py-20" />
-              ) : hotels.length === 0 ? (
+              <PetLoaderGate dataLoaded={!loading} loaderClassName="py-20">
+                {hotels.length === 0 ? (
                 <div className="text-center py-20 text-muted-foreground">No hotels found. Try adjusting your filters.</div>
                 ) : (
                 <div className={`grid gap-6 ${viewMode === "grid" ? "grid-cols-1 md:grid-cols-2 xl:grid-cols-3" : "grid-cols-1"}`}>
@@ -506,7 +505,8 @@ const Hotels = () => {
                   })()}
                 </div>
               )}
-              {/* Load More */}
+
+               {/* Load More */}
               {hotels.length > displayCount && (
                 <div className="text-center mt-10">
                   <Button variant="outline" size="lg" onClick={() => setDisplayCount(c => Math.min(c + PAGE_SIZE, hotels.length))}>
@@ -514,6 +514,8 @@ const Hotels = () => {
                   </Button>
                 </div>
               )}
+
+              </PetLoaderGate>
             </div>
           </div>
         </div>

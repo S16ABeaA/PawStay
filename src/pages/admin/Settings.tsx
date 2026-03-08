@@ -9,8 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { settingsApi, SettingsData } from "@/services/settingsApi";
-import { Building2, Bell, CreditCard, Shield, Clock, Upload, X, QrCode, Smartphone, Wallet, Banknote } from "lucide-react";
-import { PetLoader } from "@/components/ui/PetLoader";
+import { Building2, Bell, CreditCard, Shield, Clock, Upload, X, QrCode, Smartphone, Wallet, Banknote, Loader2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useAdminProperty } from "@/hooks/useAdminProperty";
 
@@ -186,8 +185,9 @@ const AdminSettings = () => {
   if (loading) {
     return (
       <AdminLayout title="Settings" subtitle="Manage your business preferences">
-        <div className="flex items-center justify-center h-96">
-          <PetLoader />
+        <div className="flex h-96 flex-col items-center justify-center gap-3">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+          <span className="text-sm text-muted-foreground">Loading settings...</span>
         </div>
       </AdminLayout>
     );

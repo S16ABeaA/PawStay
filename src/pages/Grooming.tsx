@@ -4,7 +4,7 @@ import Footer from "@/components/Footer";
 import GroomingCard from "@/components/GroomingCard";
 import { Button } from "@/components/ui/button";
 import { SlidersHorizontal, ArrowUpDown, Grid3X3, List, MapPin, Star, ArrowRight } from "lucide-react";
-import { PetLoader } from "@/components/ui/PetLoader";
+import { PetLoaderGate } from "@/components/ui/PetLoader";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Slider } from "@/components/ui/slider";
@@ -468,9 +468,8 @@ const Grooming = () => {
               </div>
 
               {/* Grooming Grid */}
-                {loading ? (
-                <PetLoader className="py-20" />
-              ) : shops.length === 0 ? (
+              <PetLoaderGate dataLoaded={!loading} loaderClassName="py-20">
+                {shops.length === 0 ? (
                 <div className="text-center py-20 text-muted-foreground">
                   No grooming salons found in this area/price range.
                 </div>
@@ -499,7 +498,7 @@ const Grooming = () => {
                 </div>
               )}
 
-              {/* Load More */}
+               {/* Load More */}
               {shops.length > displayCount && (
                 <div className="text-center mt-10">
                   <Button variant="outline" size="lg" onClick={() => setDisplayCount(c => Math.min(c + PAGE_SIZE, shops.length))}>
@@ -507,6 +506,8 @@ const Grooming = () => {
                   </Button>
                 </div>
               )}
+              </PetLoaderGate>
+
             </div>
           </div>
         </div>
