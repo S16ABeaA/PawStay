@@ -154,21 +154,19 @@ export const authController = {
       const userId = signInData.user.id;
 
       // Set Supabase auth cookies
-      res.cookie("sb-access-token", signInData.session.access_token, {
+      const isProd = process.env.NODE_ENV === 'production';
+      const cookieSameSite: 'none' | 'lax' = isProd ? 'none' : 'lax';
+      const cookieSecure = isProd;
+      const cookieOpts = {
         httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "lax",
+        secure: cookieSecure,
+        sameSite: cookieSameSite,
         maxAge: 7 * 24 * 60 * 60 * 1000,
         path: "/",
-      });
+      } as any;
 
-      res.cookie("sb-refresh-token", signInData.session.refresh_token, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "lax",
-        maxAge: 7 * 24 * 60 * 60 * 1000,
-        path: "/",
-      });
+      res.cookie("sb-access-token", signInData.session.access_token, cookieOpts);
+      res.cookie("sb-refresh-token", signInData.session.refresh_token, cookieOpts);
 
       // Return profile info
       const userProfile = await userModel.getUserById(userId);
@@ -237,21 +235,19 @@ export const authController = {
       }
 
       // Set cookies
-      res.cookie("sb-access-token", data.session.access_token, {
+      const isProd2 = process.env.NODE_ENV === 'production';
+      const cookieSameSite2: 'none' | 'lax' = isProd2 ? 'none' : 'lax';
+      const cookieSecure2 = isProd2;
+      const cookieOpts2 = {
         httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "lax",
+        secure: cookieSecure2,
+        sameSite: cookieSameSite2,
         maxAge: 7 * 24 * 60 * 60 * 1000,
         path: "/",
-      });
+      } as any;
 
-      res.cookie("sb-refresh-token", data.session.refresh_token, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "lax",
-        maxAge: 7 * 24 * 60 * 60 * 1000,
-        path: "/",
-      });
+      res.cookie("sb-access-token", data.session.access_token, cookieOpts2);
+      res.cookie("sb-refresh-token", data.session.refresh_token, cookieOpts2);
       
       // Get user info for welcome message
       const user = data.session.user;
