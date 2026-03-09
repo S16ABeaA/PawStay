@@ -96,19 +96,19 @@ export const authMiddleware = async (req: Request, res: Response, next: NextFunc
  */
 export const setAuthCookies = (res: Response, session: any) => {
   const SESSION_DURATION_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
-  
+
   res.cookie("sb-access-token", session.access_token, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
+    secure: true, // required for SameSite=None
+    sameSite: "none",
     maxAge: SESSION_DURATION_MS,
     path: "/",
   });
-
+  
   res.cookie("sb-refresh-token", session.refresh_token, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
+    secure: true,
+    sameSite: "none",
     maxAge: SESSION_DURATION_MS,
     path: "/",
   });
