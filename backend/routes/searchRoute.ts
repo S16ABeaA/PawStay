@@ -6,6 +6,7 @@ const router = Router();
 
 router.get("/search", propertyController.searchProperties);
 router.post("/search", propertyController.searchProperties);
+router.get("/randomproperty", propertyController.randomProperties);
 router.post("/randomproperty", propertyController.randomProperties);
 // Protected routes for proprietor — place before param routes to avoid "mine" being treated as an :id
 router.get('/mine', authMiddleware, propertyController.myProperties);

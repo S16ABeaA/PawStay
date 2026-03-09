@@ -19,6 +19,8 @@ export type HotelFilters = {
   lat?: number;              // user latitude
   lng?: number;              // user longitude
   radiusKm?: number;         // search radius in km (default 10)
+  limit?: number;
+  offset?: number;
 };
 
 // ── Haversine distance (km) ──
@@ -38,6 +40,8 @@ function haversineDistance(
 }
 
 export async function getProperties(filters: HotelFilters = {}) {
+  const limit = Math.min(100, Math.max(1, Number(filters.limit) || 24));
+  const offset = Math.max(0, Number(filters.offset) || 0);
   // Diagnostics: count + sample row
   // const { count: totalCount } = await supabase
   //   .from("properties")
@@ -390,6 +394,7 @@ export async function getProperties(filters: HotelFilters = {}) {
   //── Status / soft delete (only if columns exist) ──
   if (has("status"))     query = query.eq("status", "approved");
   if (has("is_deleted")) query = query.eq("is_deleted", false);
+  query = query.range(offset, offset + limit - 1);
 
   // ── Execute ──
   const { data, error } = await query;

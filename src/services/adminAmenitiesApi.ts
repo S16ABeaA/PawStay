@@ -12,7 +12,7 @@ export interface Amenity {
 
 export const adminAmenitiesApi = {
   list: (opts?: { is_active?: boolean }) => {
-    let url = BASE;
+    let url = `${BASE}/admin`;
     if (opts?.is_active !== undefined) url += `?is_active=${opts.is_active}`;
     return authHelper.get(url) as Promise<{ amenities: Amenity[] }>;
   },

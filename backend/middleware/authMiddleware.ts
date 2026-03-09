@@ -25,9 +25,9 @@ const getAuthCookieOptions = () => {
  * Checks for Supabase auth tokens and attaches user info to req.user.
  */
 export const authMiddleware = async (req: Request, res: Response, next: NextFunction) => {
-  console.log("========== AUTH MIDDLEWARE START ==========");
-  console.log("Path:", req.path);
-  console.log("Cookies:", req.cookies);
+  //console.log("========== AUTH MIDDLEWARE START ==========");
+  //console.log("Path:", req.path);
+  //console.log("Cookies:", req.cookies);
   
   try {
     // Get tokens from cookies (or Authorization header as fallback)
@@ -39,8 +39,8 @@ export const authMiddleware = async (req: Request, res: Response, next: NextFunc
       return res.status(401).json({ error: "Unauthorized: no access token found." });
     }
 
-    console.log("Access token exists:", !!accessToken);
-    console.log("Access token first 30 chars:", accessToken?.substring(0, 30) + "...");
+    //console.log("Access token exists:", !!accessToken);
+    //console.log("Access token first 30 chars:", accessToken?.substring(0, 30) + "...");
 
     // Verify the access token and get user
     const { data: { user }, error: getUserError } = await supabaseClient.auth.getUser(accessToken);

@@ -1,5 +1,7 @@
+const API_BASE_URL = import.meta.env.VITE_BACKEND_URL || "";
+
 export async function fetchRandomProperties() {
-  const res = await fetch("/api/properties/randomproperty", {
+  const res = await fetch(`${API_BASE_URL}/api/properties/randomproperty`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({}),

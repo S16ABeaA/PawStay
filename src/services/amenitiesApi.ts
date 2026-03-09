@@ -1,12 +1,14 @@
+const API_BASE_URL = import.meta.env.VITE_BACKEND_URL || "";
+
 export async function fetchAmenities(serviceType: string) {
-  const res = await fetch("/api/amenities/servicetype", {
-    method: "POST",
+  const qp = new URLSearchParams({ serviceType });
+  const res = await fetch(`${API_BASE_URL}/api/amenities?${qp.toString()}`, {
+    method: "GET",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ serviceType }),
   });
 
   if (!res.ok) throw new Error("Failed to fetch amenities of service type: " + serviceType);
 
   const data = await res.json();
-  return data.properties;
+  return data.amenities ?? data.properties ?? [];
 }

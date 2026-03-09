@@ -52,7 +52,7 @@ export const authController = {
       });
       if (signUpError) return res.status(400).json({ error: signUpError.message });
 
-      console.log("SignUpData:", signUpData);
+      //console.log("SignUpData:", signUpData);
 
       const userId = signUpData.user?.id;
       if (!userId) throw new Error("User ID not returned from Supabase");
@@ -290,7 +290,7 @@ export const authController = {
       const userProfile = await userModel.getUserById(user.id);
       
       // /*
-      console.log("[BACKEND] Fetched user profile:", userProfile?.id);
+      //console.log("[BACKEND] Fetched user profile:", userProfile?.id);
       // */
 
       if (!userProfile) {

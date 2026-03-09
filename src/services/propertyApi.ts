@@ -17,8 +17,10 @@ type PropertyFilters = {
   radiusKm?: number;
 };
 
+const API_BASE_URL = import.meta.env.VITE_BACKEND_URL || "";
+
 export async function fetchProperties(filters: PropertyFilters) {
-  const res = await fetch("/api/properties/search", {
+  const res = await fetch(`${API_BASE_URL}/api/properties/search`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(filters),
@@ -31,7 +33,7 @@ export async function fetchProperties(filters: PropertyFilters) {
 }
 
 export async function fetchPropertyById(id: string) {
-  const res = await fetch(`/api/properties/${id}`, {
+  const res = await fetch(`${API_BASE_URL}/api/properties/${id}`, {
     method: "GET",
     headers: { "Content-Type": "application/json" },
   });
@@ -43,7 +45,7 @@ export async function fetchPropertyById(id: string) {
 }
 
 export async function fetchPropertyReviews(propertyId: string) {
-  const res = await fetch(`/api/properties/${propertyId}/reviews`, {
+  const res = await fetch(`${API_BASE_URL}/api/properties/${propertyId}/reviews`, {
     method: "GET",
     headers: { "Content-Type": "application/json" },
   });

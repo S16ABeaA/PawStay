@@ -4,7 +4,7 @@ import { supabaseAdmin } from "../config/supabaseAdmin";
 export const amenitiesController = {
   getamenitiesByServiceType: async (req: Request, res: Response) => {
     try {
-      const { serviceType } = req.body as { serviceType?: string };
+      const { serviceType } = (req.method === "GET" ? req.query : req.body) as { serviceType?: string };
 
       if (!serviceType || typeof serviceType !== "string") {
         return res.status(400).json({ message: "serviceType is required" });
@@ -23,7 +23,8 @@ export const amenitiesController = {
       if (error) throw error;
 
       //console.log("[getamenitiesByServiceType] Retrieved amenities:", data);
-      return res.status(200).json({ properties: data ?? [] });
+      const amenities = data ?? [];
+      return res.status(200).json({ amenities, properties: amenities });
     } catch (err: any) {
       console.error("[getamenitiesByServiceType]", err);
       return res

@@ -63,6 +63,8 @@ export const propertyController = {
         lat: asNumber(source.lat),
         lng: asNumber(source.lng),
         radiusKm: asNumber(source.radiusKm),
+        limit: asNumber(source.limit),
+        offset: asNumber(source.offset),
       };
 
       // Call service
@@ -78,11 +80,9 @@ export const propertyController = {
 
   randomProperties: async (req: Request, res: Response) => {
     try {
-      const limit = Number(req.body?.limit) || 6;
-      // Use getProperties with no filters to get all, then shuffle and slice
-      const allProperties = await getProperties({});
-      const shuffled = allProperties.sort(() => Math.random() - 0.5);
-      const properties = shuffled.slice(0, limit);
+      const source = req.method === "GET" ? req.query : req.body;
+      const limit = Math.min(24, Math.max(1, Number((source as any)?.limit) || 6));
+      const properties = await getRandomProperties(limit);
       res.status(200).json({ properties });
     } catch (err: any) {
       res.status(500).json({ message: err.message || "Failed to fetch random properties" });
