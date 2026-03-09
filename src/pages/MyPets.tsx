@@ -1,4 +1,5 @@
  import { useState, useEffect } from "react";
+import { PetLoader } from "@/components/ui/PetLoader";
  import { Link } from "react-router-dom";
  import Header from "@/components/Header";
  import Footer from "@/components/Footer";
@@ -21,19 +22,29 @@
    ChevronLeft,
    Edit,
    Cake,
-   Weight
- } from "lucide-react";
- import { petApi } from "@/services/petApi";
- 
- interface ServiceHistory {
-   id: string;
-   type: "grooming" | "checkup";
-   serviceName: string;
-   date: string | Date;
-   notes?: string;
- }
- 
- interface Pet {
+  Weight,
+  Hotel,
+  Syringe,
+  SmilePlus,
+  CircleDot,
+  CreditCard,
+  FileText,
+  MapPin,
+  Clock,
+} from "lucide-react";
+import { petApi } from "@/services/petApi";
+import { bookingApi } from "@/services/bookingApi";
+
+interface ServiceHistory {
+  id: string;
+  bookingId?: string | null;
+  type: "grooming" | "checkup" | "vaccination" | "dental" | "boarding" | "other";
+  serviceName: string;
+  date: string | Date;
+  notes?: string;
+}
+
+interface Pet {
    id: string;
    name: string;
    species: string;
@@ -57,6 +68,24 @@
    return age;
  };
  
+ // Helper: get icon and color for service type
+ const getServiceTypeIcon = (type: string) => {
+   switch (type) {
+     case "boarding":
+       return { icon: <Hotel className="h-5 w-5" />, className: "bg-blue-500/10 text-blue-600" };
+     case "grooming":
+       return { icon: <Scissors className="h-5 w-5" />, className: "bg-primary/10 text-primary" };
+     case "checkup":
+       return { icon: <Stethoscope className="h-5 w-5" />, className: "bg-green-500/10 text-green-600" };
+     case "vaccination":
+       return { icon: <Syringe className="h-5 w-5" />, className: "bg-purple-500/10 text-purple-600" };
+     case "dental":
+       return { icon: <SmilePlus className="h-5 w-5" />, className: "bg-amber-500/10 text-amber-600" };
+     default:
+       return { icon: <CircleDot className="h-5 w-5" />, className: "bg-gray-500/10 text-gray-600" };
+   }
+ };
+
  const MyPets = () => {
    const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
    const [editingPet, setEditingPet] = useState<Pet | null>(null);
@@ -70,6 +99,29 @@
      notes: "",
    });
    const [loading, setLoading] = useState(true);
+   const [serviceDetailOpen, setServiceDetailOpen] = useState(false);
+   const [selectedService, setSelectedService] = useState<ServiceHistory | null>(null);
+   const [bookingDetail, setBookingDetail] = useState<any>(null);
+   const [bookingLoading, setBookingLoading] = useState(false);
+   const [imagePreview, setImagePreview] = useState<string | null>(null);
+
+   const handleServiceClick = async (service: ServiceHistory) => {
+     setSelectedService(service);
+     setBookingDetail(null);
+     setServiceDetailOpen(true);
+
+     if (service.bookingId) {
+       setBookingLoading(true);
+       try {
+         const res = await bookingApi.getById(service.bookingId);
+         setBookingDetail(res.booking);
+       } catch (err) {
+         console.error("Failed to fetch booking details:", err);
+       } finally {
+         setBookingLoading(false);
+       }
+     }
+   };
 
    const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>, isEdit: boolean = false) => {
      const file = e.target.files?.[0];
@@ -523,33 +575,29 @@
                        </p>
                      ) : (
                        <div className="space-y-3">
-                         {(pet.serviceHistory ?? []).map((service) => (
-                           <div
-                             key={service.id}
-                             className="flex items-center gap-3 p-3 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors"
-                           >
-                             <div className={`h-10 w-10 rounded-full flex items-center justify-center ${
-                               service.type === "grooming" 
-                                 ? "bg-primary/10 text-primary" 
-                                 : "bg-green-500/10 text-green-600"
-                             }`}>
-                               {service.type === "grooming" ? (
-                                 <Scissors className="h-5 w-5" />
-                               ) : (
-                                 <Stethoscope className="h-5 w-5" />
-                               )}
+                         {(pet.serviceHistory ?? []).map((service) => {
+                           const { icon, className: iconClass } = getServiceTypeIcon(service.type);
+                           return (
+                             <div
+                               key={service.id}
+                               className="flex items-center gap-3 p-3 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors cursor-pointer"
+                               onClick={() => handleServiceClick(service)}
+                             >
+                               <div className={`h-10 w-10 rounded-full flex items-center justify-center ${iconClass}`}>
+                                 {icon}
+                               </div>
+                               <div className="flex-1 min-w-0">
+                                 <p className="text-sm font-medium truncate">{service.serviceName}</p>
+                                 {service.notes && (
+                                   <p className="text-xs text-muted-foreground truncate">{service.notes}</p>
+                                 )}
+                               </div>
+                               <Badge variant="outline" className="shrink-0">
+                                 {getDaysAgo(service.date)}
+                               </Badge>
                              </div>
-                             <div className="flex-1 min-w-0">
-                               <p className="text-sm font-medium truncate">{service.serviceName}</p>
-                               {service.notes && (
-                                 <p className="text-xs text-muted-foreground truncate">{service.notes}</p>
-                               )}
-                             </div>
-                             <Badge variant="outline" className="shrink-0">
-                               {getDaysAgo(service.date)}
-                             </Badge>
-                           </div>
-                         ))}
+                           );
+                         })}
                        </div>
                      )}
                    </CardContent>
@@ -558,6 +606,248 @@
              </div>
            )}
          </div>
+
+         {/* Service Detail Dialog */}
+         <Dialog open={serviceDetailOpen} onOpenChange={setServiceDetailOpen}>
+           <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+             <DialogHeader>
+               <DialogTitle className="flex items-center gap-2">
+                 {selectedService && (() => {
+                   const { icon, className: iconClass } = getServiceTypeIcon(selectedService.type);
+                   return <div className={`h-8 w-8 rounded-full flex items-center justify-center ${iconClass}`}>{icon}</div>;
+                 })()}
+                 Service Details
+               </DialogTitle>
+               <DialogDescription>
+                 {selectedService?.serviceName}
+               </DialogDescription>
+             </DialogHeader>
+             {selectedService && (
+               <div className="space-y-6">
+                 {/* Service Info */}
+                 <div className="grid grid-cols-2 gap-4">
+                   <div>
+                     <p className="text-sm text-muted-foreground">Service Name</p>
+                     <p className="font-medium">{selectedService.serviceName}</p>
+                   </div>
+                   <div>
+                     <p className="text-sm text-muted-foreground">Type</p>
+                     <Badge className="capitalize mt-1">{selectedService.type}</Badge>
+                   </div>
+                   <div>
+                     <p className="text-sm text-muted-foreground">Date</p>
+                     <p className="font-medium flex items-center gap-1">
+                       <Calendar className="h-4 w-4" />
+                       {new Date(selectedService.date).toLocaleDateString()}
+                     </p>
+                   </div>
+                   {selectedService.notes && (
+                     <div className="col-span-2">
+                       <p className="text-sm text-muted-foreground">Notes</p>
+                       <p className="font-medium text-sm bg-muted/50 p-3 rounded-lg mt-1">{selectedService.notes}</p>
+                     </div>
+                   )}
+                 </div>
+
+                 {/* Booking Details (if linked to a booking) */}
+                 {selectedService.bookingId && (
+                   <div className="border-t pt-4">
+                     {bookingLoading ? (
+                       <PetLoader text="Loading booking details..." className="py-8" />
+                     ) : bookingDetail ? (
+                       <div className="space-y-4">
+                         <h4 className="font-semibold text-sm flex items-center gap-2">
+                           <FileText className="h-4 w-4 text-primary" />
+                           Booking Information
+                         </h4>
+                         <div className="grid grid-cols-2 gap-4">
+                           {bookingDetail.property_name && (
+                             <div>
+                               <p className="text-sm text-muted-foreground">Property</p>
+                               <p className="font-medium flex items-center gap-1">
+                                 <MapPin className="h-3.5 w-3.5" />
+                                 {bookingDetail.property_name}
+                               </p>
+                             </div>
+                           )}
+                           {bookingDetail.pet_name && (
+                             <div>
+                               <p className="text-sm text-muted-foreground">Pet</p>
+                               <p className="font-medium">{bookingDetail.pet_name}</p>
+                             </div>
+                           )}
+                           {bookingDetail.service_name && (
+                             <div>
+                               <p className="text-sm text-muted-foreground">Service</p>
+                               <p className="font-medium">{bookingDetail.service_name}</p>
+                             </div>
+                           )}
+                           {bookingDetail.room_name && (
+                             <div>
+                               <p className="text-sm text-muted-foreground">Room</p>
+                               <p className="font-medium">{bookingDetail.room_name}</p>
+                             </div>
+                           )}
+                           <div>
+                             <p className="text-sm text-muted-foreground">Check-in</p>
+                             <p className="font-medium flex items-center gap-1">
+                               <Calendar className="h-3.5 w-3.5" />
+                               {new Date(bookingDetail.checkin).toLocaleDateString()}
+                               {bookingDetail.time_slot && (
+                                 <span className="text-muted-foreground ml-1 flex items-center gap-0.5">
+                                   <Clock className="h-3 w-3" /> {bookingDetail.time_slot}
+                                 </span>
+                               )}
+                             </p>
+                           </div>
+                           {bookingDetail.checkout && (
+                             <div>
+                               <p className="text-sm text-muted-foreground">Check-out</p>
+                               <p className="font-medium flex items-center gap-1">
+                                 <Calendar className="h-3.5 w-3.5" />
+                                 {new Date(bookingDetail.checkout).toLocaleDateString()}
+                               </p>
+                             </div>
+                           )}
+                           {bookingDetail.total_price != null && (
+                             <div>
+                               <p className="text-sm text-muted-foreground">Amount</p>
+                               <p className="font-medium">₱{Number(bookingDetail.total_price).toLocaleString()}</p>
+                             </div>
+                           )}
+                           <div>
+                             <p className="text-sm text-muted-foreground">Status</p>
+                             <Badge variant={bookingDetail.status === "confirmed" ? "default" : bookingDetail.status === "pending" ? "secondary" : bookingDetail.status === "completed" ? "default" : "destructive"} className="mt-1">
+                               {bookingDetail.status}
+                             </Badge>
+                           </div>
+                           {bookingDetail.special_requirements && (
+                             <div className="col-span-2">
+                               <p className="text-sm text-muted-foreground">Special Requirements</p>
+                               <p className="text-sm bg-muted/50 p-3 rounded-lg mt-1">{bookingDetail.special_requirements}</p>
+                             </div>
+                           )}
+                         </div>
+
+                         {/* Payment Details */}
+                         {bookingDetail.payment_method && (
+                           <div className="border-t pt-4">
+                             <h4 className="font-semibold text-sm mb-3 flex items-center gap-2">
+                               <CreditCard className="h-4 w-4 text-primary" />
+                               Payment Information
+                             </h4>
+                             <div className="grid grid-cols-2 gap-4">
+                               <div>
+                                 <p className="text-sm text-muted-foreground">Payment Method</p>
+                                 <p className="font-medium capitalize">{bookingDetail.payment_method}</p>
+                               </div>
+                               {bookingDetail.reference_number && (
+                                 <div>
+                                   <p className="text-sm text-muted-foreground">Reference Number</p>
+                                   <p className="font-medium font-mono text-sm bg-muted/50 px-2 py-1 rounded inline-block">{bookingDetail.reference_number}</p>
+                                 </div>
+                               )}
+                               <div>
+                                 <p className="text-sm text-muted-foreground">Payment Status</p>
+                                 <Badge variant={bookingDetail.payment_status === "paid" ? "default" : "secondary"} className="mt-1 capitalize">
+                                   {bookingDetail.payment_status}
+                                 </Badge>
+                               </div>
+                             </div>
+                             {bookingDetail.payment_screenshot_url && (
+                               <div className="mt-3">
+                                 <p className="text-sm text-muted-foreground mb-2">Payment Screenshot</p>
+                                 <div
+                                   className="cursor-pointer inline-block border border-border rounded-lg overflow-hidden hover:ring-2 hover:ring-primary/50 transition-all"
+                                   onClick={() => setImagePreview(bookingDetail.payment_screenshot_url)}
+                                 >
+                                   <img
+                                     src={bookingDetail.payment_screenshot_url}
+                                     alt="Payment proof"
+                                     className="w-40 h-40 object-cover"
+                                   />
+                                 </div>
+                                 <p className="text-xs text-muted-foreground mt-1">Click to enlarge</p>
+                               </div>
+                             )}
+                           </div>
+                         )}
+
+                         {/* Pet Documents */}
+                         {(bookingDetail.vaccine_record_url || bookingDetail.med_cert_url) && (
+                           <div className="border-t pt-4">
+                             <h4 className="font-semibold text-sm mb-3 flex items-center gap-2">
+                               <FileText className="h-4 w-4 text-primary" />
+                               Pet Documents
+                             </h4>
+                             <div className="flex flex-wrap gap-4">
+                               {bookingDetail.vaccine_record_url && (
+                                 <div>
+                                   <p className="text-sm text-muted-foreground mb-2">Vaccine Record</p>
+                                   <div
+                                     className="cursor-pointer inline-block border border-border rounded-lg overflow-hidden hover:ring-2 hover:ring-primary/50 transition-all"
+                                     onClick={() => setImagePreview(bookingDetail.vaccine_record_url)}
+                                   >
+                                     <img
+                                       src={bookingDetail.vaccine_record_url}
+                                       alt="Vaccine record"
+                                       className="w-40 h-40 object-cover"
+                                     />
+                                   </div>
+                                   <p className="text-xs text-muted-foreground mt-1">Click to enlarge</p>
+                                 </div>
+                               )}
+                               {bookingDetail.med_cert_url && (
+                                 <div>
+                                   <p className="text-sm text-muted-foreground mb-2">Medical Certificate</p>
+                                   <div
+                                     className="cursor-pointer inline-block border border-border rounded-lg overflow-hidden hover:ring-2 hover:ring-primary/50 transition-all"
+                                     onClick={() => setImagePreview(bookingDetail.med_cert_url)}
+                                   >
+                                     <img
+                                       src={bookingDetail.med_cert_url}
+                                       alt="Medical certificate"
+                                       className="w-40 h-40 object-cover"
+                                     />
+                                   </div>
+                                   <p className="text-xs text-muted-foreground mt-1">Click to enlarge</p>
+                                 </div>
+                               )}
+                             </div>
+                           </div>
+                         )}
+                       </div>
+                     ) : (
+                       <p className="text-sm text-muted-foreground text-center py-4">
+                         Could not load booking details.
+                       </p>
+                     )}
+                   </div>
+                 )}
+
+                 <div className="flex justify-end pt-4 border-t">
+                   <Button variant="outline" onClick={() => setServiceDetailOpen(false)}>Close</Button>
+                 </div>
+               </div>
+             )}
+           </DialogContent>
+         </Dialog>
+
+         {/* Image Preview Dialog */}
+         <Dialog open={!!imagePreview} onOpenChange={() => setImagePreview(null)}>
+           <DialogContent className="max-w-3xl p-2">
+             <DialogHeader>
+               <DialogTitle>Image Preview</DialogTitle>
+               <DialogDescription>Click outside or press Escape to close</DialogDescription>
+             </DialogHeader>
+             {imagePreview && (
+               <div className="flex items-center justify-center">
+                 <img src={imagePreview} alt="Preview" className="max-w-full max-h-[75vh] object-contain rounded-lg" />
+               </div>
+             )}
+           </DialogContent>
+         </Dialog>
+
        </main>
        <Footer />
      </div>

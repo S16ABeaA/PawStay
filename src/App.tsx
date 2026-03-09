@@ -1,8 +1,9 @@
+import { ThemeProvider } from "next-themes";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useLocation, Outlet } from "react-router-dom";
 import ScrollToTop from "@/components/ScrollToTop";
 import Index from "./pages/Index";
 import Hotels from "./pages/Hotels";
@@ -23,9 +24,13 @@ import NotFound from "./pages/NotFound";
 import Profile from "./pages/Profile";
 import MyPets from "./pages/MyPets";
 import MyBookings from "./pages/MyBookings";
+import Notifications from "./pages/Notifications";
 import HelpCenter from "./pages/HelpCenter";
+import FAQ from "./pages/FAQ";
 import RequireAuth from "./components/RequireAuth";
+import RequireAdmin from "./components/RequireAdmin";
 import RequireSuperAdmin from "./components/RequireSuperAdmin";
+import { AdminPropertyProvider } from "./hooks/useAdminProperty";
 
 // Admin pages
 import AdminDashboard from "./pages/admin/Dashboard";
@@ -33,6 +38,7 @@ import AdminBookings from "./pages/admin/Bookings";
 import AdminServices from "./pages/admin/Services";
 import AdminReviews from "./pages/admin/Reviews";
 import AdminSettings from "./pages/admin/Settings";
+import AdminCalendar from "./pages/admin/Calendar";
 
 // SuperAdmin pages
 import SuperAdminDashboard from "./pages/superadmin/Dashboard";
@@ -42,15 +48,26 @@ import SuperAdminAnalytics from "./pages/superadmin/Analytics";
 import SuperAdminRevenue from "./pages/superadmin/Revenue";
 import SuperAdminSupport from "./pages/superadmin/Support";
 import SuperAdminSettings from "./pages/superadmin/Settings";
+import SuperAdminAmenities from "./pages/superadmin/Amenities";
 
 const queryClient = new QueryClient();
 
+/** Shared wrapper for all /admin routes so the property context persists across navigation */
+const AdminRouteWrapper = () => (
+  <RequireAuth allowedRoles={["proprietor"]}>
+    <AdminPropertyProvider>
+      <Outlet />
+    </AdminPropertyProvider>
+  </RequireAuth>
+);
+
 const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <Toaster />
-      <Sonner />
-      <BrowserRouter>
+  <ThemeProvider attribute="class" defaultTheme="light" enableSystem>
+    <QueryClientProvider client={queryClient}>
+      <TooltipProvider>
+        <Toaster />
+        <Sonner />
+        <BrowserRouter>
         <ScrollToTop />
         <Routes>
           {/* Public routes */}
@@ -73,9 +90,10 @@ const App = () => (
               </RequireAuth>
             }
           />
-          <Route path="/favorites" element={<Favorites />} />
-          <Route path="/booking" element={<Booking />} />
+          <Route path="/favorites" element={<RequireAuth><Favorites /></RequireAuth>} />
+          <Route path="/booking" element={<RequireAuth signUpFirst><Booking /></RequireAuth> } />
           <Route path="/search" element={<SearchResults />} />
+          <Route path="/faq" element={<FAQ />} />
           <Route path="/help-center" element={<HelpCenter />} />
           <Route
             path="/profile"
@@ -85,7 +103,7 @@ const App = () => (
               </RequireAuth>
             }
           />
-          <Route path="/my-pets" element={<MyPets />} />
+          <Route path="/my-pets" element={<RequireAuth><MyPets /></RequireAuth>} />
           <Route
             path="/my-bookings"
             element={
@@ -94,13 +112,24 @@ const App = () => (
               </RequireAuth>
             }
           />
+          <Route
+            path="/notifications"
+            element={
+              <RequireAuth>
+                <Notifications />
+              </RequireAuth>
+            }
+          />
           
-          {/* Admin routes */}
-          <Route path="/admin" element={<AdminDashboard />} />
-          <Route path="/admin/bookings" element={<AdminBookings />} />
-          <Route path="/admin/services" element={<AdminServices />} />
-          <Route path="/admin/reviews" element={<AdminReviews />} />
-          <Route path="/admin/settings" element={<AdminSettings />} />
+          {/* Admin routes — single shared AdminPropertyProvider via layout route */}
+          <Route path="/admin" element={<AdminRouteWrapper />}>
+            <Route index element={<AdminDashboard />} />
+            <Route path="bookings" element={<AdminBookings />} />
+            <Route path="services" element={<AdminServices />} />
+            <Route path="reviews" element={<AdminReviews />} />
+            <Route path="settings" element={<AdminSettings />} />
+            <Route path="calendar" element={<AdminCalendar />} />
+          </Route>
           
           {/* SuperAdmin routes */}
           <Route path="/superadmin" element={<RequireSuperAdmin><SuperAdminDashboard /></RequireSuperAdmin>} />
@@ -110,12 +139,15 @@ const App = () => (
           <Route path="/superadmin/revenue" element={<RequireSuperAdmin><SuperAdminRevenue /></RequireSuperAdmin>} />
           <Route path="/superadmin/support" element={<RequireSuperAdmin><SuperAdminSupport /></RequireSuperAdmin>} />
           <Route path="/superadmin/settings" element={<RequireSuperAdmin><SuperAdminSettings /></RequireSuperAdmin>} />
+          <Route path="/superadmin/amenities" element={<RequireSuperAdmin><SuperAdminAmenities /></RequireSuperAdmin>} />
+          
           
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>
+  </ThemeProvider>
 );
 
 export default App;

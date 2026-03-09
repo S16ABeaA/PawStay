@@ -47,7 +47,7 @@ export const userModel = {
       .from("profiles")
       .update(fields)
       .eq("id", id)
-      .select("id, first_name, last_name, email, role, phone, address, avatar_url")
+      .select("id, first_name, last_name, role, phone, address, avatar_url")
       .single();
     if (error) throw error;
     return data;

@@ -1,7 +1,7 @@
 import { Link, useLocation } from "react-router-dom";
 import {
   LayoutDashboard, Users, Building2, BarChart3, Settings,
-  LogOut, PawPrint, ChevronLeft, Menu, Shield, DollarSign, MessageSquare,
+  LogOut, PawPrint, ChevronLeft, Menu, Shield, DollarSign, MessageSquare, FileText,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
@@ -19,6 +19,8 @@ const navItems = [
   { icon: Building2,       label: "Properties",  href: "/superadmin/properties", exact: false },
   { icon: BarChart3,       label: "Analytics",   href: "/superadmin/analytics",  exact: false },
   { icon: DollarSign,      label: "Revenue",     href: "/superadmin/revenue",    exact: false },
+  
+  { icon: PawPrint,        label: "Amenities",    href: "/superadmin/amenities",  exact: false },
   { icon: MessageSquare,   label: "Support",     href: "/superadmin/support",    exact: false },
   { icon: Settings,        label: "Settings",    href: "/superadmin/settings",   exact: false },
 ];
@@ -93,10 +95,8 @@ const SuperAdminSidebar = ({ user }: SidebarProps) => {
         <div className="h-16 flex items-center justify-between px-3 border-b border-white/[0.06] shrink-0">
           {!collapsed ? (
             <>
-              <Link to="/superadmin" className="flex items-center gap-2.5">
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#ffa31a] shadow-[0_0_16px_rgba(255,163,26,0.2)]">
-                  <PawPrint className="h-4 w-4 text-[#1b1b1b]" />
-                </div>
+              <Link to="/" className="flex items-center gap-2.5">
+                <img src="/PawStay%20Logo.jpg" alt="PawStay" className="h-8 w-8 rounded-md object-cover" />
                 <div className="leading-none">
                   <span className="block text-sm font-bold text-white tracking-tight">PawStay</span>
                   <span className="block text-[9px] font-semibold text-[#ffa31a] uppercase tracking-[0.12em] mt-0.5">Super Admin</span>
@@ -112,15 +112,12 @@ const SuperAdminSidebar = ({ user }: SidebarProps) => {
           ) : (
             <Tooltip delayDuration={0}>
               <TooltipTrigger asChild>
-                <button
-                  onClick={() => setCollapsed(false)}
-                  className="w-full flex items-center justify-center h-8 rounded-lg text-[#808080] hover:text-white hover:bg-white/[0.06] transition-colors"
-                >
-                  <Menu className="h-4 w-4" />
-                </button>
+                <Link to="/" className="w-full flex items-center justify-center h-8 rounded-lg text-[#808080] hover:text-white hover:bg-white/[0.06] transition-colors">
+                  <img src="/PawStay%20Logo.jpg" alt="PawStay" className="h-6 w-6 rounded-md object-cover" />
+                </Link>
               </TooltipTrigger>
               <TooltipContent side="right" className="bg-[#292929] border-white/10 text-white text-xs">
-                Expand sidebar
+                PawStay Super Admin
               </TooltipContent>
             </Tooltip>
           )}

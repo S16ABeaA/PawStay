@@ -8,120 +8,62 @@ import {
   ArrowLeft, Share2, Check,
   Phone, Mail, Clock, Award, Users
 } from "lucide-react";
+import { PetLoader } from "@/components/ui/PetLoader";
 import { useState, useEffect } from "react";
 import { favoritesApi } from "../services/favoritesApi";
-
-const groomingData: Record<number, {
-  id: number;
-  propertyId?: string;
-  name: string;
-  images: string[];
-  location: string;
-  rating: number;
-  reviews: number;
-  description: string;
-  amenities: { name: string; icon: React.ElementType }[];
-  features: string[];
-  services: { name: string; price: number; duration: string; description: string }[];
-  hours: string;
-  phone: string;
-  email: string;
-}> = {
-  1: {
-    id: 1,
-    propertyId: "a1000000-0000-0000-0000-000000000002",
-    name: "Pawsome Grooming Spa",
-    images: [
-      "https://images.unsplash.com/photo-1516734212186-a967f81ad0d7?w=800&auto=format&fit=crop",
-      "https://images.unsplash.com/photo-1591946614720-90a587da4a36?w=800&auto=format&fit=crop",
-      "https://images.unsplash.com/photo-1587300003388-59208cc962cb?w=800&auto=format&fit=crop",
-      "https://images.unsplash.com/photo-1548199973-03cce0bbc87b?w=800&auto=format&fit=crop",
-    ],
-    location: "456 Grooming Lane, Los Angeles, CA 90001",
-    rating: 4.9,
-    reviews: 412,
-    description: "Welcome to Pawsome Grooming Spa, where we transform your furry friends into their most fabulous selves. Our certified groomers use premium, pet-safe products and the latest grooming techniques to ensure your pet looks and feels amazing.",
-    amenities: [
-      { name: "Certified Groomers", icon: Award },
-      { name: "Pet-Safe Products", icon: Sparkles },
-      { name: "Experienced Team", icon: Users },
-      { name: "Relaxing Spa", icon: Bath },
-    ],
-    features: [
-      "Hypoallergenic shampoos",
-      "Stress-free environment",
-      "Individual attention",
-      "Before & after photos",
-      "Aromatherapy options",
-      "Same-day appointments available",
-    ],
-    services: [
-      { name: "Basic Bath & Dry", price: 35, duration: "45 min", description: "Bath, blow dry, and brush out" },
-      { name: "Full Grooming", price: 65, duration: "1.5 hrs", description: "Complete grooming with haircut and styling" },
-      { name: "Deluxe Spa Package", price: 95, duration: "2 hrs", description: "Full grooming plus spa treatments" },
-      { name: "Nail Trim Only", price: 15, duration: "15 min", description: "Quick nail trimming service" },
-    ],
-    hours: "Mon-Sat: 9AM - 7PM, Sun: 10AM - 5PM",
-    phone: "+1 (555) 234-5678",
-    email: "hello@pawsomespa.com",
-  },
-};
-
-const defaultData = {
-  id: 0,
-  name: "Premium Pet Grooming",
-  images: [
-    "https://images.unsplash.com/photo-1516734212186-a967f81ad0d7?w=800&auto=format&fit=crop",
-    "https://images.unsplash.com/photo-1591946614720-90a587da4a36?w=800&auto=format&fit=crop",
-    "https://images.unsplash.com/photo-1587300003388-59208cc962cb?w=800&auto=format&fit=crop",
-    "https://images.unsplash.com/photo-1548199973-03cce0bbc87b?w=800&auto=format&fit=crop",
-  ],
-  location: "123 Pet Care Street, Los Angeles, CA",
-  rating: 4.8,
-  reviews: 256,
-  description: "Professional pet grooming services with certified groomers. We use only premium, pet-safe products to ensure your furry friend looks and feels their best.",
-  amenities: [
-    { name: "Certified Groomers", icon: Award },
-    { name: "Pet-Safe Products", icon: Sparkles },
-    { name: "Experienced Team", icon: Users },
-    { name: "Relaxing Spa", icon: Bath },
-  ],
-  features: [
-    "Hypoallergenic shampoos",
-    "Stress-free environment",
-    "Individual attention",
-    "Before & after photos",
-    "Aromatherapy options",
-    "Same-day appointments available",
-  ],
-  services: [
-    { name: "Basic Bath & Dry", price: 35, duration: "45 min", description: "Bath, blow dry, and brush out" },
-    { name: "Full Grooming", price: 65, duration: "1.5 hrs", description: "Complete grooming with haircut and styling" },
-    { name: "Deluxe Spa Package", price: 95, duration: "2 hrs", description: "Full grooming plus spa treatments" },
-    { name: "Nail Trim Only", price: 15, duration: "15 min", description: "Quick nail trimming service" },
-  ],
-  hours: "Mon-Sat: 9AM - 7PM, Sun: 10AM - 5PM",
-  phone: "+1 (555) 234-5678",
-  email: "contact@petgrooming.com",
-};
+import { fetchPropertyById, fetchPropertyReviews } from "../services/propertyApi";
+import ReviewList from "@/components/ReviewList";
 
 const GroomingDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const [property, setProperty] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
   const [isLiked, setIsLiked] = useState(false);
-  const data = groomingData[Number(id)] || defaultData;
+  const [selectedService, setSelectedService] = useState<any>(null);
+  const [reviews, setReviews] = useState<any[]>([]);
+
   const isAuthenticated =
     typeof window !== "undefined" &&
     localStorage.getItem("pawstay.authenticated") === "true";
 
-  const propertyId = (data as any).propertyId ?? id;
-
+  // ── Fetch property data ──
   useEffect(() => {
     let mounted = true;
-    if (!isAuthenticated || !propertyId) return;
     const load = async () => {
       try {
-        const fav = await favoritesApi.checkFavorite(propertyId as any);
+        setLoading(true);
+        const data = await fetchPropertyById(id || "");
+        if (mounted && data) {
+          setProperty(data);
+          // Filter services by "Grooming" category and pick the first one
+          const groomingServices = (data.property_services || [])
+            .filter((s: any) => s.is_active && s.category === "Grooming");
+          if (groomingServices.length > 0) {
+            setSelectedService(groomingServices[0]);
+          } else {
+            setSelectedService({ name: "Full Grooming", price: data.cheapest_service_price || 0, description: "Complete grooming service" });
+          }
+          // Load reviews in parallel
+          fetchPropertyReviews(data.id).then(setReviews).catch(() => {});
+        }
+      } catch (err) {
+        console.error("Failed to fetch property", err);
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    };
+    load();
+    return () => { mounted = false; };
+  }, [id]);
+
+  // ── Check favorites ──
+  useEffect(() => {
+    let mounted = true;
+    if (!isAuthenticated || !id) return;
+    const load = async () => {
+      try {
+        const fav = await favoritesApi.checkFavorite(id);
         if (mounted) setIsLiked(Boolean(fav));
       } catch (err) {
         console.error("checkFavorite failed", err);
@@ -129,10 +71,83 @@ const GroomingDetail = () => {
     };
     load();
     return () => { mounted = false; };
-  }, [propertyId, isAuthenticated]);
-  const [selectedService, setSelectedService] = useState(data.services[1]);
+  }, [id, isAuthenticated]);
 
-  const serviceFee = Math.round(selectedService.price * 0.10 * 100) / 100;
+  const handleLikeClick = async () => {
+    if (!isAuthenticated) {
+      navigate(`/signin?redirect=${encodeURIComponent(`/grooming/${id}`)}`);
+      return;
+    }
+    if (!id) return;
+    const previous = isLiked;
+    setIsLiked(!previous);
+    try {
+      if (previous) {
+        await favoritesApi.removeFavorite(id);
+      } else {
+        await favoritesApi.addFavorite(id);
+      }
+    } catch (err) {
+      console.error("favorite toggle failed", err);
+      setIsLiked(previous);
+    }
+  };
+
+  // ── Loading state ──
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background">
+        <Header />
+        <div className="flex flex-col items-center justify-center py-32">
+          <PetLoader text="Loading salon details..." />
+        </div>
+        <Footer />
+      </div>
+    );
+  }
+
+  // ── Not found ──
+  if (!property) {
+    return (
+      <div className="min-h-screen bg-background">
+        <Header />
+        <main className="py-8">
+          <div className="container text-center py-20">
+            <p className="text-muted-foreground text-lg">Grooming salon not found</p>
+            <Link to="/grooming" className="text-primary hover:underline mt-4 inline-block">
+              ← Back to Grooming
+            </Link>
+          </div>
+        </main>
+        <Footer />
+      </div>
+    );
+  }
+
+  // ── Derived data ──
+  const coverImage = property.cover_image || "https://images.unsplash.com/photo-1516734212186-a967f81ad0d7?w=800&auto=format&fit=crop";
+  const images = property.images?.length > 0
+    ? property.images
+    : [coverImage, coverImage, coverImage, coverImage];
+
+  // Filter services by "Grooming" category only
+  const groomingServices = (property.property_services || [])
+    .filter((s: any) => s.is_active && s.category === "Grooming");
+
+  // Amenities from DB
+  const amenities = (property.property_amenities || []).map((a: any) => a.amenities?.amenity).filter(Boolean);
+
+  const selected = selectedService || groomingServices[0] || { name: "Full Grooming", price: 0 };
+  const serviceFee = Math.round(selected.price * 0.10 * 100) / 100;
+
+  const formatLabel = (s: string) =>
+    s
+      ? s
+          .toString()
+          .replace(/_/g, " ")
+          .toLowerCase()
+          .replace(/(^|\s)\S/g, (t) => t.toUpperCase())
+      : s;
 
   return (
     <div className="min-h-screen bg-background">
@@ -149,13 +164,13 @@ const GroomingDetail = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
             <div className="aspect-[4/3] rounded-2xl overflow-hidden">
               <img
-                src={data.images[0]}
-                alt={data.name}
+                src={images[0]}
+                alt={property.name}
                 className="w-full h-full object-cover"
               />
             </div>
             <div className="grid grid-cols-2 gap-4">
-              {data.images.slice(1).map((img, i) => (
+              {images.slice(1, 5).map((img: string, i: number) => (
                 <div key={i} className="aspect-[4/3] rounded-xl overflow-hidden">
                   <img src={img} alt="" className="w-full h-full object-cover" />
                 </div>
@@ -173,41 +188,20 @@ const GroomingDetail = () => {
                     <Badge className="bg-accent/10 text-accent border-accent/20">Grooming Spa</Badge>
                     <div className="flex items-center gap-1 px-2 py-1 rounded-md bg-rating/10">
                       <Star className="h-4 w-4 fill-rating text-rating" />
-                      <span className="text-sm font-bold">{data.rating}</span>
+                      <span className="text-sm font-bold">{property.rating || 0}</span>
                     </div>
-                    <span className="text-sm text-muted-foreground">({data.reviews} reviews)</span>
+                    <span className="text-sm text-muted-foreground">({property.review_count || 0} reviews)</span>
                   </div>
                   <h1 className="font-display text-3xl md:text-4xl font-bold text-foreground mb-2">
-                    {data.name}
+                    {property.name}
                   </h1>
                   <div className="flex items-center gap-1 text-muted-foreground">
                     <MapPin className="h-4 w-4" />
-                    <span>{data.location}</span>
+                    <span>{property.address || property.city || "Location not specified"}</span>
                   </div>
                 </div>
                 <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={async () => {
-                      if (!isAuthenticated) {
-                        navigate(`/signin?redirect=${encodeURIComponent(`/grooming/${id}`)}`);
-                        return;
-                      }
-                      const previous = isLiked;
-                      setIsLiked(!previous);
-                      try {
-                        if (previous) {
-                          await favoritesApi.removeFavorite(propertyId as any);
-                        } else {
-                          await favoritesApi.addFavorite(propertyId as any);
-                        }
-                      } catch (err) {
-                        console.error("favorite toggle failed", err);
-                        setIsLiked(previous);
-                      }
-                    }}
-                  >
+                  <Button variant="outline" size="icon" onClick={handleLikeClick}>
                     <Heart className={`h-5 w-5 ${isLiked ? "fill-primary text-primary" : ""}`} />
                   </Button>
                   <Button variant="outline" size="icon">
@@ -219,65 +213,184 @@ const GroomingDetail = () => {
               {/* Description */}
               <div className="mb-8">
                 <h2 className="font-semibold text-xl mb-3">About This Salon</h2>
-                <p className="text-muted-foreground leading-relaxed">{data.description}</p>
+                <p className="text-muted-foreground leading-relaxed">
+                  {property.description || "Professional pet grooming services with certified groomers. We use only premium, pet-safe products to ensure your furry friend looks and feels their best."}
+                </p>
               </div>
 
               {/* Amenities */}
-              <div className="mb-8">
-                <h2 className="font-semibold text-xl mb-4">Why Choose Us</h2>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  {data.amenities.map((amenity, i) => (
-                    <div key={i} className="flex items-center gap-3 p-4 rounded-xl bg-secondary/50">
-                      <amenity.icon className="h-5 w-5 text-accent" />
-                      <span className="text-sm font-medium">{amenity.name}</span>
-                    </div>
-                  ))}
+              {amenities.length > 0 && (
+                <div className="mb-8">
+                  <h2 className="font-semibold text-xl mb-4">Why Choose Us</h2>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    {amenities.map((name: string, i: number) => (
+                      <div key={i} className="flex items-center gap-3 p-4 rounded-xl bg-secondary/50">
+                        <Check className="h-5 w-5 text-accent" />
+                        <span className="text-sm font-medium">{name}</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              </div>
+              )}
 
-              {/* Features */}
-              <div className="mb-8">
-                <h2 className="font-semibold text-xl mb-4">What's Included</h2>
-                <div className="grid md:grid-cols-2 gap-3">
-                  {data.features.map((feature, i) => (
-                    <div key={i} className="flex items-center gap-2">
-                      <Check className="h-5 w-5 text-success" />
-                      <span className="text-muted-foreground">{feature}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
+              {/* Pet types and dog sizes (improved design) */}
+              {(property.pet_types_accepted?.length > 0 || property.dog_sizes?.length > 0) && (
+                <div className="mb-8">
+                  <h2 className="font-semibold text-xl mb-4">Pet Types & Sizes</h2>
 
-              {/* Services */}
-              <div>
-                <h2 className="font-semibold text-xl mb-4">Our Services</h2>
-                <div className="space-y-3">
-                  {data.services.map((service) => (
-                    <div
-                      key={service.name}
-                      onClick={() => setSelectedService(service)}
-                      className={`p-4 rounded-xl border-2 cursor-pointer transition-all ${
-                        selectedService.name === service.name
-                          ? "border-primary bg-primary/5"
-                          : "border-border hover:border-primary/50"
-                      }`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <h3 className="font-semibold text-foreground">{service.name}</h3>
-                          <p className="text-sm text-muted-foreground">{service.description}</p>
-                          <div className="flex items-center gap-1 mt-1 text-xs text-muted-foreground">
-                            <Clock className="h-3 w-3" />
-                            <span>{service.duration}</span>
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-xl font-bold text-foreground">${service.price}</p>
+                  <div className="flex flex-col gap-4">
+                    {property.pet_types_accepted?.length > 0 && (
+                      <div>
+                        <h3 className="text-sm font-medium mb-3">Accepted Pets</h3>
+                        <div className="flex flex-wrap gap-2">
+                          {property.pet_types_accepted.map((p: string, i: number) => (
+                            <span
+                              key={i}
+                              className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-gradient-to-r from-accent/5 to-accent/10 text-accent text-sm font-medium border border-accent/10 shadow-sm"
+                              aria-label={`Accepted pet ${formatLabel(p)}`}
+                            >
+                              <span className="text-xs">🐾</span>
+                              <span>{formatLabel(p)}</span>
+                            </span>
+                          ))}
                         </div>
                       </div>
-                    </div>
-                  ))}
+                    )}
+
+                    {property.dog_sizes?.length > 0 && (
+                      <div>
+                        <h3 className="text-sm font-medium mb-3">Dog Sizes</h3>
+                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+                          {property.dog_sizes.map((d: string, i: number) => (
+                            <div
+                              key={i}
+                              className="inline-flex items-center justify-center px-3 py-2 rounded-xl bg-secondary/60 text-sm font-semibold text-foreground border border-border"
+                              aria-label={`Dog size ${formatLabel(d)}`}
+                            >
+                              {formatLabel(d)}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
+              )}
+
+              {/* Features - from property facilities_amenities */}
+              {property.facilities_amenities?.length > 0 && (
+                <div className="mb-8">
+                  <h2 className="font-semibold text-xl mb-4">What's Included</h2>
+                  <div className="grid md:grid-cols-2 gap-3">
+                    {property.facilities_amenities.map((feature: string, i: number) => (
+                      <div key={i} className="flex items-center gap-2">
+                        <Check className="h-5 w-5 text-success" />
+                        <span className="text-muted-foreground">{feature}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Services — filtered by Grooming category */}
+              <div className="mb-8">
+                <h2 className="font-semibold text-xl mb-4">Our Services</h2>
+                {groomingServices.length > 0 ? (
+                  <div className="space-y-3">
+                    {groomingServices.map((service: any) => (
+                      <div
+                        key={service.id}
+                        onClick={() => setSelectedService(service)}
+                        className={`p-4 rounded-xl border-2 cursor-pointer transition-all ${
+                          selected.id === service.id
+                            ? "border-primary bg-primary/5"
+                            : "border-border hover:border-primary/50"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <h3 className="font-semibold text-foreground">{service.name}</h3>
+                            <p className="text-sm text-muted-foreground">{service.description || "Professional grooming service"}</p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-xl font-bold text-foreground">₱{service.price}</p>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-muted-foreground">No grooming services available for this salon.</p>
+                )}
+              </div>
+
+              {/* Reviews Section */}
+              <div className="mb-8">
+                <div className="flex items-center gap-3 mb-6">
+                  <h2 className="font-semibold text-xl">Guest Reviews</h2>
+                  {reviews.length > 0 && (
+                    <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-rating/10">
+                      <Star className="h-4 w-4 fill-rating text-rating" />
+                      <span className="font-bold text-sm">{property.rating || 0}</span>
+                      <span className="text-sm text-muted-foreground">· {reviews.length} review{reviews.length !== 1 ? "s" : ""}</span>
+                    </div>
+                  )}
+                </div>
+                {reviews.length === 0 ? (
+                  <div className="text-center py-10 border border-dashed rounded-xl text-muted-foreground">
+                    No reviews yet. Be the first to share your experience!
+                  </div>
+                ) : (
+                  <div className="space-y-5">
+                    {reviews.map((review: any) => {
+                      const name = review.profiles
+                        ? `${review.profiles.first_name || ""} ${review.profiles.last_name || ""}`.trim() || "Guest"
+                        : "Guest";
+                      const avatar = review.profiles?.avatar_url;
+                      const date = new Date(review.created_at).toLocaleDateString("en-PH", { year: "numeric", month: "long", day: "numeric" });
+                      return (
+                        <div key={review.id} className="p-5 rounded-xl border border-border bg-card">
+                          <div className="flex items-start justify-between mb-3">
+                            <div className="flex items-center gap-3">
+                              {avatar ? (
+                                <img src={avatar} alt={name} className="w-10 h-10 rounded-full object-cover" />
+                              ) : (
+                                <div className="w-10 h-10 rounded-full bg-accent/10 flex items-center justify-center font-semibold text-accent text-sm">
+                                  {name.charAt(0).toUpperCase()}
+                                </div>
+                              )}
+                              <div>
+                                <p className="font-semibold text-sm text-foreground">{name}</p>
+                                <p className="text-xs text-muted-foreground">{date}</p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              {Array.from({ length: 5 }).map((_, i) => (
+                                <Star key={i} className={`h-3.5 w-3.5 ${i < review.rating ? "fill-rating text-rating" : "text-muted-foreground/30"}`} />
+                              ))}
+                            </div>
+                          </div>
+                          {review.pet_name && (
+                            <p className="text-xs text-muted-foreground mb-2">🐾 Pet: {review.pet_name}</p>
+                          )}
+                          <p className="text-sm text-muted-foreground leading-relaxed">{review.comment}</p>
+                          {review.reply && (
+                            <div className="mt-3 pl-4 border-l-2 border-accent/30">
+                              <p className="text-xs font-semibold text-accent mb-1">Owner's Reply</p>
+                              <p className="text-xs text-muted-foreground">{review.reply}</p>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Reviews */}
+              <div className="mb-8">
+                <h2 className="font-semibold text-xl mb-4">Customer Reviews</h2>
+                <ReviewList propertyId={property.id} />
               </div>
             </div>
 
@@ -286,30 +399,47 @@ const GroomingDetail = () => {
               <div className="bg-card rounded-2xl p-6 shadow-elevated sticky top-24">
                 <div className="flex items-center gap-2 mb-2">
                   <Scissors className="h-5 w-5 text-accent" />
-                  <span className="font-medium">{selectedService.name}</span>
+                  <span className="font-medium">{selected.name}</span>
                 </div>
                 <div className="flex items-baseline gap-2 mb-6">
-                  <span className="text-3xl font-bold text-foreground">${selectedService.price}</span>
-                  <span className="text-muted-foreground">• {selectedService.duration}</span>
+                  <span className="text-3xl font-bold text-foreground">₱{selected.price}</span>
+                  <span className="text-muted-foreground">• {selected.duration}</span>
                 </div>
 
                 {/* Price Summary */}
                 <div className="border-t border-border pt-4 mb-4 space-y-2">
                   <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">{selectedService.name}</span>
-                    <span>${selectedService.price}</span>
+                    <span className="text-muted-foreground">{selected.name}</span>
+                    <span>₱{selected.price}</span>
                   </div>
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">Service fee (10%)</span>
-                    <span>${serviceFee}</span>
+                    <span>₱{serviceFee}</span>
                   </div>
                   <div className="flex justify-between font-semibold pt-2 border-t border-border">
                     <span>Total</span>
-                    <span>${selectedService.price + serviceFee}</span>
+                    <span>₱{selected.price + serviceFee}</span>
                   </div>
                 </div>
 
-                <Link to="/booking" state={{ shop: { type: "grooming", name: data.name, location: data.location, image: data.images[0], price: selectedService.price, serviceName: selectedService.name, propertyId: (data as any).propertyId?.toString(), qrCodeGCash: (data as any).qrCodeGCash, qrCodePayMaya: (data as any).qrCodePayMaya, acceptedPaymentMethods: (data as any).acceptedPaymentMethods } }}>
+                <Link
+                  to="/booking"
+                  state={{
+                    shop: {
+                      type: "grooming",
+                      name: property.name,
+                      location: property.city || property.address,
+                      image: coverImage,
+                      price: selected.price,
+                      serviceName: selected.name,
+                      serviceId: selected.id,
+                      propertyId: property.id,
+                      qrCodeGCash: property.qrCodeGCash,
+                      qrCodePayMaya: property.qrCodePayMaya,
+                      acceptedPaymentMethods: property.acceptedPaymentMethods,
+                    },
+                  }}
+                >
                   <Button variant="hero" size="lg" className="w-full mb-4">
                     Book Appointment
                   </Button>
@@ -321,17 +451,21 @@ const GroomingDetail = () => {
 
                 {/* Contact */}
                 <div className="border-t border-border pt-4 space-y-3">
-                  <div className="flex items-center gap-3 text-sm text-muted-foreground">
-                    <Phone className="h-4 w-4" />
-                    <span>{data.phone}</span>
-                  </div>
-                  <div className="flex items-center gap-3 text-sm text-muted-foreground">
-                    <Mail className="h-4 w-4" />
-                    <span>{data.email}</span>
-                  </div>
+                  {property.phone && (
+                    <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                      <Phone className="h-4 w-4" />
+                      <span>{property.phone}</span>
+                    </div>
+                  )}
+                  {property.website && (
+                    <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                      <Mail className="h-4 w-4" />
+                      <span>{property.website}</span>
+                    </div>
+                  )}
                   <div className="flex items-center gap-3 text-sm text-muted-foreground">
                     <Clock className="h-4 w-4" />
-                    <span>{data.hours}</span>
+                    <span>Mon-Sat: 9AM - 7PM</span>
                   </div>
                 </div>
               </div>

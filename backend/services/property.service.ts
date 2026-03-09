@@ -7,8 +7,8 @@ export type HotelFilters = {
   checkin?: string;
   checkout?: string;
   timeSlot?: string;          // for same-day services like grooming/vet
-  petType?: string;
-  dogSize?: string;
+  petType?: string | string[];
+  dogSize?: string | string[];
   propertyType?: string;
   serviceCategory?: string;  // per-service filter: Boarding, Grooming, Veterinary, etc.
   minPrice?: number;
@@ -69,15 +69,17 @@ export async function getProperties(filters: HotelFilters = {}) {
   // When lat/lng are provided, skip text-based location filter
   // (geo filter is applied post-query below)
   if (filters.location && filters.lat == null) {
-    const loc = filters.location;
-    const orParts: string[] = [];
-    if (has("city"))     orParts.push(`city.ilike.%${loc}%`);
-    if (has("location")) orParts.push(`location.ilike.%${loc}%`);
-    if (has("address"))  orParts.push(`address.ilike.%${loc}%`);
-    if (has("name"))     orParts.push(`name.ilike.%${loc}%`);
+    const loc = filters.location.trim();
+    if (loc) {
+      const orParts: string[] = [];
+      if (has("city"))     orParts.push(`city.ilike.%${loc}%`);
+      if (has("location")) orParts.push(`location.ilike.%${loc}%`);
+      if (has("address"))  orParts.push(`address.ilike.%${loc}%`);
+      if (has("name"))     orParts.push(`name.ilike.%${loc}%`);
 
-    if (orParts.length) {
-      query = query.or(orParts.join(","));
+      if (orParts.length) {
+        query = query.or(orParts.join(","));
+      }
     }
   }
 
@@ -105,28 +107,44 @@ export async function getProperties(filters: HotelFilters = {}) {
     }
   }
 
-  // ── Pet type ──
+  // ── Pet type (multi-select) ──
   if (filters.petType) {
-    if (filters.petType === "others") {
-      query = query.not("exotic_pet_types", "is", null);
-    }
+    const petTypes = (Array.isArray(filters.petType) ? filters.petType : [filters.petType]).filter(Boolean);
+    if (petTypes.length > 0) {
+      const hasOthers = petTypes.some(t => t.toLowerCase() === "others");
+      const normalTypes = petTypes
+        .filter(t => t.toLowerCase() !== "others")
+        .map(t => t.charAt(0).toUpperCase() + t.slice(1).toLowerCase());
 
-    else if (has("pet_types_accepted")) {
-      const formatted =
-        filters.petType.charAt(0).toUpperCase() +
-        filters.petType.slice(1).toLowerCase();
-      query = query.contains("pet_types_accepted", [formatted]);
+      if (hasOthers && normalTypes.length === 0) {
+        query = query.not("exotic_pet_types", "is", null);
+      } else if (hasOthers && normalTypes.length > 0 && has("pet_types_accepted")) {
+        const orParts = normalTypes.map(t => `pet_types_accepted.cs.{${t}}`);
+        orParts.push("exotic_pet_types.not.is.null");
+        query = query.or(orParts.join(","));
+      } else if (normalTypes.length > 0 && has("pet_types_accepted")) {
+        if (normalTypes.length === 1) {
+          query = query.contains("pet_types_accepted", [normalTypes[0]]);
+        } else {
+          const orParts = normalTypes.map(t => `pet_types_accepted.cs.{${t}}`);
+          query = query.or(orParts.join(","));
+        }
+      }
     }
   }
 
-// -- Dog Size --
+  // ── Dog Size (multi-select) ──
   if (filters.dogSize) {
-  const formatted =
-    filters.dogSize.charAt(0).toUpperCase() +
-    filters.dogSize.slice(1).toLowerCase();
+    const dogSizes = (Array.isArray(filters.dogSize) ? filters.dogSize : [filters.dogSize]).filter(Boolean);
+    const validSizes = dogSizes.map(s => s.charAt(0).toUpperCase() + s.slice(1).toLowerCase());
 
-    if (has("dog_sizes")) {
-      query = query.contains("dog_sizes", [formatted]);
+    if (validSizes.length > 0 && has("dog_sizes")) {
+      if (validSizes.length === 1) {
+        query = query.contains("dog_sizes", [validSizes[0]]);
+      } else {
+        const orParts = validSizes.map(s => `dog_sizes.cs.{${s}}`);
+        query = query.or(orParts.join(","));
+      }
     }
   }
 
@@ -333,42 +351,39 @@ export async function getProperties(filters: HotelFilters = {}) {
     }
   }
 
-  // ── Service category filter (per-service, not per-property) ──
-  if (filters.serviceCategory) {
-    const cat = filters.serviceCategory;
-    let svcQuery = supabaseAdmin
-      .from("property_services")
-      .select("property_id, price")
-      .eq("category", cat)
-      .eq("is_active", true)
-      .eq("is_deleted", false);
-
-    // Scope price range to this category
-    if (filters.minPrice !== undefined) svcQuery = svcQuery.gte("price", filters.minPrice);
-    if (filters.maxPrice !== undefined) svcQuery = svcQuery.lte("price", filters.maxPrice);
-
-    const { data: svcRows, error: svcErr } = await svcQuery;
-    if (svcErr) { console.error("[getProperties] serviceCategory lookup", svcErr); throw svcErr; }
-
-    const matchedIds = [...new Set((svcRows ?? []).map((r) => String(r.property_id)))];
-    if (matchedIds.length === 0) return [];
-    query = query.in("id", matchedIds);
-  } else if (filters.minPrice !== undefined || filters.maxPrice !== undefined) {
-    // Price filter across all services when no category is specified
+  // ── COMBINED SERVICE FILTER (Category + Price) ──
+  // This logic finds all properties that have at least one service 
+  // matching the category AND the price range.
+  if (filters.serviceCategory || filters.minPrice !== undefined || filters.maxPrice !== undefined) {
     let svcQuery = supabaseAdmin
       .from("property_services")
       .select("property_id")
       .eq("is_active", true)
       .eq("is_deleted", false);
 
-    if (filters.minPrice !== undefined) svcQuery = svcQuery.gte("price", filters.minPrice);
-    if (filters.maxPrice !== undefined) svcQuery = svcQuery.lte("price", filters.maxPrice);
+    if (filters.serviceCategory) {
+      svcQuery = svcQuery.eq("category", filters.serviceCategory);
+    }
+    if (filters.minPrice !== undefined) {
+      svcQuery = svcQuery.gte("price", filters.minPrice);
+    }
+    if (filters.maxPrice !== undefined) {
+      svcQuery = svcQuery.lte("price", filters.maxPrice);
+    }
 
     const { data: svcRows, error: svcErr } = await svcQuery;
-    if (svcErr) { console.error("[getProperties] price filter lookup", svcErr); throw svcErr; }
+    if (svcErr) {
+      console.error("[getProperties] service filter lookup", svcErr);
+      throw svcErr;
+    }
 
+    // Get unique property IDs that matched the service criteria
     const matchedIds = [...new Set((svcRows ?? []).map((r) => String(r.property_id)))];
+    
+    // If no services matched the price/category, return empty immediately
     if (matchedIds.length === 0) return [];
+
+    // Filter properties to only those that have matching services
     query = query.in("id", matchedIds);
   }
 
@@ -469,9 +484,12 @@ export async function getRandomProperties(limit: number = 6) {
 
   if (!allIds || allIds.length === 0) return [];
 
-  // Shuffle and pick `limit` random IDs
-  const shuffled = allIds.sort(() => Math.random() - 0.5);
-  const selected = shuffled.slice(0, Math.min(limit, shuffled.length));
+  // Fisher-Yates shuffle for unbiased randomness
+  for (let i = allIds.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [allIds[i], allIds[j]] = [allIds[j], allIds[i]];
+  }
+  const selected = allIds.slice(0, Math.min(limit, allIds.length));
   const selectedIds = selected.map((row) => row.id);
 
   // Fetch full property data for selected IDs
@@ -482,6 +500,14 @@ export async function getRandomProperties(limit: number = 6) {
       property_amenities(
         amenity_id,
         amenities(amenity)
+      ),
+      property_services(
+        id,
+        name,
+        category,
+        price,
+        description,
+        is_active
       )
     `)
     .in("id", selectedIds);
@@ -491,35 +517,69 @@ export async function getRandomProperties(limit: number = 6) {
     throw error;
   }
 
-  const rows = data || [];
-  if (rows.length === 0) return [];
+  if (!data || data.length === 0) return [];
 
-  // Attach cheapest service price
-  const propertyIds = rows.map((p: any) => p.id);
+  // Enrich with cheapest service price
+  return data.map((p: any) => {
+    const activeServices = p.property_services?.filter((s: any) => s.is_active) || [];
+    const cheapestPrice = activeServices.length > 0
+      ? Math.min(...activeServices.map((s: any) => Number(s.price || 0)))
+      : null;
+    return {
+      ...p,
+      cheapest_service_price: cheapestPrice,
+    };
+  });
+}
 
-  const { data: serviceRows, error: serviceError } = await supabaseAdmin
-    .from("property_services")
-    .select("property_id, price")
-    .in("property_id", propertyIds)
-    .eq("is_active", true)
-    .eq("is_deleted", false)
-    .order("price", { ascending: true });
+export async function getPropertyById(id: string) {
+  const { data, error } = await supabaseAdmin
+    .from("properties")
+    .select(`
+      *,
+      property_amenities(
+        amenity_id,
+        amenities(amenity)
+      ),
+      property_services(
+        id,
+        name,
+        category,
+        price,
+        description,
+        is_active
+      ),
+      property_pricing(
+        payment_options
+      )
+    `)
+    .eq("id", id)
+    .single();
 
-  if (serviceError) {
-    console.error("[getRandomProperties] service price lookup", serviceError);
-    throw serviceError;
+  if (error) {
+    console.error("[getPropertyById]", error);
+    throw error;
   }
 
-  const cheapestByProperty = new Map<string, number>();
-  for (const row of serviceRows ?? []) {
-    const pid = String(row.property_id);
-    if (!cheapestByProperty.has(pid)) {
-      cheapestByProperty.set(pid, Number(row.price ?? 0));
-    }
-  }
+  if (!data) return null;
 
-  return rows.map((p: any) => ({
-    ...p,
-    cheapest_service_price: cheapestByProperty.get(String(p.id)) ?? null,
-  }));
+  // Get cheapest service price
+  const activeServices = data.property_services?.filter((s: any) => s.is_active) || [];
+  const cheapestPrice = activeServices.length > 0
+    ? Math.min(...activeServices.map((s: any) => Number(s.price || 0)))
+    : null;
+
+  // Extract QR codes and accepted payment methods from property_pricing
+  // Supabase may return property_pricing as an object (1-to-1) or array
+  const rawPricing = (data as any).property_pricing;
+  const pricingRow = Array.isArray(rawPricing) ? rawPricing[0] : rawPricing;
+  const paymentOpts = pricingRow?.payment_options || {};
+
+  return {
+    ...data,
+    cheapest_service_price: cheapestPrice,
+    qrCodeGCash: paymentOpts.gcash_qr_url || null,
+    qrCodePayMaya: paymentOpts.paymaya_qr_url || null,
+    acceptedPaymentMethods: paymentOpts.accepted_methods || [],
+  };
 }

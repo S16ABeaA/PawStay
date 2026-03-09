@@ -377,10 +377,11 @@ create table if not exists bookings (
 
   -- Payment
   payment_method  text
-                  check (payment_method in ('card','gcash','cash','bank_transfer',null)),
+                  check (payment_method in ('card','gcash','paymaya','cash','bank_transfer',null)),
   payment_status  text not null default 'unpaid'
                   check (payment_status in ('unpaid','paid','refunded','partially_refunded')),
   paid_at         timestamptz,
+  reference_number text,                -- payment reference number for gcash/paymaya
   payment_screenshot_url text,        -- screenshot proof for gcash/paymaya
 
   -- Room assignment (for hotel bookings)
@@ -413,7 +414,7 @@ create table if not exists pet_service_history (
   pet_id        uuid not null references pets(id) on delete restrict,
   booking_id    uuid references bookings(id) on delete restrict,
   service_type  text not null
-                check (service_type in ('grooming','checkup','vaccination','dental','other')),
+                check (service_type in ('grooming','checkup','vaccination','dental','boarding','other')),
   service_name  text not null,         -- e.g. "Full Grooming Package"
   performed_at  date not null default current_date,
   notes         text,
@@ -979,7 +980,9 @@ begin
     special_requirements, med_cert_url, vaccine_record_url,
     service_name, service_type,
     owner_name, owner_email, owner_phone, emergency_contact,
-    subtotal, service_fee, total_price, payment_method, payment_screenshot_url, notes
+    subtotal, service_fee, total_price,
+    payment_method, reference_number, payment_screenshot_url,
+    notes, source, created_by
   ) values (
     v_property_id,
     (p_booking_data->>'user_id')::uuid,
@@ -1006,8 +1009,11 @@ begin
     nullif(p_booking_data->>'service_fee', '')::numeric,
     nullif(p_booking_data->>'total_price', '')::numeric,
     p_booking_data->>'payment_method',
+    p_booking_data->>'reference_number',
     p_booking_data->>'payment_screenshot_url',
-    p_booking_data->>'notes'
+    p_booking_data->>'notes',
+    coalesce(p_booking_data->>'source', 'web'),
+    nullif(p_booking_data->>'created_by', '')::uuid
   )
   returning to_jsonb(bookings.*) into v_result;
 

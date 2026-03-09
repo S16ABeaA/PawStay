@@ -115,10 +115,10 @@ const GroomingCard = ({ grooming }: GroomingCardProps) => {
             <div className="flex items-baseline gap-1.5">
               {grooming.originalPrice && (
                 <span className="text-sm text-muted-foreground line-through">
-                  ${grooming.originalPrice}
+                  ₱{grooming.originalPrice}
                 </span>
               )}
-              <span className="text-2xl font-bold text-foreground">${grooming.price}</span>
+              <span className="text-2xl font-bold text-foreground">₱{grooming.price}</span>
             </div>
             <span className="text-xs text-muted-foreground">starting from</span>
           </div>
