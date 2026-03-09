@@ -2,7 +2,7 @@ import { Request, Response } from "express";
 import { supabaseAdmin } from "../config/supabaseAdmin";
 import { supabaseClient } from "../config/supabaseClient";
 import { userModel } from "../models/userModel";
-import { clearAuthCookies } from "../middleware/authMiddleware";
+import { clearAuthCookies, setAuthCookies } from "../middleware/authMiddleware";
 
 export const authController = {
   signUp: async (req: Request, res: Response) => {
@@ -154,19 +154,7 @@ export const authController = {
       const userId = signInData.user.id;
 
       // Set Supabase auth cookies
-      const isProd = process.env.NODE_ENV === 'production';
-      const cookieSameSite: 'none' | 'lax' = isProd ? 'none' : 'lax';
-      const cookieSecure = isProd;
-      const cookieOpts = {
-        httpOnly: true,
-        secure: cookieSecure,
-        sameSite: cookieSameSite,
-        maxAge: 7 * 24 * 60 * 60 * 1000,
-        path: "/",
-      } as any;
-
-      res.cookie("sb-access-token", signInData.session.access_token, cookieOpts);
-      res.cookie("sb-refresh-token", signInData.session.refresh_token, cookieOpts);
+      setAuthCookies(res, signInData.session);
 
       // Return profile info
       const userProfile = await userModel.getUserById(userId);
@@ -235,19 +223,7 @@ export const authController = {
       }
 
       // Set cookies
-      const isProd2 = process.env.NODE_ENV === 'production';
-      const cookieSameSite2: 'none' | 'lax' = isProd2 ? 'none' : 'lax';
-      const cookieSecure2 = isProd2;
-      const cookieOpts2 = {
-        httpOnly: true,
-        secure: cookieSecure2,
-        sameSite: cookieSameSite2,
-        maxAge: 7 * 24 * 60 * 60 * 1000,
-        path: "/",
-      } as any;
-
-      res.cookie("sb-access-token", data.session.access_token, cookieOpts2);
-      res.cookie("sb-refresh-token", data.session.refresh_token, cookieOpts2);
+      setAuthCookies(res, data.session);
       
       // Get user info for welcome message
       const user = data.session.user;

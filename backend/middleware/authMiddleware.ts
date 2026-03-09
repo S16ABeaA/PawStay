@@ -2,6 +2,24 @@ import { Request, Response, NextFunction } from "express";
 import { supabaseClient } from "../config/supabaseClient";
 import { userModel } from "../models/userModel";
 
+const isProductionLikeEnv = () => {
+  return (
+    process.env.NODE_ENV === "production" ||
+    !!process.env.RENDER ||
+    process.env.VERCEL_ENV === "production"
+  );
+};
+
+const getAuthCookieOptions = () => {
+  const prodLike = isProductionLikeEnv();
+  return {
+    httpOnly: true,
+    secure: prodLike,
+    sameSite: (prodLike ? "none" : "lax") as "none" | "lax",
+    path: "/",
+  };
+};
+
 /**
  * Middleware to protect routes using Supabase Auth.
  * Checks for Supabase auth tokens and attaches user info to req.user.
@@ -96,18 +114,8 @@ export const authMiddleware = async (req: Request, res: Response, next: NextFunc
  */
 export const setAuthCookies = (res: Response, session: any) => {
   const SESSION_DURATION_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
-
-  const isProd = process.env.NODE_ENV === 'production';
-  const cookieSameSite: 'none' | 'lax' = isProd ? 'none' : 'lax';
-  const cookieSecure = isProd;
-
-  const cookieOpts = {
-    httpOnly: true,
-    secure: cookieSecure,
-    sameSite: cookieSameSite,
-    maxAge: SESSION_DURATION_MS,
-    path: "/",
-  } as any;
+  const base = getAuthCookieOptions();
+  const cookieOpts = { ...base, maxAge: SESSION_DURATION_MS };
 
   res.cookie("sb-access-token", session.access_token, cookieOpts);
   res.cookie("sb-refresh-token", session.refresh_token, cookieOpts);
@@ -117,8 +125,9 @@ export const setAuthCookies = (res: Response, session: any) => {
  * Helper function to clear auth cookies
  */
 export const clearAuthCookies = (res: Response) => {
-  res.clearCookie("sb-access-token", { path: "/" });
-  res.clearCookie("sb-refresh-token", { path: "/" });
+  const cookieOpts = getAuthCookieOptions();
+  res.clearCookie("sb-access-token", cookieOpts);
+  res.clearCookie("sb-refresh-token", cookieOpts);
 };
 
 //Middleware to restrict a route to admin (proprietor) users only.
