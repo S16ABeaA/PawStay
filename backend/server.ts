@@ -47,22 +47,44 @@ const allowedOrigins = (process.env.CORS_ORIGINS
   .map((origin) => origin.trim())
   .filter(Boolean);
 
+// const corsOptions: cors.CorsOptions = {
+//   origin: (origin, callback) => {
+//     if (
+//       !origin ||
+//       allowedOrigins.length === 0 ||
+//       allowedOrigins.includes(origin) ||
+//       (process.env.NODE_ENV !== 'production' && isLocalDevOrigin(origin))
+//     ) {
+//       callback(null, true);
+//       return;
+//     }
+//     callback(new Error(`CORS blocked for origin: ${origin}`));
+//   },
+//   credentials: true,
+//   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+//   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+// };
 const corsOptions: cors.CorsOptions = {
   origin: (origin, callback) => {
+    // allow requests with no origin (server-to-server)
+    if (!origin) return callback(null, true);
+
+    // allow your dev origins and all vercel URLs
     if (
-      !origin ||
-      allowedOrigins.length === 0 ||
       allowedOrigins.includes(origin) ||
-      (process.env.NODE_ENV !== 'production' && isLocalDevOrigin(origin))
+      /\.vercel\.app$/.test(origin)
     ) {
       callback(null, true);
       return;
     }
+
+    // block everything else
+    console.log(`CORS blocked for origin: ${origin}`);
     callback(new Error(`CORS blocked for origin: ${origin}`));
   },
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  methods: ["GET","POST","PUT","PATCH","DELETE","OPTIONS"],
+  allowedHeaders: ["Content-Type","Authorization","X-Requested-With"]
 };
 
 const apiLimiter = rateLimit({
@@ -75,7 +97,8 @@ const apiLimiter = rateLimit({
 app.disable('x-powered-by');
 app.use(helmet());
 app.use(cors(corsOptions));
-app.options(/.*/, cors(corsOptions));
+// app.options(/.*/, cors(corsOptions));
+app.options("*", cors(corsOptions)); // preflight
 app.use(cookieParser());
 app.use(express.json({ limit: '20mb' }));
 app.use(express.urlencoded({ extended: true, limit: '20mb' }));
