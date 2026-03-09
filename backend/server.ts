@@ -28,6 +28,7 @@ const app = express();
 const PORT = process.env.PORT || 5001;
 
 const defaultDevOrigins = [
+  'https://pawstayph-git-dev-s16abeaas-projects.vercel.app',
   'http://localhost:8080',
   'http://localhost:8081',
   'http://localhost:5173',
