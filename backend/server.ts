@@ -18,6 +18,7 @@ import reviewsRoutes from './routes/reviewsRoute';
 import settingsRoutes from './routes/settingsRoute';
 import notificationRoutes from './routes/notificationRoute';
 import supportRoutes from './routes/supportRoute';
+import analyticsRoutes from './routes/analyticsRoute';
 import dashboardRoute from './routes/dashboardRoute';
 import settlementRoutes from './routes/settlementRoute';
  
@@ -102,6 +103,7 @@ app.use('/api/reviews', reviewsRoutes);
 app.use("/api/settings", settingsRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/support', supportRoutes);
+app.use('/api/analytics', analyticsRoutes);
 app.use('/api/settlements', settlementRoutes);
 
 // Simple health/root route
