@@ -82,6 +82,10 @@ app.use(express.urlencoded({ extended: true, limit: '20mb' }));
 
 //deploy test only
 console.log("CORS Allowed Origins:", allowedOrigins);
+app.use((req, res, next) => {
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.path} - Origin: ${req.headers.origin}`);
+  next();
+});
 
 // Prevent browsers from caching API responses so property-switching always gets fresh data
 app.use('/api', (_req, res, next) => {
