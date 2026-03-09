@@ -112,7 +112,8 @@ export const adminPropertyController = {
           .from("bookings")
           .select("property_id, total_price, status")
           .in("property_id", propertyIds)
-          .eq("is_deleted", false);
+          .eq("is_deleted", false)
+          .limit(50000);
 
         (bookings ?? []).forEach((b: any) => {
           if (!bookingStats[b.property_id]) {

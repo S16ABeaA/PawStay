@@ -43,7 +43,7 @@ const AdminBookings = () => {
   const { toast } = useToast();
   const { selectedPropertyId, loading: propLoading } = useAdminProperty();
   const [loadingBookings, setLoadingBookings] = useState(false);
-  const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_BACKEND_URL || 'http://localhost:5001';
+  const API_BASE_URL = import.meta.env.VITE_BACKEND_URL || '';
 
   const handleConfirm = async (id: string) => {
     try {

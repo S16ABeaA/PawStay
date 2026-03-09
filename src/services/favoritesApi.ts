@@ -1,7 +1,6 @@
 import { authHelper } from "../helpers/authHelper";
 
-// Prefer `VITE_API_BASE_URL`, fall back to older `VITE_BACKEND_URL`, then localhost
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_BACKEND_URL || "http://localhost:5001";
+const API_BASE_URL = import.meta.env.VITE_BACKEND_URL || "";
 
 
 export const favoritesApi = {

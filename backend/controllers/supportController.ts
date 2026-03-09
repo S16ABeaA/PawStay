@@ -77,7 +77,7 @@ export const supportController = {
         query = query.or(`subject.ilike.%${search}%,ticket_number.ilike.%${search}%`);
       }
 
-      const { data: tickets, error } = await query;
+      const { data: tickets, error } = await query.limit(500);
       if (error) throw error;
 
       // For each ticket, get message count
@@ -85,7 +85,8 @@ export const supportController = {
       const { data: messageCounts, error: mcErr } = await supabaseAdmin
         .from("ticket_messages")
         .select("ticket_id")
-        .in("ticket_id", ticketIds.length ? ticketIds : ["00000000-0000-0000-0000-000000000000"]);
+        .in("ticket_id", ticketIds.length ? ticketIds : ["00000000-0000-0000-0000-000000000000"])
+        .limit(10000);
 
       if (mcErr) throw mcErr;
 

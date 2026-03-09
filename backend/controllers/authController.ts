@@ -27,10 +27,13 @@ export const authController = {
     }
 
     try {
-      // Check if user already exists
-      const { data: existingUser } = await supabaseAdmin.auth.admin.listUsers({ perPage: 1000 });
-      const userExists = existingUser?.users?.some(u => u.email === email);
-      if (userExists) {
+      // Check if user already exists via profiles table (much lighter than listUsers)
+      const { data: existingProfile } = await supabaseAdmin
+        .from("profiles")
+        .select("id")
+        .eq("email", email)
+        .maybeSingle();
+      if (existingProfile) {
           return res.status(409).json({ message: "User with this email already exists." });
       }
 
@@ -421,7 +424,8 @@ export const authController = {
           .from("profiles")
           .select("id, first_name, last_name, email, role, phone, address, avatar_url, created_at")
           .eq("is_deleted", false)
-          .order("created_at", { ascending: false }),
+          .order("created_at", { ascending: false })
+          .limit(1000),
         supabaseAdmin.auth.admin.listUsers({ perPage: 1000 }),
       ]);
 

@@ -94,7 +94,8 @@ export const bookingModel = {
       .select("*, properties:property_id(name, cover_image)")
       .eq("user_id", userId)
       .eq("is_deleted", false)
-      .order("created_at", { ascending: false });
+      .order("created_at", { ascending: false })
+      .limit(500);
 
     if (error) throw error;
 

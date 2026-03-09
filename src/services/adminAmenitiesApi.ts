@@ -1,6 +1,6 @@
 import { authHelper } from "@/helpers/authHelper";
 
-const BASE = (import.meta.env.VITE_BACKEND_URL || "http://localhost:5001") + "/api/amenities";
+const BASE = (import.meta.env.VITE_BACKEND_URL || "") + "/api/amenities";
 
 export interface Amenity {
   id: string;

@@ -20,7 +20,7 @@ export const LocationInput = ({ value, onChange, onSelect }: Props) => {
     if (!query) return setSuggestions([]);
     try {
       const res = await fetch(
-        `/api/location/search?q=${encodeURIComponent(query)}`
+        `${import.meta.env.VITE_BACKEND_URL || ""}/api/location/search?q=${encodeURIComponent(query)}`
       );
       if (!res.ok) throw new Error("Search failed");
       const data = await res.json();

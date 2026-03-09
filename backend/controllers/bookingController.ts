@@ -67,10 +67,22 @@ export const adminCalendar = async (req: Request, res: Response) => {
 
     if (pSvcErr) throw pSvcErr;
 
-    // 3. Build bookings query
+    // 3. Build bookings query — select only the columns the frontend needs
+    const BOOKING_COLUMNS = [
+      "id", "property_id", "user_id", "pet_id", "service_id",
+      "checkin", "checkout", "time_slot",
+      "pet_name", "pet_type", "pet_breed",
+      "service_name", "service_type",
+      "owner_name", "owner_email", "owner_phone",
+      "special_requirements", "subtotal", "service_fee", "total_price",
+      "payment_status", "status", "notes", "room_name",
+      "source", "created_by", "created_at",
+      "properties:property_id(name)"
+    ].join(", ");
+
     let bookingsQuery = supabaseAdmin
       .from("bookings")
-      .select("*, properties:property_id(name)")
+      .select(BOOKING_COLUMNS)
       .in("property_id", propertyIds)
       .eq("is_deleted", false)
       .order("checkin", { ascending: true });
@@ -79,6 +91,8 @@ export const adminCalendar = async (req: Request, res: Response) => {
     const filterPropertyId = req.query.property_id as string | undefined;
     const filterServiceType = req.query.service_type as string | undefined;
     const filterStatus = req.query.status as string | undefined;
+    const filterDateFrom = req.query.date_from as string | undefined;
+    const filterDateTo = req.query.date_to as string | undefined;
 
     if (filterPropertyId) {
       bookingsQuery = bookingsQuery.eq("property_id", filterPropertyId);
@@ -89,6 +103,21 @@ export const adminCalendar = async (req: Request, res: Response) => {
     if (filterStatus) {
       bookingsQuery = bookingsQuery.eq("status", filterStatus);
     }
+
+    // Apply date range — default to last 6 months if no range specified
+    if (filterDateFrom) {
+      bookingsQuery = bookingsQuery.gte("checkin", filterDateFrom);
+    } else {
+      const sixMonthsAgo = new Date();
+      sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+      bookingsQuery = bookingsQuery.gte("checkin", sixMonthsAgo.toISOString().split("T")[0]);
+    }
+    if (filterDateTo) {
+      bookingsQuery = bookingsQuery.lte("checkin", filterDateTo);
+    }
+
+    // Safety cap to prevent OOM
+    bookingsQuery = bookingsQuery.limit(2000);
 
     const { data: bookings, error: bookErr } = await bookingsQuery;
     if (bookErr) throw bookErr;
@@ -1764,7 +1793,7 @@ export const getReceivables = async (req: Request, res: Response) => {
       query = query.eq("status", "checked_out");
     }
 
-    const { data: bookings, error } = await query.order("checkin", { ascending: true });
+    const { data: bookings, error } = await query.order("checkin", { ascending: true }).limit(50000);
     if (error) throw error;
 
     // 2) Fetch all completed settlements to subtract from outstanding

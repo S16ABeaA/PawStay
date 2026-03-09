@@ -151,19 +151,11 @@ export interface PropertySubmissionResponse {
 
 export class PropertyService {
   private static readonly CONFIGURED_BACKEND_BASE_URL =
-    import.meta.env.VITE_API_BASE_URL ||
-    import.meta.env.VITE_BACKEND_URL ||
-    import.meta.env.VITE_AUTH_API_URL ||
-    'http://localhost:5001'
+    import.meta.env.VITE_BACKEND_URL || ''
 
-  private static readonly BACKEND_BASE_URLS = Array.from(
-    new Set(
-      [
-        this.CONFIGURED_BACKEND_BASE_URL,
-        'http://localhost:5001',
-      ].filter((url): url is string => Boolean(url)),
-    ),
-  )
+  private static readonly BACKEND_BASE_URLS = [
+    this.CONFIGURED_BACKEND_BASE_URL,
+  ].filter((url): url is string => Boolean(url))
 
   private static readonly SUBMIT_PROPERTY_PATH = '/api/submit-property'
 

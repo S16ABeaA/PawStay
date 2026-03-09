@@ -161,7 +161,7 @@ const Booking = () => {
     if (!propertyId) return;
     const fetchPaymentOptions = async () => {
       try {
-        const res = await fetch(`/api/properties/${propertyId}/payment`);
+        const res = await fetch(`${import.meta.env.VITE_BACKEND_URL || ""}/api/properties/${propertyId}/payment`);
         if (!res.ok) return;
         const data = await res.json();
         setFetchedQR({
