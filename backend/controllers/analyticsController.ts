@@ -51,12 +51,13 @@ export const analyticsController = {
       const { data: bookings, count: totalBookings } = await bookingsQuery;
       console.log("Total bookings:", totalBookings);
       
-      // ── Revenue: paid bookings filtered by checkout/checkin date ──
+      // ── Revenue: service fee from finalized bookings filtered by checkout/checkin date ──
       const { data: paidBookings } = await supabaseAdmin
         .from("bookings")
-        .select("total_price, checkout, checkin")
+        .select("service_fee, checkout, checkin")
         .eq("is_deleted", false)
-        .eq("payment_status", "paid");
+        .in("status", ["completed", "checked_out"])
+        .neq("payment_status", "refunded");
 
       const revenueInRange = (paidBookings ?? []).filter((b: any) => {
         const d = b.checkout || b.checkin;
@@ -64,7 +65,7 @@ export const analyticsController = {
       });
 
       const totalRevenue = revenueInRange.reduce(
-        (sum: number, b: any) => sum + (parseFloat(b.total_price) || 0),
+        (sum: number, b: any) => sum + (parseFloat(b.service_fee) || 0),
         0
       );
       const paidCount = revenueInRange.length;
@@ -131,12 +132,12 @@ export const analyticsController = {
           .gte("created_at", prevSince.toISOString())
           .lt("created_at", since.toISOString());
         prevBookingsCount = prevCount ?? 0;
-        // Previous period revenue (paid bookings by checkout/checkin date)
+        // Previous period revenue (service fee from finalized bookings by checkout/checkin date)
         prevRevenue = (paidBookings ?? []).reduce(
           (sum: number, b: any) => {
             const d = b.checkout || b.checkin;
             return d && d >= prevSinceDate && d < sinceDate!
-              ? sum + (parseFloat(b.total_price) || 0)
+              ? sum + (parseFloat(b.service_fee) || 0)
               : sum;
           },
           0
@@ -185,12 +186,13 @@ export const analyticsController = {
       if (since) bookingQuery = bookingQuery.gte("created_at", since.toISOString());
       const { data: allBookings } = await bookingQuery;
 
-      // Revenue by checkout date, paid only
+      // Revenue by checkout date, finalized bookings only (service fee = platform commission)
       const { data: paidBookings } = await supabaseAdmin
         .from("bookings")
-        .select("total_price, checkout, checkin")
+        .select("service_fee, checkout, checkin")
         .eq("is_deleted", false)
-        .eq("payment_status", "paid");
+        .in("status", ["completed", "checked_out"])
+        .neq("payment_status", "refunded");
 
       // Group by day for short ranges, month for longer
       const useDaily = range === "7d" || range === "30d";
@@ -211,7 +213,7 @@ export const analyticsController = {
           ? (dateRef as string).slice(0, 10)
           : (dateRef as string).slice(0, 7);
         if (!periodMap[key]) periodMap[key] = { bookings: 0, revenue: 0 };
-        periodMap[key].revenue += parseFloat(b.total_price) || 0;
+        periodMap[key].revenue += parseFloat(b.service_fee) || 0;
       }
 
       const trends = Object.entries(periodMap)
@@ -247,12 +249,13 @@ export const analyticsController = {
       if (since) countQuery = countQuery.gte("created_at", since.toISOString());
       const { data: allBookings } = await countQuery;
 
-      // Revenue by checkout date, paid only
+      // Revenue by checkout date, finalized bookings only (service fee = platform commission)
       const { data: paidBookings } = await supabaseAdmin
         .from("bookings")
-        .select("total_price, checkout, checkin, properties!inner(property_type)")
+        .select("service_fee, checkout, checkin, properties!inner(property_type)")
         .eq("is_deleted", false)
-        .eq("payment_status", "paid");
+        .in("status", ["completed", "checked_out"])
+        .neq("payment_status", "refunded");
 
       const typeMap: Record<string, { count: number; revenue: number }> = {};
       for (const b of allBookings ?? []) {
@@ -268,7 +271,7 @@ export const analyticsController = {
         const types: string[] = (b as any).properties?.property_type ?? [];
         const type = types[0] || "other";
         if (!typeMap[type]) typeMap[type] = { count: 0, revenue: 0 };
-        typeMap[type].revenue += parseFloat(b.total_price) || 0;
+        typeMap[type].revenue += parseFloat(b.service_fee) || 0;
       }
 
       const total = (allBookings ?? []).length || 1;
@@ -362,12 +365,13 @@ export const analyticsController = {
       if (since) countQuery = countQuery.gte("created_at", since.toISOString());
       const { data: allBookings } = await countQuery;
 
-      // Revenue by checkout date, paid only
+      // Revenue by checkout date, finalized bookings only (service fee = platform commission)
       const { data: paidBookings } = await supabaseAdmin
         .from("bookings")
-        .select("total_price, checkout, checkin, properties!inner(city)")
+        .select("service_fee, checkout, checkin, properties!inner(city)")
         .eq("is_deleted", false)
-        .eq("payment_status", "paid");
+        .in("status", ["completed", "checked_out"])
+        .neq("payment_status", "refunded");
 
       // Property counts per city
       const { data: propertyData } = await supabaseAdmin
@@ -394,7 +398,7 @@ export const analyticsController = {
         if (sinceDate && dateRef < sinceDate) continue;
         const city = (b as any).properties?.city || "Unknown";
         if (!cityMap[city]) cityMap[city] = { bookings: 0, revenue: 0 };
-        cityMap[city].revenue += parseFloat(b.total_price) || 0;
+        cityMap[city].revenue += parseFloat(b.service_fee) || 0;
       }
 
       const locations = Object.entries(cityMap)
@@ -433,12 +437,13 @@ export const analyticsController = {
       if (since) countQuery = countQuery.gte("created_at", since.toISOString());
       const { data: allBookings } = await countQuery;
 
-      // Revenue by checkout date, paid only
+      // Revenue by checkout date, finalized bookings only (service fee = platform commission)
       const { data: paidBookings } = await supabaseAdmin
         .from("bookings")
-        .select("property_id, total_price, checkout, checkin")
+        .select("property_id, service_fee, checkout, checkin")
         .eq("is_deleted", false)
-        .eq("payment_status", "paid");
+        .in("status", ["completed", "checked_out"])
+        .neq("payment_status", "refunded");
 
       // Aggregate by property
       const propMap: Record<string, { bookings: number; revenue: number }> = {};
@@ -453,7 +458,7 @@ export const analyticsController = {
         if (sinceDate && dateRef < sinceDate) continue;
         const pid = b.property_id;
         if (!propMap[pid]) propMap[pid] = { bookings: 0, revenue: 0 };
-        propMap[pid].revenue += parseFloat(b.total_price) || 0;
+        propMap[pid].revenue += parseFloat(b.service_fee) || 0;
       }
 
       // Get top 10 property IDs

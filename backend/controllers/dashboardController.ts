@@ -57,29 +57,31 @@ export const getDashboardStats = async (_req: Request, res: Response) => {
       .gte("created_at", startOfLastMonth)
       .lt("created_at", startOfThisMonth);
 
-    // ── 3. Revenue This Month vs Last Month ──
+    // ── 3. Revenue This Month vs Last Month (service fee = platform commission) ──
     const { data: revenueThisMonthRows } = await supabaseAdmin
       .from("bookings")
-      .select("total_price")
+      .select("service_fee")
       .eq("is_deleted", false)
-      .in("payment_status", ["paid"])
+      .in("status", ["completed", "checked_out"])
+      .neq("payment_status", "refunded")
       .gte("created_at", startOfThisMonth);
 
     const revenueThisMonth = (revenueThisMonthRows || []).reduce(
-      (sum: number, r: any) => sum + (parseFloat(r.total_price) || 0),
+      (sum: number, r: any) => sum + (parseFloat(r.service_fee) || 0),
       0
     );
 
     const { data: revenueLastMonthRows } = await supabaseAdmin
       .from("bookings")
-      .select("total_price")
+      .select("service_fee")
       .eq("is_deleted", false)
-      .in("payment_status", ["paid"])
+      .in("status", ["completed", "checked_out"])
+      .neq("payment_status", "refunded")
       .gte("created_at", startOfLastMonth)
       .lt("created_at", startOfThisMonth);
 
     const revenueLastMonth = (revenueLastMonthRows || []).reduce(
-      (sum: number, r: any) => sum + (parseFloat(r.total_price) || 0),
+      (sum: number, r: any) => sum + (parseFloat(r.service_fee) || 0),
       0
     );
 
@@ -112,9 +114,10 @@ export const getDashboardStats = async (_req: Request, res: Response) => {
     // Top performers computed for the year-to-date
     const { data: topRevenueRows } = await supabaseAdmin
       .from("bookings")
-      .select("property_id, total_price")
+      .select("property_id, service_fee")
       .eq("is_deleted", false)
-      .in("payment_status", ["paid"])
+      .in("status", ["completed", "checked_out"])
+      .neq("payment_status", "refunded")
       .gte("created_at", startOfYear);
 
     // Aggregate per property
@@ -122,7 +125,7 @@ export const getDashboardStats = async (_req: Request, res: Response) => {
     const bookingCountMap: Record<string, number> = {};
     (topRevenueRows || []).forEach((b: any) => {
       const pid = b.property_id;
-      revenueMap[pid] = (revenueMap[pid] || 0) + (parseFloat(b.total_price) || 0);
+      revenueMap[pid] = (revenueMap[pid] || 0) + (parseFloat(b.service_fee) || 0);
       bookingCountMap[pid] = (bookingCountMap[pid] || 0) + 1;
     });
 
