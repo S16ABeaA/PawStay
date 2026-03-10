@@ -21,6 +21,7 @@ import supportRoutes from './routes/supportRoute';
 import analyticsRoutes from './routes/analyticsRoute';
 import dashboardRoute from './routes/dashboardRoute';
 import settlementRoutes from './routes/settlementRoute';
+import aiRoutes from './routes/aiRoute';
  
 dotenv.config({ path: '../.env' });
 dotenv.config();
@@ -105,6 +106,7 @@ app.use('/api/notifications', notificationRoutes);
 app.use('/api/support', supportRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/settlements', settlementRoutes);
+app.use('/api/ai', aiRoutes);
 
 // Simple health/root route
 app.get('/', (_req, res) => {

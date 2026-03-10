@@ -67,7 +67,7 @@ export const propertyController = {
 
       // Call service
       const properties = await getProperties(filters);
-      //console.log("[searchProperties] Retrieved properties:", properties);
+      console.log("[searchProperties] Retrieved properties:", properties);
       // Return JSON response
       res.status(200).json({ properties });
     } catch (err: any) {
