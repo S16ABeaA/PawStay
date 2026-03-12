@@ -23,7 +23,6 @@ const StepIndicator = ({
   establishmentSubstep = 1,
   propertySetupCompleted = 0,
   propertySetupTotal = 5,
-  photosCompleted = false,
   pricingCalendarCompleted = 0,
   pricingCalendarTotal = 8,
 }: StepIndicatorProps) => {
@@ -32,14 +31,9 @@ const StepIndicator = ({
       {steps.map((step, index) => {
         const isEstablishmentInfo = step.title === "Establishment Info";
         const isPropertySetup = step.title === "Property Setup";
-        const isPhotos = step.title === "Photos";
         const isPricingCalendar = step.title === "Pricing and Calendar";
         const establishmentFirstComplete = currentStep === 1 || establishmentSubstep >= 2 || currentStep > 1;
         const establishmentSecondComplete = establishmentSubstep >= 2 || currentStep > 1;
-        const establishmentComplete = currentStep > 1;
-        const propertySetupComplete = currentStep > 2 || (currentStep === 2 && propertySetupCompleted >= propertySetupTotal);
-        const photosComplete = currentStep > 3;
-        const pricingCalendarComplete = currentStep > 4 || (currentStep === 4 && pricingCalendarCompleted >= pricingCalendarTotal);
         const isStepComplete = currentStep > step.number;
         const isStepActive = isEstablishmentInfo
           ? currentStep === 1
@@ -73,7 +67,6 @@ const StepIndicator = ({
                 <span
                   className={cn(
                     "text-xs mt-2 font-medium hidden sm:block whitespace-nowrap",
-                    step.number === 6 && "ml-3",
                     currentStep >= step.number ? "text-foreground" : "text-muted-foreground"
                   )}
                 >

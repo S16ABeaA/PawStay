@@ -16,7 +16,7 @@ import About from "./pages/About";
 import SignIn from "./pages/SignIn";
 import CheckEmail from "./pages/CheckEmail";
 import ForgotPassword from "./pages/ForgotPassword";
-import ListProperty from "./pages/ListProperty";
+import ListProperty from "@/pages/user/ListProperty";
 import Favorites from "./pages/Favorites";
 import Booking from "./pages/Booking";
 import SearchResults from "./pages/SearchResults";
