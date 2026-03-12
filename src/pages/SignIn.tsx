@@ -151,6 +151,12 @@ const SignIn = () => {
       //   return;
       // }
 
+      // Regular customers
+      toast({
+        title: "Welcome! 🎉",
+        description: `Logged in as ${result.user.email}`,
+      });
+
       localStorage.setItem("pawstay.authenticated", "true");
       console.log("User role:", result.user.role);
 

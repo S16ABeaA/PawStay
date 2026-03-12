@@ -22,7 +22,7 @@ const CTASection = () => {
               </h2>
               <p className="text-lg text-muted-foreground mb-8">
                 Join thousands of fur parents who trust PawStay for their furry family members. 
-                Book your first stay today and get 20% off!
+                Book your first stay today with our verified providers!
               </p>
 
               <div className="flex flex-col sm:flex-row gap-3 mb-8">
@@ -38,7 +38,7 @@ const CTASection = () => {
               <div className="flex flex-wrap gap-6">
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <Shield className="h-5 w-5 text-success" />
-                  <span>Verified Hotels</span>
+                  <span>Verified Providers</span>
                 </div>
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <Clock className="h-5 w-5 text-accent" />
@@ -67,7 +67,7 @@ const CTASection = () => {
                     </div>
                     <div>
                       <p className="font-semibold text-foreground">100% Verified</p>
-                      <p className="text-sm text-muted-foreground">All hotels inspected</p>
+                      <p className="text-sm text-muted-foreground">All locations inspected</p>
                     </div>
                   </div>
                 </div>

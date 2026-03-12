@@ -141,8 +141,8 @@ const SuperAdminSettings = () => {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="font-medium text-white">High-Value Bookings</p>
-                  <p className="text-sm text-[#808080]">
-                    Alert for bookings over $500
+                  <p className="text-sm text-slate-400">
+                    Alert for bookings over ₱500
                   </p>
                 </div>
                 <Switch defaultChecked />

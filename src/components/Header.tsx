@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Menu, X, PawPrint, User, Heart, HelpCircle } from "lucide-react";
+import { Menu, X, PawPrint, User, Heart, Bell, HelpCircle } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { authApi } from "@/services/authApi";
+import NotificationBell from "@/components/NotificationBell";
 
 const Header = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -49,10 +50,8 @@ const Header = () => {
     <header className="sticky top-0 z-50 w-full border-b border-border/50 bg-background/80 backdrop-blur-lg">
       <div className="container flex h-16 items-center justify-between">
         {/* Logo */}
-        <Link to="/" className="flex items-center gap-2 group">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-hero shadow-soft group-hover:shadow-glow transition-shadow">
-            <PawPrint className="h-5 w-5 text-primary-foreground" />
-          </div>
+        <Link to="/" className="flex items-center gap-1 group">
+          <img src="/PawStay%20Logo.jpg" alt="PawStay" className="h-10 w-10 rounded-xl object-cover" />
           <span className="font-display text-xl font-bold text-foreground">
             PawStay
           </span>
@@ -72,7 +71,7 @@ const Header = () => {
           <Link to="/about" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
             About
           </Link>
-          <Link to="/help-center" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1">
+          <Link to="/faq" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1">
             <HelpCircle className="h-4 w-4" />
             Help
           </Link>
@@ -82,6 +81,7 @@ const Header = () => {
        {/* Desktop Actions */}
         {isLoggedIn && (
           <div className="hidden md:flex items-center gap-3">
+            <NotificationBell />
             <Link to="/favorites">
               <Button variant="ghost" size="icon" className="text-muted-foreground">
                 <Heart className="h-5 w-5" />
@@ -140,10 +140,16 @@ const Header = () => {
             <Link to="/grooming" className="py-2 text-sm font-medium text-foreground" onClick={() => setIsMenuOpen(false)}>Grooming</Link>
             <Link to="/veterinary" className="py-2 text-sm font-medium text-foreground" onClick={() => setIsMenuOpen(false)}>Veterinary</Link>
             <Link to="/about" className="py-2 text-sm font-medium text-foreground" onClick={() => setIsMenuOpen(false)}>About</Link>
-            <Link to="/help-center" className="py-2 text-sm font-medium text-foreground flex items-center gap-1" onClick={() => setIsMenuOpen(false)}>
+            <Link to="/faq" className="py-2 text-sm font-medium text-foreground flex items-center gap-1" onClick={() => setIsMenuOpen(false)}>
               <HelpCircle className="h-4 w-4" /> Help Center
             </Link>
             <hr className="border-border my-2" />
+            {isLoggedIn && (
+              <Link to="/notifications" className="py-2 text-sm font-medium text-foreground flex items-center gap-2" onClick={() => setIsMenuOpen(false)}>
+                <Bell className="h-4 w-4" />
+                Notifications
+              </Link>
+            )}
             {isLoggedIn ? (
               <Link to="/profile" onClick={() => setIsMenuOpen(false)}>
                 <Button variant="outline" className="w-full gap-2">

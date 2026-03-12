@@ -1,8 +1,9 @@
 import { ReactNode, useEffect, useState, useRef } from "react";
 import SuperAdminSidebar from "./SuperAdminSidebar";
-import { Bell, Search, ChevronDown, LogOut, User, ChevronRight, Clock } from "lucide-react";
+import { Search, ChevronDown, LogOut, User, ChevronRight, Clock } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import NotificationBell from "@/components/NotificationBell";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   DropdownMenu,
@@ -29,6 +30,7 @@ const BREADCRUMB_MAP: Record<string, string> = {
   "/superadmin/properties": "Properties",
   "/superadmin/analytics": "Analytics",
   "/superadmin/revenue": "Revenue",
+  "/superadmin/amenities": "Amenities",
   "/superadmin/support": "Support",
   "/superadmin/settings": "Settings",
 };
@@ -145,14 +147,7 @@ const SuperAdminLayout = ({ children, title, subtitle }: SuperAdminLayoutProps) 
           <div className="w-px h-6 bg-white/[0.06] hidden lg:block" />
 
           {/* Notification bell */}
-          <Button
-            variant="ghost"
-            size="icon"
-            className="relative h-9 w-9 rounded-lg text-[#808080] hover:text-white hover:bg-white/[0.05]"
-          >
-            <Bell className="h-[18px] w-[18px]" />
-            <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-[#ffa31a] ring-2 ring-[#1b1b1b] sa-pulse-dot" />
-          </Button>
+          <NotificationBell />
 
           {/* User avatar dropdown */}
           <DropdownMenu>

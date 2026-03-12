@@ -30,11 +30,21 @@ import {
   Heart,
   Calendar,
   PawPrint,
-  ChevronRight
+  ChevronRight,
+  Sun,
+  Moon
 } from "lucide-react";
+import { useTheme } from "next-themes";
 import { useToast } from "@/hooks/use-toast";
 
 import { authApi } from "../services/authApi";
+
+const formatPhoneInput = (value: string) => value.replace(/[^\d\s\-+()]/g, "");
+const isValidPhoneNumber = (phone: string) => {
+  if (!phone) return true; // empty is ok (optional)
+  const digitsOnly = phone.replace(/\D/g, "");
+  return digitsOnly.length >= 7 && digitsOnly.length <= 15;
+};
 import { petApi } from "@/services/petApi";
 
 type ProfilePet = {
@@ -48,6 +58,27 @@ type ProfilePet = {
 const Profile = () => {
   const { toast } = useToast();
   const navigate = useNavigate();
+  const { theme, setTheme } = useTheme();
+
+  // Notification preferences (persisted in localStorage)
+  const [emailNotif, setEmailNotif] = useState(() => {
+    const saved = localStorage.getItem("pawstay.pref.emailNotif");
+    return saved !== null ? saved === "true" : true;
+  });
+  const [smsNotif, setSmsNotif] = useState(() => {
+    const saved = localStorage.getItem("pawstay.pref.smsNotif");
+    return saved !== null ? saved === "true" : false;
+  });
+  const [marketingNotif, setMarketingNotif] = useState(() => {
+    const saved = localStorage.getItem("pawstay.pref.marketingNotif");
+    return saved !== null ? saved === "true" : true;
+  });
+
+  const togglePref = (key: string, value: boolean, setter: (v: boolean) => void) => {
+    setter(value);
+    localStorage.setItem(`pawstay.pref.${key}`, String(value));
+    toast({ title: "Preference Updated", description: `Setting has been ${value ? "enabled" : "disabled"}.` });
+  };
   
   // Simulated user data - in real app, this would come from auth context
   // const [user, setUser] = useState({
@@ -242,6 +273,7 @@ const Profile = () => {
       toast({
         title: "Error",
         description: err?.error || err?.message || "Failed to update profile. Please try again.",
+        variant: "destructive",
       });
     }
   };
@@ -270,6 +302,7 @@ const Profile = () => {
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [isAvatarDialogOpen, setIsAvatarDialogOpen] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [isViewAvatarOpen, setIsViewAvatarOpen] = useState(false);
 
   const handleAvatarSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -340,7 +373,10 @@ const Profile = () => {
           {/* Profile Header */}
           <div className="flex flex-col md:flex-row items-start md:items-center gap-6 mb-8">
             <div className="relative">
-              <Avatar className="h-24 w-24 border-4 border-background shadow-elevated">
+              <Avatar
+                className="h-24 w-24 border-4 border-background shadow-elevated cursor-pointer hover:opacity-80 transition-opacity"
+                onClick={() => setIsViewAvatarOpen(true)}
+              >
                 <AvatarImage src={user.avatar} />
                 <AvatarFallback className="bg-gradient-hero text-2xl text-white">
                   {user.firstName[0]}{user.lastName[0]}
@@ -714,26 +750,58 @@ const Profile = () => {
                   <CardTitle className="text-base">Account Settings</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
+                  {/* Dark / Light Mode */}
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      {theme === "dark" ? (
+                        <Moon className="h-4 w-4 text-primary" />
+                      ) : (
+                        <Sun className="h-4 w-4 text-primary" />
+                      )}
+                      <div>
+                        <p className="text-sm font-medium">Dark Mode</p>
+                        <p className="text-xs text-muted-foreground">
+                          {theme === "dark" ? "Switch to light theme" : "Switch to dark theme"}
+                        </p>
+                      </div>
+                    </div>
+                    <Switch
+                      checked={theme === "dark"}
+                      onCheckedChange={(checked) => setTheme(checked ? "dark" : "light")}
+                    />
+                  </div>
+
+                  <Separator />
+
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-sm font-medium">Email Notifications</p>
                       <p className="text-xs text-muted-foreground">Receive booking updates</p>
                     </div>
-                    <Switch defaultChecked />
+                    <Switch
+                      checked={emailNotif}
+                      onCheckedChange={(v) => togglePref("emailNotif", v, setEmailNotif)}
+                    />
                   </div>
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-sm font-medium">SMS Notifications</p>
                       <p className="text-xs text-muted-foreground">Get text reminders</p>
                     </div>
-                    <Switch />
+                    <Switch
+                      checked={smsNotif}
+                      onCheckedChange={(v) => togglePref("smsNotif", v, setSmsNotif)}
+                    />
                   </div>
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-sm font-medium">Marketing Emails</p>
                       <p className="text-xs text-muted-foreground">Deals and promotions</p>
                     </div>
-                    <Switch defaultChecked />
+                    <Switch
+                      checked={marketingNotif}
+                      onCheckedChange={(v) => togglePref("marketingNotif", v, setMarketingNotif)}
+                    />
                   </div>
                 </CardContent>
               </Card>
@@ -768,6 +836,30 @@ const Profile = () => {
               {isUploading ? "Uploading..." : "Save"}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* View Avatar Full-Size Dialog */}
+      <Dialog open={isViewAvatarOpen} onOpenChange={setIsViewAvatarOpen}>
+        <DialogContent className="sm:max-w-lg flex flex-col items-center">
+          <DialogHeader>
+            <DialogTitle>Profile Picture</DialogTitle>
+          </DialogHeader>
+          <div className="flex justify-center py-4">
+            {user?.avatar ? (
+              <img
+                src={user.avatar}
+                alt={`${user.firstName} ${user.lastName}`}
+                className="max-h-[60vh] max-w-full rounded-xl object-contain"
+              />
+            ) : (
+              <Avatar className="h-48 w-48 border-4 border-background shadow-elevated">
+                <AvatarFallback className="bg-gradient-hero text-5xl text-white">
+                  {user?.firstName?.[0]}{user?.lastName?.[0]}
+                </AvatarFallback>
+              </Avatar>
+            )}
+          </div>
         </DialogContent>
       </Dialog>
     </div>

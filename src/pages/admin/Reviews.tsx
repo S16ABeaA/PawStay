@@ -11,95 +11,76 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Star, MessageSquare, ThumbsUp, Flag, Send } from "lucide-react";
-import { useState } from "react";
+import { Star, MessageSquare, ThumbsUp, Flag, Send, Loader2 } from "lucide-react";
+import { useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
-
-const initialReviews = [
-  {
-    id: 1,
-    author: "John Smith",
-    pet: "Max",
-    rating: 5,
-    date: "2026-01-28",
-    text: "Absolutely amazing service! Max had the best time and came back so happy. The staff was incredibly attentive and sent daily updates.",
-    replied: true,
-    reply: "Thank you so much, John! We loved having Max with us!",
-    service: "Boarding",
-  },
-  {
-    id: 2,
-    author: "Sarah Johnson",
-    pet: "Bella",
-    rating: 4,
-    date: "2026-01-27",
-    text: "Great grooming service. Bella looks beautiful! Only giving 4 stars because the wait was a bit long.",
-    replied: false,
-    reply: "",
-    service: "Grooming",
-  },
-  {
-    id: 3,
-    author: "Mike Brown",
-    pet: "Charlie",
-    rating: 5,
-    date: "2026-01-25",
-    text: "This is our go-to place for Charlie. The luxury suite is worth every penny. Love the webcam feature!",
-    replied: true,
-    reply: "Charlie is always welcome! Thank you for your loyalty!",
-    service: "Boarding",
-  },
-  {
-    id: 4,
-    author: "Emily Davis",
-    pet: "Luna",
-    rating: 3,
-    date: "2026-01-24",
-    text: "Service was okay. Luna seemed a bit stressed when we picked her up. Would appreciate more communication.",
-    replied: false,
-    reply: "",
-    service: "Daycare",
-  },
-  {
-    id: 5,
-    author: "Alex Wilson",
-    pet: "Cooper",
-    rating: 5,
-    date: "2026-01-22",
-    text: "Outstanding care for Cooper! The team went above and beyond. Will definitely be back!",
-    replied: true,
-    reply: "We adore Cooper! See you again soon!",
-    service: "Boarding",
-  },
-];
+import { reviewsApi, OwnerReview } from "@/services/reviewsApi";
+import { useAdminProperty } from "@/hooks/useAdminProperty";
 
 const AdminReviews = () => {
-  const [reviews, setReviews] = useState(initialReviews);
+  const [reviews, setReviews] = useState<OwnerReview[]>([]);
+  const [loading, setLoading] = useState(true);
   const [replyDialogOpen, setReplyDialogOpen] = useState(false);
-  const [selectedReview, setSelectedReview] = useState<typeof initialReviews[0] | null>(null);
+  const [selectedReview, setSelectedReview] = useState<OwnerReview | null>(null);
   const [replyText, setReplyText] = useState("");
+  const [replying, setReplying] = useState(false);
   const { toast } = useToast();
+  const { selectedPropertyId, loading: propLoading } = useAdminProperty();
 
-  const averageRating = (reviews.reduce((acc, r) => acc + r.rating, 0) / reviews.length).toFixed(1);
-  const pendingReplies = reviews.filter(r => !r.replied).length;
+  const averageRating = reviews.length ? (reviews.reduce((acc, r) => acc + Number(r.rating || 0), 0) / reviews.length).toFixed(1) : "0.0";
+  const pendingReplies = reviews.filter((r) => !r.replied).length;
 
-  const handleReply = (review: typeof initialReviews[0]) => {
+  // Fetch reviews from backend for selected property
+  useEffect(() => {
+    let cancelled = false;
+
+    // Clear stale reviews when property changes
+    setReviews([]);
+
+    if (propLoading) return;
+
+    const fetchReviews = async () => {
+      try {
+        setLoading(true);
+        const data = await reviewsApi.myReviews(selectedPropertyId);
+        if (cancelled) return;
+        setReviews(data.reviews ?? []);
+      } catch (err) {
+        console.error('Failed to load reviews', err);
+        if (!cancelled) toast({ title: "Error", description: "Failed to load reviews.", variant: "destructive" });
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+
+    fetchReviews();
+
+    return () => { cancelled = true; };
+  }, [selectedPropertyId, propLoading]);
+
+  const handleReply = (review: OwnerReview) => {
     setSelectedReview(review);
     setReplyText("");
     setReplyDialogOpen(true);
   };
 
-  const submitReply = () => {
-    if (selectedReview && replyText.trim()) {
-      setReviews(reviews.map(r => 
-        r.id === selectedReview.id ? { ...r, replied: true, reply: replyText } : r
-      ));
-      toast({ title: "Reply Sent", description: "Your reply has been posted." });
+  const submitReply = async () => {
+    if (!selectedReview || !replyText.trim()) return;
+    setReplying(true);
+    try {
+      await reviewsApi.replyToReview(selectedReview.id, replyText);
+      setReviews((prev) => prev.map((r) => (r.id === selectedReview.id ? { ...r, replied: true, reply: replyText } : r)));
+      toast({ title: 'Reply Sent', description: 'Your reply has been posted.' });
       setReplyDialogOpen(false);
+    } catch (err: any) {
+      console.error('Reply failed', err);
+      toast({ title: 'Error', description: err?.message || 'Failed to send reply', variant: 'destructive' });
+    } finally {
+      setReplying(false);
     }
   };
 
-  const handleFlag = (id: number) => {
+  const handleFlag = (id: string) => {
     toast({ title: "Review Flagged", description: "This review has been flagged for moderation." });
   };
 
@@ -116,7 +97,7 @@ const AdminReviews = () => {
     }
   };
 
-  const ReviewCard = ({ review }: { review: typeof initialReviews[0] }) => (
+  const ReviewCard = ({ review }: { review: OwnerReview }) => (
     <Card key={review.id}>
       <CardContent className="p-5">
         <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
@@ -178,6 +159,13 @@ const AdminReviews = () => {
 
   return (
     <AdminLayout title="Reviews" subtitle="Monitor and respond to customer feedback">
+      {loading ? (
+        <div className="flex flex-col items-center justify-center gap-3 py-16">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+          <span className="text-sm text-muted-foreground">Loading reviews...</span>
+        </div>
+      ) : (
+      <>
       {/* Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
         <Card>
@@ -268,16 +256,18 @@ const AdminReviews = () => {
                 rows={4}
               />
               <div className="flex gap-2 justify-end">
-                <Button variant="outline" onClick={() => setReplyDialogOpen(false)}>Cancel</Button>
-                <Button onClick={submitReply} className="gap-2">
-                  <Send className="h-4 w-4" />
-                  Send Reply
+                <Button variant="outline" onClick={() => setReplyDialogOpen(false)} disabled={replying}>Cancel</Button>
+                <Button onClick={submitReply} className="gap-2" disabled={replying || !replyText.trim()}>
+                  {replying ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                  {replying ? "Sending…" : "Send Reply"}
                 </Button>
               </div>
             </div>
           )}
         </DialogContent>
       </Dialog>
+      </>
+      )}
     </AdminLayout>
   );
 };

@@ -4,6 +4,7 @@ import Footer from "@/components/Footer";
 import HotelCard from "@/components/HotelCard";
 import { Button } from "@/components/ui/button";
 import { Heart, ArrowRight, Home, Scissors, Stethoscope } from "lucide-react";
+import { PetLoader } from "@/components/ui/PetLoader";
 import { favoritesApi } from "../services/favoritesApi";
 import { useState, useEffect } from "react";
 
@@ -91,12 +92,8 @@ const Favorites = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center gap-6 bg-background">
-        <div className="relative w-40 h-10 overflow-hidden">
-          <span className="absolute left-0 animate-move-right text-4xl">🐱</span>
-          <span className="absolute left-0 animate-move-right text-4xl animation-delay-500">🐶</span>
-        </div>
-        <p className="text-lg text-muted-foreground animate-pulse">Loading favorites...</p>
+      <div className="min-h-screen flex flex-col items-center justify-center bg-background">
+        <PetLoader text="Loading favorites..." />
       </div>
     );
   }

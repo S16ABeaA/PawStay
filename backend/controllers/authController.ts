@@ -373,7 +373,7 @@ export const authController = {
           phone: updatedProfile.phone || "",
           address: updatedProfile.address || "",
           avatar_url: updatedProfile.avatar_url || "",
-          email: updatedProfile.email || user.email,
+          email: user.email,
         },
       });
     } catch (err: any) {
