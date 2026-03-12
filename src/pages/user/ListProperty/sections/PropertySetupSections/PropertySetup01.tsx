@@ -30,7 +30,7 @@ const PropertySetup01 = ({ formData, onChange, hasBoarding, hasGrooming }: Props
             <h3 className="text-lg font-medium mb-6">Pet Types</h3>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               {[
-                { name: "Dogs", icon: "🐶", sizes: ["Small", "Medium", "Large"] },
+                { name: "Dogs", icon: "🐶", sizes: ["Small", "Medium", "Large", "Giant"] },
                 { name: "Cats", icon: "🐱", sizes: null },
                 { name: "Exotic Pets", icon: "🐦", sizes: null }
               ].map((type) => {
