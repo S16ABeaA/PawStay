@@ -73,9 +73,20 @@ export const getGeminiToolSchema = (toolName: string): Record<string, unknown> =
           },
           service_type: {
             type: SchemaType.STRING,
-            description: "Service category: boarding, grooming, walking, sitting, veterinary",
+            description: "Service category: boarding, grooming, veterinary",
           },
         },
+      };
+    case "get_review_count":
+      return {
+        type: SchemaType.OBJECT,
+        properties: {
+          propertyId: {
+            type: SchemaType.STRING,
+            description: "Property ID to fetch review stats for",
+          },
+        },
+        required: ["propertyId"],
       };
     case "create_booking":
       return {
@@ -144,8 +155,9 @@ export const geminiAgentLoop = async (
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error("GEMINI_API_KEY not configured");
 
-  const modelName = process.env.GEMINI_MODEL || "gemini-2.5-flash";
-
+  // const modelName = process.env.GEMINI_MODEL || "gemini-2.5-flash";
+  const modelName = process.env.GEMINI_MODEL || "gemini-3.1-flash-lite-preview";
+  
   // Initialise Gemini client
   const genAI = new GoogleGenerativeAI(apiKey);
   const model = genAI.getGenerativeModel({

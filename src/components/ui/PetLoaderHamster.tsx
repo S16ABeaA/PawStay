@@ -7,9 +7,10 @@ import React, { useState, useEffect } from 'react';
  */
 interface PetLoaderProps {
   onComplete?: () => void;
+  dataLoaded?: boolean;
 }
 
-const PetLoader: React.FC<PetLoaderProps> = ({ onComplete }) => {
+const PetLoader: React.FC<PetLoaderProps> = ({ onComplete, dataLoaded = false }) => {
   const [progress, setProgress] = useState(0);
   const [isFadingOut, setIsFadingOut] = useState(false);
   const [loadingText, setLoadingText] = useState("Warming up the wheel");
@@ -18,14 +19,20 @@ const PetLoader: React.FC<PetLoaderProps> = ({ onComplete }) => {
   useEffect(() => {
     const loadingInterval = setInterval(() => {
       setProgress((prev) => {
-        const step = prev > 85 ? Math.random() * 1.2 : Math.random() * 2.5 + 0.5;
+        const step = dataLoaded
+          ? (prev > 90 ? Math.random() * 2 + 1.5 : Math.random() * 5 + 2)
+          : (prev > 85 ? Math.random() * 1.2 : Math.random() * 2.5 + 0.5);
         const next = prev + step;
         
-        // Update playful text based on progress
-        if (next > 25 && next < 50) setLoadingText("Generating server electricity");
-        if (next >= 50 && next < 80) setLoadingText("Reaching terminal velocity");
-        if (next >= 80 && next < 100) setLoadingText("Power level maximum...");
-        if (next >= 100) setLoadingText("Systems fully powered!");
+        // Update status text to match PawStay tone
+        if (next > 25 && next < 50) setLoadingText("Gathering nearby pet services");
+        if (next >= 50 && next < 80) setLoadingText("Confirming availability and details");
+        if (next >= 80 && next < 100) setLoadingText("Almost ready — finalizing results");
+        if (next >= 100) setLoadingText("Done — preparing your results");
+
+        if (!dataLoaded) {
+          return Math.min(next, 95);
+        }
 
         if (next >= 100) {
           clearInterval(loadingInterval);
@@ -39,7 +46,7 @@ const PetLoader: React.FC<PetLoaderProps> = ({ onComplete }) => {
       });
     }, 60);
     return () => clearInterval(loadingInterval);
-  }, [onComplete]);
+  }, [onComplete, dataLoaded]);
 
   return (
     <div 
@@ -201,8 +208,8 @@ const PetLoader: React.FC<PetLoaderProps> = ({ onComplete }) => {
           {progress >= 100 ? (
             <span className="text-emerald-500 transition-colors duration-500">Power Generated</span>
           ) : (
-            <span className="flex items-center gap-2">
-              {loadingText}
+            <span className="flex items-center gap-2 min-w-0">
+              <span className="truncate whitespace-nowrap">{loadingText}</span>
               <span className="flex gap-[2px]">
                 <span className="w-1 h-1 bg-orange-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></span>
                 <span className="w-1 h-1 bg-orange-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></span>
@@ -235,56 +242,4 @@ const PetLoader: React.FC<PetLoaderProps> = ({ onComplete }) => {
   );
 };
 
-// --- MAIN APPLICATION DEMO ---
-
-export default function App() {
-  const [isLoading, setIsLoading] = useState(true);
-  const [isReadyToReveal, setIsReadyToReveal] = useState(false);
-
-  const handleLoadingFinished = () => {
-    setIsReadyToReveal(true);
-    // Remove from DOM strictly after CSS fade transition completes
-    setTimeout(() => setIsLoading(false), 800);
-  };
-
-  return (
-    <div className="min-h-screen bg-white text-slate-800 overflow-x-hidden font-sans selection:bg-emerald-100 selection:text-emerald-900">
-      
-      {/* Loading Overlay */}
-      {isLoading && <PetLoader onComplete={handleLoadingFinished} />}
-
-      {/* Main Content Reveal */}
-      <main 
-        className={`px-6 py-24 max-w-6xl mx-auto transition-all duration-[1000ms] cubic-bezier(0.16, 1, 0.3, 1) ${
-          isReadyToReveal ? 'opacity-100 translate-y-0 filter-none' : 'opacity-0 translate-y-8 blur-[4px]'
-        }`}
-      >
-        <header className="mb-16 max-w-2xl">
-          <div className="inline-block px-3 py-1 mb-6 rounded-full bg-emerald-50 border border-emerald-100 text-emerald-600 text-xs font-bold tracking-widest uppercase">
-            System Online
-          </div>
-          <h1 className="text-4xl md:text-5xl font-extrabold text-slate-900 mb-6 tracking-tight leading-tight">
-            Data Ready to Fetch
-          </h1>
-          <p className="text-lg text-slate-500 leading-relaxed">
-            The dependencies have successfully been juggled into place. Notice the smooth exit transition of the playful loader before revealing the content.
-          </p>
-        </header>
-        
-        {/* Clean, Linear-style Grid Layout */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {[1, 2, 3, 4, 5, 6].map((item) => (
-            <div key={item} className="group bg-white rounded-2xl p-6 shadow-[0_2px_10px_rgb(0,0,0,0.02)] border border-slate-100 hover:border-slate-200 hover:shadow-[0_8px_30px_rgb(0,0,0,0.06)] transition-all duration-300 cursor-pointer">
-              <div className="w-10 h-10 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center mb-6 group-hover:bg-emerald-50 group-hover:border-emerald-100 transition-colors">
-                <div className="w-4 h-4 rounded-full bg-slate-200 group-hover:bg-emerald-400 transition-colors"></div>
-              </div>
-              <div className="h-5 bg-slate-800 rounded mb-3 w-[60%] opacity-90"></div>
-              <div className="h-3 bg-slate-100 rounded mb-2 w-full"></div>
-              <div className={`h-3 bg-slate-100 rounded w-[${item % 2 === 0 ? '70%' : '85%'}]`}></div>
-            </div>
-          ))}
-        </div>
-      </main>
-    </div>
-  );
-}
+export default PetLoader;

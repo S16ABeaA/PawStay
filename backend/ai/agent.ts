@@ -30,6 +30,7 @@ import {
 
 const SUPPORTED_TOOLS: Set<string> = new Set<string>([
   "search_services",
+  "get_review_count",
   "create_booking",
   "get_user_bookings",
   "cancel_booking",
@@ -119,10 +120,15 @@ export class PetPlatformAgent {
         executeTool,
       );
 
+      // Pass the reply through as-is — the LLM formats property names as
+      // markdown links per the system prompt, and the frontend markdown
+      // renderer is responsible for turning them into clickable hyperlinks.
+      const reply = result.text;
+
       // Persist the assistant reply in session memory
       sessionMemory.append(sessionId, {
         role: "assistant",
-        content: result.text,
+        content: reply,
       });
 
       // Build usedTools from the activity log
@@ -132,7 +138,7 @@ export class PetPlatformAgent {
       }));
 
       return {
-        reply: result.text,
+        reply,
         usedTools,
         toolActivity: result.toolActivity.map((a) => ({
           tool: a.tool,
@@ -196,6 +202,12 @@ export class PetPlatformAgent {
         return {
           location: asString(args.location),
           service_type: asString(args.service_type),
+        };
+      case "get_review_count":
+        return {
+          propertyId:
+            asString(args.propertyId) ||
+            asString(args.property_id),
         };
       case "create_booking":
         return {

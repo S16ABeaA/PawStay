@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { aiChatApi } from "@/services/aiChatApi";
-import { Send, Bot, User } from "lucide-react";
+import { Send, Bot, User, ExternalLink } from "lucide-react";
+import ReactMarkdown from "react-markdown";
 
 type ChatRow = {
   role: "user" | "assistant" | "tool-activity";
@@ -107,7 +108,29 @@ export const AiChatPanel = ({ className }: AiChatPanelProps) => {
                   <Bot size={14} />
                 </div>
                 <div className="max-w-[80%] whitespace-pre-wrap rounded-2xl px-3 py-2 bg-gray-100 text-gray-800 rounded-bl-sm">
-                  {row.content}
+                  <ReactMarkdown
+                    components={{
+                      a: ({ href, children, ...props }) => {
+                        const rawHref = href || "";
+                        const safeHref = rawHref.startsWith("https://localhost")
+                          ? rawHref.replace("https://localhost", "http://localhost")
+                          : rawHref;
+
+                        return (
+                          <a
+                            {...props}
+                            href={safeHref}
+                            className="font-semibold underline underline-offset-2 text-rose-700 hover:text-rose-800 inline-flex items-center gap-1"
+                          >
+                            <span>{children}</span>
+                            <ExternalLink size={12} className="opacity-80" />
+                          </a>
+                        );
+                      },
+                    }}
+                  >
+                    {row.content}
+                  </ReactMarkdown>
                 </div>
               </>
             )}

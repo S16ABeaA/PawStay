@@ -3,6 +3,7 @@ import { createBookingTool } from "./createBooking";
 import { getProviderRevenueTool } from "./getProviderRevenue";
 import { getUserBookingsTool } from "./getUserBookings";
 import { searchServicesTool } from "./searchServices";
+import { getReviewCountTool } from "./getReviewCount";
 
 export const defaultTools = [
   searchServicesTool,
@@ -10,4 +11,5 @@ export const defaultTools = [
   getUserBookingsTool,
   cancelBookingTool,
   getProviderRevenueTool,
+  getReviewCountTool,
 ];
