@@ -1,6 +1,7 @@
 import AdminLayout from "@/components/admin/AdminLayout";
 import StatsCard from "@/components/admin/StatsCard";
 import { PropertyStatusNotification } from "@/components/admin/PropertyStatusNotification";
+import { TicketNotifications } from "@/components/admin/TicketNotifications";
 import { Calendar, DollarSign, Star, Users, TrendingUp, Clock, AlertCircle } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -147,6 +148,9 @@ const AdminDashboard = () => {
 
       {/* Property Status Notifications */}
       <PropertyStatusNotification />
+
+      {/* Ticket Notifications */}
+      <TicketNotifications />
 
       {/* Stats Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
