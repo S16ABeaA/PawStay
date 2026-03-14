@@ -609,3 +609,120 @@ export const deleteSettlement = async (req: Request, res: Response) => {
     return res.status(500).json({ error: "Failed to delete settlement.", details: err?.message || err });
   }
 };
+
+/**
+ * GET /api/settlements/proprietor/monthly-status
+ * Get current month's settlement status for the authenticated proprietor.
+ * Proprietors can check their own outstanding balances.
+ *
+ * Query params:
+ *   - propertyId (optional): specific property to check
+ *
+ * Returns:
+ *   - thisMonthGenerated
+ *   - thisMonthSettled
+ *   - thisMonthOutstanding
+ *   - properties: array of property details with their outstanding amounts
+ */
+export const getProprietorMonthlyStatus = async (req: Request, res: Response) => {
+  try {
+    const proprietorId = (req as any).user?.id;
+    const { propertyId } = req.query as Record<string, string>;
+
+    if (!proprietorId) {
+      return res.status(401).json({ error: "Unauthorized: proprietor ID required." });
+    }
+
+    // Get proprietor's properties
+    let propsQuery = supabaseAdmin
+      .from("properties")
+      .select("id, name")
+      .eq("owner_id", proprietorId)
+      .eq("is_deleted", false);
+
+    if (propertyId) {
+      propsQuery = propsQuery.eq("id", propertyId);
+    }
+
+    const { data: properties, error: propsErr } = await propsQuery;
+    if (propsErr) throw propsErr;
+
+    if (!properties || properties.length === 0) {
+      return res.json({
+        thisMonthGenerated: 0,
+        thisMonthSettled: 0,
+        thisMonthOutstanding: 0,
+        properties: [],
+        currency: "PHP",
+      });
+    }
+
+    const propIds = properties.map((p: any) => p.id);
+
+    // Current month boundaries
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+
+    // This month generated for proprietor's properties
+    const { data: monthGen, error: e1 } = await supabaseAdmin
+      .from("bookings")
+      .select("service_fee, property_id")
+      .eq("is_deleted", false)
+      .in("status", ["completed", "checked_out"])
+      .neq("payment_status", "refunded")
+      .gte("finalized_at", monthStart)
+      .in("property_id", propIds)
+      .limit(100000);
+    if (e1) throw e1;
+
+    const thisMonthGenerated = (monthGen ?? []).reduce(
+      (sum: number, b: any) => sum + (parseFloat(b.service_fee) || 0),
+      0
+    );
+
+    // This month settled for proprietor's properties
+    const { data: monthSett, error: e2 } = await supabaseAdmin
+      .from("proprietor_settlements")
+      .select("amount, property_id")
+      .eq("status", "completed")
+      .gte("settled_at", monthStart)
+      .in("property_id", propIds)
+      .limit(100000);
+    if (e2) throw e2;
+
+    const thisMonthSettled = (monthSett ?? []).reduce(
+      (sum: number, s: any) => sum + (parseFloat(s.amount) || 0),
+      0
+    );
+
+    // Build detailed property info with their outstanding amounts
+    const propertyDetails = properties.map((prop: any) => {
+      const propGen = (monthGen ?? [])
+        .filter((b: any) => b.property_id === prop.id)
+        .reduce((sum: number, b: any) => sum + (parseFloat(b.service_fee) || 0), 0);
+
+      const propSett = (monthSett ?? [])
+        .filter((s: any) => s.property_id === prop.id)
+        .reduce((sum: number, s: any) => sum + (parseFloat(s.amount) || 0), 0);
+
+      return {
+        propertyId: prop.id,
+        propertyName: prop.name,
+        generated: Math.round(propGen * 100) / 100,
+        settled: Math.round(propSett * 100) / 100,
+        outstanding: Math.round((propGen - propSett) * 100) / 100,
+      };
+    });
+
+    return res.json({
+      thisMonthGenerated: Math.round(thisMonthGenerated * 100) / 100,
+      thisMonthSettled: Math.round(thisMonthSettled * 100) / 100,
+      thisMonthOutstanding: Math.round((thisMonthGenerated - thisMonthSettled) * 100) / 100,
+      properties: propertyDetails,
+      currency: "PHP",
+    });
+  } catch (err: any) {
+    console.error("getProprietorMonthlyStatus error:", err);
+    return res.status(500).json({ error: "Failed to get monthly settlement status.", details: err?.message || err });
+  }
+};

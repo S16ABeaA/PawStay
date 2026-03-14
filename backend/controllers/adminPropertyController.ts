@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import { supabaseAdmin } from "../config/supabaseAdmin";
+import { notificationModel } from "../models/notificationModel";
 
 const BUCKET = "property-images";
 
@@ -379,12 +380,30 @@ export const adminPropertyController = {
         .update(updatePayload)
         .eq("id", id)
         .eq("is_deleted", false)
-        .select("id, name, status")
+        .select("id, name, status, owner_id")
         .single();
 
       if (error || !data) {
         console.error("updatePropertyStatus error:", error);
         return res.status(404).json({ error: "Property not found or update failed." });
+      }
+
+      // Create notification when property is approved
+      if (status === "approved") {
+        try {
+          await notificationModel.create({
+            user_id: data.owner_id,
+            type: "property_approved",
+            title: "Property Approved! 🎉",
+            message: `Your property "${data.name}" has been approved and is now live on PawStay.`,
+            link: `/admin/properties/${data.id}`,
+            reference_id: data.id,
+            reference_type: "property",
+          });
+        } catch (notifErr) {
+          console.warn("Failed to create notification for property approval:", notifErr);
+          // Don't fail the request if notification creation fails
+        }
       }
 
       const statusMessages: Record<string, string> = {

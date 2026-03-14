@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import { supabaseAdmin } from "../config/supabaseAdmin";
+import { notificationModel } from "../models/notificationModel";
 
 /* ─── helpers ─── */
 const generateTicketNumber = () => {
@@ -10,6 +11,23 @@ const generateTicketNumber = () => {
 };
 
 const priorityOrder: Record<string, number> = { Urgent: 0, High: 1, Medium: 2, Low: 3 };
+
+/** Get all super admin user IDs */
+const getSuperAdminIds = async (): Promise<string[]> => {
+  try {
+    const { data: admins, error } = await supabaseAdmin
+      .from("profiles")
+      .select("id")
+      .eq("role", "super_admin")
+      .eq("is_deleted", false);
+    
+    if (error) throw error;
+    return (admins ?? []).map((a: any) => a.id);
+  } catch (err) {
+    console.warn("Failed to get super admin IDs:", err);
+    return [];
+  }
+};
 
 /* ─── controller ─── */
 export const supportController = {
@@ -227,6 +245,35 @@ export const supportController = {
 
       if (mErr) throw mErr;
 
+      // Notify super admins about the new ticket
+      try {
+        const superAdminIds = await getSuperAdminIds();
+        const userProfile = await supabaseAdmin
+          .from("profiles")
+          .select("first_name, last_name")
+          .eq("id", user.id)
+          .single();
+        
+        const userName = userProfile.data
+          ? `${userProfile.data.first_name || ""} ${userProfile.data.last_name || ""}`.trim()
+          : "A user";
+
+        for (const adminId of superAdminIds) {
+          await notificationModel.create({
+            user_id: adminId,
+            type: "new_ticket",
+            title: "New Support Ticket",
+            message: `${userName} has submitted a new support ticket: "${subject}"`,
+            link: `/admin/support/${ticket.id}`,
+            reference_id: ticket.id,
+            reference_type: "support_ticket",
+          });
+        }
+      } catch (notifErr) {
+        console.warn("Failed to notify super admins about new ticket:", notifErr);
+        // Don't fail the request if notification creation fails
+      }
+
       return res.status(201).json(ticket);
     } catch (err: any) {
       console.error("createTicket error:", err);
@@ -294,6 +341,49 @@ export const supportController = {
           .from("support_tickets")
           .update({ status: "Open", updated_at: new Date().toISOString() })
           .eq("id", id);
+      }
+
+      // Create notifications based on who sent the message
+      try {
+        const senderProfile = await supabaseAdmin
+          .from("profiles")
+          .select("first_name, last_name")
+          .eq("id", user.id)
+          .single();
+        
+        const senderName = senderProfile.data
+          ? `${senderProfile.data.first_name || ""} ${senderProfile.data.last_name || ""}`.trim()
+          : "A user";
+
+        if (isStaff) {
+          // Super admin reply -> notify the ticket creator (admin/proprietor)
+          await notificationModel.create({
+            user_id: ticket.user_id,
+            type: "ticket_reply",
+            title: "New Reply to Your Ticket",
+            message: `A super admin has replied to your support ticket: "${msg.message.substring(0, 50)}..."`,
+            link: `/support/${ticket.id}`,
+            reference_id: ticket.id,
+            reference_type: "support_ticket",
+          });
+        } else {
+          // User reply -> notify all super admins
+          const superAdminIds = await getSuperAdminIds();
+          for (const adminId of superAdminIds) {
+            await notificationModel.create({
+              user_id: adminId,
+              type: "ticket_reply",
+              title: "New Reply on Support Ticket",
+              message: `${senderName} has replied to a support ticket: "${msg.message.substring(0, 50)}..."`,
+              link: `/admin/support/${ticket.id}`,
+              reference_id: ticket.id,
+              reference_type: "support_ticket",
+            });
+          }
+        }
+      } catch (notifErr) {
+        console.warn("Failed to create ticket reply notification:", notifErr);
+        // Don't fail the request if notification creation fails
       }
 
       return res.status(201).json({
