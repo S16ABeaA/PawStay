@@ -10,12 +10,16 @@ import {
   getReceivableSummary,
   getPropertySettlements,
   deleteSettlement,
+  getProprietorMonthlyStatus,
 } from "../controllers/settlementController";
 
 const router = Router();
 
-// All settlement routes require auth + super admin
+// All settlement routes require auth
 router.use(authMiddleware);
+
+// Proprietor endpoint - view own monthly status (accessible to all authenticated users)
+router.get("/proprietor/monthly-status", getProprietorMonthlyStatus);
 
 // Dashboard aggregates (must be before /:id to avoid route conflicts)
 router.get("/monthly-receivables", requireSuperAdmin, getMonthlyReceivables);
