@@ -1,6 +1,6 @@
 import AdminLayout from "@/components/admin/AdminLayout";
 import StatsCard from "@/components/admin/StatsCard";
-import { Calendar, DollarSign, Star, Users, TrendingUp, Clock } from "lucide-react";
+import { Calendar, DollarSign, Star, Users, TrendingUp, Clock, AlertCircle } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -22,6 +22,9 @@ const AdminDashboard = () => {
   const [loadingCheckIns, setLoadingCheckIns] = useState(false);
   const [recentBookings, setRecentBookings] = useState<any[]>([]);
   const [loadingRecent, setLoadingRecent] = useState(false);
+  const [settlementStatus, setSettlementStatus] = useState<any>(null);
+  const [loadingSettlement, setLoadingSettlement] = useState(false);
+  const [isPaymentDueDay, setIsPaymentDueDay] = useState(false);
 
   useEffect(() => {
     // Track whether this effect has been superseded by a newer one
@@ -31,6 +34,7 @@ const AdminDashboard = () => {
     setStats({ totalBookings: 0, revenue: 0, avgRating: 0, occupancy: 0 });
     setTodayCheckIns([]);
     setRecentBookings([]);
+    setSettlementStatus(null);
 
     if (propLoading || !selectedPropertyId) return;
 
@@ -81,15 +85,65 @@ const AdminDashboard = () => {
       }
     };
 
+    const fetchSettlementStatus = async () => {
+      try {
+        setLoadingSettlement(true);
+        const data = await authHelper.get(`${API_BASE_URL}/api/settlements/proprietor/monthly-status${qs}`);
+        if (cancelled) return;
+        setSettlementStatus(data);
+      } catch (err) {
+        console.error('Failed to load settlement status', err);
+      } finally {
+        if (!cancelled) setLoadingSettlement(false);
+      }
+    };
+
     fetchStats();
     fetchCheckIns();
     fetchRecent();
+    fetchSettlementStatus();
 
     return () => { cancelled = true; };
   }, [selectedPropertyId, propLoading]);
 
+  // Check if today is the first or last day of the month
+  useEffect(() => {
+    const today = new Date();
+    const firstDay = today.getDate() === 1;
+    const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate() === today.getDate();
+    setIsPaymentDueDay(firstDay || lastDay);
+  }, []);
+
   return (
     <AdminLayout title="Dashboard" subtitle="Welcome back! Here's your business overview.">
+      {/* Settlement Payment Notification */}
+      {isPaymentDueDay && settlementStatus && settlementStatus.thisMonthOutstanding > 0 && (
+        <div className="mb-6 p-4 rounded-lg border border-amber-200 bg-amber-50">
+          <div className="flex items-start gap-3">
+            <AlertCircle className="h-5 w-5 text-amber-600 flex-shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <h3 className="font-semibold text-amber-900">Payment Due: Monthly Settlement</h3>
+              <p className="text-sm text-amber-800 mt-1">
+                Outstanding balance for this month: <span className="font-bold">₱{settlementStatus.thisMonthOutstanding.toFixed(2)}</span>
+              </p>
+              <p className="text-xs text-amber-700 mt-2">
+                {new Date().getDate() === 1 
+                  ? "Settlement reminders are sent on the 1st of the month."
+                  : "Please settle any outstanding payments by the end of the month."}
+              </p>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="mt-3 border-amber-300 text-amber-900 hover:bg-amber-100"
+                onClick={() => navigate('/admin/settlements')}
+              >
+                View Settlements
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Stats Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         <div onClick={() => navigate('/admin/bookings')} className="cursor-pointer">
