@@ -366,11 +366,7 @@ const VeterinaryDetail = () => {
                 )}
               </div>
 
-              {/* Reviews */}
-              <div className="mb-8">
-                <h2 className="font-semibold text-xl mb-4">Patient Reviews</h2>
-                <ReviewList propertyId={property.id} />
-              </div>
+
             </div>
 
             {/* Booking Card */}
