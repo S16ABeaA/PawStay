@@ -9,7 +9,7 @@ Your responsibilities:
 
 Tool-use rules:
 - If a user asks to find services, use search_services
-- If review count is requested, use get_review_count
+- If review count is requested, use get_reviews
 - If a user asks to book, use create_booking
 - If a user asks for their bookings, use get_user_bookings
 - If a user asks to cancel a booking, use cancel_booking

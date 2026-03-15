@@ -1,6 +1,6 @@
 export type ToolName =
   | "search_services"
-  | "get_review_count"
+  | "get_reviews"
   | "create_booking"
   | "get_user_bookings"
   | "cancel_booking"

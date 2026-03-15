@@ -30,7 +30,7 @@ import {
 
 const SUPPORTED_TOOLS: Set<string> = new Set<string>([
   "search_services",
-  "get_review_count",
+  "get_reviews",
   "create_booking",
   "get_user_bookings",
   "cancel_booking",
@@ -203,7 +203,7 @@ export class PetPlatformAgent {
           location: asString(args.location),
           service_type: asString(args.service_type),
         };
-      case "get_review_count":
+      case "get_reviews":
         return {
           propertyId:
             asString(args.propertyId) ||

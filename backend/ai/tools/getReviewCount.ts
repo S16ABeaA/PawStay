@@ -46,7 +46,7 @@ const extractReviewStats = (response: any): { avgRating: number | null; totalRev
 };
 
 export const getReviewCountTool: ToolDefinition<GetReviewCountArgs, GetReviewCountResult> = {
-  name: "get_review_count",
+  name: "get_reviews",
   description: "Get average rating and total review count for a property",
   inputSchema: "{ propertyId: string }",
   run: async (args) => {

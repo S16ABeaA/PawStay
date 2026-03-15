@@ -77,7 +77,7 @@ export const getGeminiToolSchema = (toolName: string): Record<string, unknown> =
           },
         },
       };
-    case "get_review_count":
+    case "get_reviews":
       return {
         type: SchemaType.OBJECT,
         properties: {
