@@ -43,6 +43,8 @@ import {
 } from "lucide-react";
 import { supportApi, type SupportTicket, type TicketDetail } from "@/services/supportApi";
 import { useToast } from "@/hooks/use-toast";
+import RandomFullPagePetLoader from "@/components/ui/RandomFullPagePetLoader";
+import { useBlockingPageLoad } from "@/hooks/useBlockingPageLoad";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 
 /* ─── helpers ─── */
@@ -165,6 +167,7 @@ const HelpCenter = () => {
 
   // View mode
   const [view, setView] = useState<"list" | "chat">("list");
+  const [isPageBlocking, notifyLoaderFinished] = useBlockingPageLoad(loading && tickets.length === 0, 800);
 
   /* ─── load tickets ─── */
   const loadTickets = async () => {
@@ -187,6 +190,10 @@ const HelpCenter = () => {
     if (isLoggedIn) loadTickets();
     else setLoading(false);
   }, []);
+
+  if (isPageBlocking) {
+    return <RandomFullPagePetLoader dataLoaded={!loading} onComplete={notifyLoaderFinished} />;
+  }
 
   /* ─── select ticket ─── */
   const openTicket = async (id: string) => {

@@ -21,11 +21,15 @@ import supportRoutes from './routes/supportRoute';
 import analyticsRoutes from './routes/analyticsRoute';
 import dashboardRoute from './routes/dashboardRoute';
 import settlementRoutes from './routes/settlementRoute';
+<<<<<<< HEAD
 import { dispatchSettlementRemindersJob } from './controllers/settlementController';
 import {
   dispatchBookingLifecycleNotificationsJob,
   dispatchWeeklyReportNotificationsJob,
 } from './services/notificationJobs';
+=======
+import aiRoutes from './routes/aiRoute';
+>>>>>>> 79e7530eafbfe51fcb1607fcc05720f739ca50c6
  
 dotenv.config({ path: '../.env' });
 dotenv.config();
@@ -110,6 +114,7 @@ app.use('/api/notifications', notificationRoutes);
 app.use('/api/support', supportRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/settlements', settlementRoutes);
+app.use('/api/ai', aiRoutes);
 
 // Simple health/root route
 app.get('/', (_req, res) => {

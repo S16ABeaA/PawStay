@@ -1,5 +1,7 @@
  import { useState, useEffect } from "react";
 import { PetLoader } from "@/components/ui/PetLoader";
+import RandomFullPagePetLoader from "@/components/ui/RandomFullPagePetLoader";
+import { useBlockingPageLoad } from "@/hooks/useBlockingPageLoad";
  import { Link } from "react-router-dom";
  import Header from "@/components/Header";
  import Footer from "@/components/Footer";
@@ -104,6 +106,7 @@ interface Pet {
    const [bookingDetail, setBookingDetail] = useState<any>(null);
    const [bookingLoading, setBookingLoading] = useState(false);
    const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [isPageBlocking, notifyLoaderFinished] = useBlockingPageLoad(loading, 800);
 
    const handleServiceClick = async (service: ServiceHistory) => {
      setSelectedService(service);
@@ -237,6 +240,10 @@ interface Pet {
      }
    };
  
+  if (isPageBlocking) {
+    return <RandomFullPagePetLoader dataLoaded={!loading} onComplete={notifyLoaderFinished} />;
+  }
+
    return (
      <div className="min-h-screen bg-background">
        <Header />
@@ -491,15 +498,7 @@ interface Pet {
            </div>
  
            {/* Pets List */}
-           {loading ? (
-             <Card>
-               <CardContent className="py-12">
-                 <div className="flex flex-col items-center justify-center text-center">
-                   <p className="text-muted-foreground">Loading your pets...</p>
-                 </div>
-               </CardContent>
-             </Card>
-           ) : pets.length === 0 ? (
+           {pets.length === 0 ? (
              <Card>
                <CardContent className="py-12">
                  <div className="flex flex-col items-center justify-center text-center">

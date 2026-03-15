@@ -28,7 +28,8 @@ import {
   FileText,
   Eye,
 } from "lucide-react";
-import { PetLoader } from "@/components/ui/PetLoader";
+import RandomFullPagePetLoader from "@/components/ui/RandomFullPagePetLoader";
+import { useBlockingPageLoad } from "@/hooks/useBlockingPageLoad";
 import { bookingApi } from "@/services/bookingApi";
 import { reviewsApi } from "@/services/reviewsApi";
 import ReviewDialog from "@/components/ReviewDialog";
@@ -119,6 +120,7 @@ const MyBookings = () => {
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
   const [detailBooking, setDetailBooking] = useState<Booking | null>(null);
   const [checkingPayment, setCheckingPayment] = useState<string | null>(null);
+  const [isPageBlocking, notifyLoaderFinished] = useBlockingPageLoad(loading, 800);
 
   const fetchBookings = async () => {
     try {
@@ -207,16 +209,8 @@ const MyBookings = () => {
   const upcoming = bookings.filter(isUpcoming);
   const past = bookings.filter((b) => !isUpcoming(b));
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-background">
-        <Header />
-        <main className="py-16 flex items-center justify-center">
-          <PetLoader text="Loading bookings..." />
-        </main>
-        <Footer />
-      </div>
-    );
+  if (isPageBlocking) {
+    return <RandomFullPagePetLoader dataLoaded={!loading} onComplete={notifyLoaderFinished} />;
   }
 
   return (

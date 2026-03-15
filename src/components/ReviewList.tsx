@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Star } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { reviewsApi, Review } from "@/services/reviewsApi";
+import { PetLoader } from "@/components/ui/PetLoader";
 
 interface ReviewListProps {
   propertyId: string;
@@ -57,9 +58,7 @@ export default function ReviewList({ propertyId }: ReviewListProps) {
 
   if (loading) {
     return (
-      <div className="py-8 text-center text-muted-foreground text-sm">
-        Loading reviews…
-      </div>
+      <PetLoader text="Loading reviews..." className="py-8 min-h-[180px]" />
     );
   }
 
