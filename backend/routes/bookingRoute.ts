@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { authMiddleware } from "../middleware/authMiddleware";
+import { requireSuperAdmin } from "../middleware/requireSuperAdmin";
 import {
   createBooking,
   listBookings,
@@ -16,6 +17,14 @@ import {
   listBookingsForOwner,
   getBookingForOwner,
   updateBookingStatusForOwner,
+  getTotalRevenue,
+  getRevenueByServiceType,
+  getRevenueByProperty,
+  getRevenueByLocation,
+  getRevenueByTimePeriod,
+  getRevenuePeriodComparison,
+  getRevenueMonthlySeries,
+  getReceivables,
 } from "../controllers/bookingController";
 
 const router = Router();
@@ -52,6 +61,18 @@ router.get('/mine', listBookingsForOwner);
 router.get('/mine/:id', getBookingForOwner);
 // Proprietor: update booking status
 router.post('/:id/status', updateBookingStatusForOwner);
+
+// Super admin revenue analytics
+router.get('/revenue/total', requireSuperAdmin, getTotalRevenue);
+router.get('/revenue/by-service-type', requireSuperAdmin, getRevenueByServiceType);
+router.get('/revenue/by-property', requireSuperAdmin, getRevenueByProperty);
+router.get('/revenue/by-location', requireSuperAdmin, getRevenueByLocation);
+router.get('/revenue/by-time-period', requireSuperAdmin, getRevenueByTimePeriod);
+router.get('/revenue/period-comparison', requireSuperAdmin, getRevenuePeriodComparison);
+router.get('/revenue/monthly-series', requireSuperAdmin, getRevenueMonthlySeries);
+
+// Super admin receivables
+router.get('/receivables', requireSuperAdmin, getReceivables);
 
 router.get("/", listBookings);
 router.get("/:id", getBooking);
