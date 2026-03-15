@@ -43,8 +43,6 @@ import {
 } from "lucide-react";
 import { supportApi, type SupportTicket, type TicketDetail } from "@/services/supportApi";
 import { useToast } from "@/hooks/use-toast";
-import RandomFullPagePetLoader from "@/components/ui/RandomFullPagePetLoader";
-import { useBlockingPageLoad } from "@/hooks/useBlockingPageLoad";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 
 /* ─── helpers ─── */
@@ -167,7 +165,6 @@ const HelpCenter = () => {
 
   // View mode
   const [view, setView] = useState<"list" | "chat">("list");
-  const [isPageBlocking, notifyLoaderFinished] = useBlockingPageLoad(loading && tickets.length === 0, 800);
 
   /* ─── load tickets ─── */
   const loadTickets = async () => {
@@ -191,16 +188,15 @@ const HelpCenter = () => {
     else setLoading(false);
   }, []);
 
-  if (isPageBlocking) {
-    return <RandomFullPagePetLoader dataLoaded={!loading} onComplete={notifyLoaderFinished} />;
-  }
-
   /* ─── select ticket ─── */
   const openTicket = async (id: string) => {
     try {
       setDetailLoading(true);
       const detail = await supportApi.getTicket(id);
-      setSelectedTicket(detail);
+      setSelectedTicket({
+        ...detail,
+        messages: Array.isArray(detail.messages) ? detail.messages : [],
+      });
       setView("chat");
       setTicketUnreadMap((prev) => ({ ...prev, [id]: 0 }));
       setSearchParams({ ticket: id });
@@ -277,7 +273,12 @@ const HelpCenter = () => {
         replyText.trim()
       );
       setSelectedTicket((prev) =>
-        prev ? { ...prev, messages: [...prev.messages, msg] } : prev
+        prev
+          ? {
+              ...prev,
+              messages: [...(Array.isArray(prev.messages) ? prev.messages : []), msg],
+            }
+          : prev
       );
       setReplyText("");
     } catch {
@@ -646,7 +647,7 @@ const HelpCenter = () => {
                       </div>
                     )}
 
-                    {selectedTicket?.messages.map((msg, idx) => {
+                    {(selectedTicket?.messages ?? []).map((msg, idx) => {
                       const isMe = !msg.is_staff;
                       return (
                         <div
