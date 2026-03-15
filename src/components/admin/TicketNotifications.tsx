@@ -30,7 +30,7 @@ export const TicketNotifications = () => {
         
         // Filter for ticket-related notifications only
         const ticketNotifs = (data.notifications || []).filter(
-          (n: TicketNotification) => n.type === "ticket_reply"
+          (n: TicketNotification) => n.type === "ticket_reply" || n.type === "new_ticket"
         );
         
         setNotifications(ticketNotifs.slice(0, 3)); // Show latest 3
@@ -108,7 +108,7 @@ export const TicketNotifications = () => {
                   
                   <div className="flex items-center gap-2 mt-3">
                     <Badge variant="outline" className="bg-blue-100 text-blue-700 border-blue-200 text-xs">
-                      Ticket Reply
+                      {notification.type === "new_ticket" ? "New Ticket" : "Ticket Reply"}
                     </Badge>
                     <span className="text-xs text-slate-500">
                       {new Date(notification.created_at).toLocaleDateString()}
@@ -116,7 +116,7 @@ export const TicketNotifications = () => {
                   </div>
 
                   <div className="mt-3">
-                    <Link to={`/user/support/${notification.reference_id}`}>
+                    <Link to={`/help-center?ticket=${notification.reference_id}`}>
                       <Button size="sm" variant="outline" className={`${iconColor} border-blue-300 hover:bg-blue-100`}>
                         <MessageSquare className="h-4 w-4 mr-1" />
                         View Ticket

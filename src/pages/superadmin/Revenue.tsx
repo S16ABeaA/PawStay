@@ -24,6 +24,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from 'recharts';
 import { bookingApi } from "@/services/bookingApi";
 import { useToast } from "@/hooks/use-toast";
+import { useSearchParams } from "react-router-dom";
 
 // Custom tooltip for monthly receivables chart
 const ReceivablesTooltip = ({ active, payload, label }: any) => {
@@ -81,6 +82,7 @@ const ReceivablesTooltip = ({ active, payload, label }: any) => {
 
 const SuperAdminRevenue = () => {
   const { toast } = useToast();
+  const [searchParams] = useSearchParams();
   const [totalRevenue, setTotalRevenue] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [serviceTypeBreakdown, setServiceTypeBreakdown] = useState<Array<{ serviceType: string; revenue: number; count: number }>>([]);
@@ -328,6 +330,17 @@ const SuperAdminRevenue = () => {
     const t = setTimeout(() => fetchPayables(), recvSearch ? 400 : 0);
     return () => clearTimeout(t);
   }, [recvStatusFilter, recvSortBy, recvSearch]);
+
+  useEffect(() => {
+    const targetPropertyId = searchParams.get("propertyId");
+    if (!targetPropertyId || recvProperties.length === 0) return;
+
+    const found = recvProperties.find((p: any) => p.propertyId === targetPropertyId);
+    if (!found) return;
+
+    setSelectedProperty(found);
+    fetchPropertySettlements(found.propertyId);
+  }, [searchParams, recvProperties]);
 
   // Format currency for display
   const formatCurrency = (amount: number) => {

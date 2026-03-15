@@ -1,5 +1,217 @@
 import { Request, Response } from "express";
 import { supabaseAdmin } from "../config/supabaseAdmin";
+import { notificationModel } from "../models/notificationModel";
+import { getSuperAdminRecipients } from "../services/notificationRecipients";
+
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+const startOfUtcDay = (date: Date): Date =>
+  new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+
+const toPhp = (amount: number): string =>
+  `PHP ${amount.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+const getReminderCopyByOffset = (
+  dayOffsetFromSettlement: number
+): { title: string; messagePrefix: string } | null => {
+  if (dayOffsetFromSettlement === -1) {
+    return {
+      title: "Settlement Due Tomorrow",
+      messagePrefix: "Reminder: your settlement day is tomorrow",
+    };
+  }
+  if (dayOffsetFromSettlement === 0) {
+    return {
+      title: "Settlement Due Today",
+      messagePrefix: "Your settlement is due today",
+    };
+  }
+  if (dayOffsetFromSettlement === 7) {
+    return {
+      title: "Final Settlement Due Today",
+      messagePrefix: "Final reminder: settlement is now overdue by 7 days and your business risks being removed if unpaid",
+    };
+  }
+  return null;
+};
+
+const getCurrentSettlementCycleDay = (todayStart: Date): Date => {
+  const currentMonthSettlementDay = new Date(
+    Date.UTC(todayStart.getUTCFullYear(), todayStart.getUTCMonth(), 1)
+  );
+  const currentCycleDueDay = new Date(currentMonthSettlementDay.getTime() + 7 * MS_PER_DAY);
+
+  if (todayStart.getTime() <= currentCycleDueDay.getTime()) {
+    return currentMonthSettlementDay;
+  }
+
+  return new Date(Date.UTC(todayStart.getUTCFullYear(), todayStart.getUTCMonth() + 1, 1));
+};
+
+const createReminderIfMissingToday = async (params: {
+  userId: string;
+  propertyId: string;
+  title: string;
+  message: string;
+  now: Date;
+}) => {
+  const dayStart = startOfUtcDay(params.now).toISOString();
+  const dayEnd = new Date(startOfUtcDay(params.now).getTime() + MS_PER_DAY).toISOString();
+
+  const { data: existing, error: existingErr } = await supabaseAdmin
+    .from("notifications")
+    .select("id")
+    .eq("user_id", params.userId)
+    .eq("reference_id", params.propertyId)
+    .eq("reference_type", "property")
+    .eq("title", params.title)
+    .gte("created_at", dayStart)
+    .lt("created_at", dayEnd)
+    .limit(1);
+
+  if (existingErr) throw existingErr;
+  if ((existing ?? []).length > 0) return false;
+
+  await notificationModel.create({
+    user_id: params.userId,
+    type: "system",
+    title: params.title,
+    message: params.message,
+    link: "/admin",
+    reference_id: params.propertyId,
+    reference_type: "property",
+  });
+
+  return true;
+};
+
+export const dispatchSettlementRemindersJob = async (opts?: { now?: Date; dryRun?: boolean }) => {
+  const now = opts?.now ?? new Date();
+  const dryRun = !!opts?.dryRun;
+  const todayStart = startOfUtcDay(now);
+  const settlementDay = getCurrentSettlementCycleDay(todayStart);
+  const dayOffsetFromSettlement = Math.round(
+    (todayStart.getTime() - settlementDay.getTime()) / MS_PER_DAY
+  );
+  const reminderCopy = getReminderCopyByOffset(dayOffsetFromSettlement);
+
+  if (!reminderCopy) {
+    return {
+      created: 0,
+      checkedProperties: 0,
+      skipped: "not-a-reminder-day" as const,
+      settlementDay: settlementDay.toISOString(),
+      dueDay: new Date(settlementDay.getTime() + 7 * MS_PER_DAY).toISOString(),
+      dayOffsetFromSettlement,
+      dryRun,
+    };
+  }
+
+  const { data: properties, error: propsErr } = await supabaseAdmin
+    .from("properties")
+    .select("id, name, owner_id")
+    .eq("is_deleted", false);
+
+  if (propsErr) throw propsErr;
+
+  let created = 0;
+  let checkedProperties = 0;
+
+  for (const property of properties ?? []) {
+    checkedProperties += 1;
+
+    const { data: bookings, error: bookingErr } = await supabaseAdmin
+      .from("bookings")
+      .select("id, service_fee")
+      .eq("property_id", property.id)
+      .eq("is_deleted", false)
+      .in("status", ["completed", "checked_out"])
+      .neq("payment_status", "refunded")
+      .not("finalized_at", "is", null)
+      .limit(100000);
+
+    if (bookingErr) {
+      console.warn("[settlement-reminders] failed to fetch bookings", property.id, bookingErr);
+      continue;
+    }
+
+    const bookingIds = (bookings ?? []).map((b: any) => b.id);
+    const totalFees = (bookings ?? []).reduce(
+      (sum: number, b: any) => sum + (parseFloat(b.service_fee) || 0),
+      0
+    );
+
+    let settledTotal = 0;
+    if (bookingIds.length > 0) {
+      const { data: links, error: linksErr } = await supabaseAdmin
+        .from("settlement_bookings")
+        .select("amount, proprietor_settlements!inner(status)")
+        .in("booking_id", bookingIds);
+
+      if (linksErr) {
+        console.warn("[settlement-reminders] failed to fetch settlement links", property.id, linksErr);
+        continue;
+      }
+
+      settledTotal = (links ?? []).reduce((sum: number, link: any) => {
+        if (link?.proprietor_settlements?.status === "completed") {
+          return sum + (parseFloat(link.amount) || 0);
+        }
+        return sum;
+      }, 0);
+    }
+
+    const outstanding = Math.round((totalFees - settledTotal) * 100) / 100;
+    if (outstanding <= 0) continue;
+
+    try {
+      if (dryRun) {
+        created += 1;
+      } else {
+        const wasCreated = await createReminderIfMissingToday({
+          userId: property.owner_id,
+          propertyId: property.id,
+          title: reminderCopy.title,
+          message: `${reminderCopy.messagePrefix} for ${property.name}. Outstanding balance: ${toPhp(outstanding)}.`,
+          now,
+        });
+        if (wasCreated) created += 1;
+      }
+    } catch (notifErr) {
+      console.warn("[settlement-reminders] failed to create notification", property.id, notifErr);
+    }
+  }
+
+  return {
+    created,
+    checkedProperties,
+    settlementDay: settlementDay.toISOString(),
+    dueDay: new Date(settlementDay.getTime() + 7 * MS_PER_DAY).toISOString(),
+    dayOffsetFromSettlement,
+    dryRun,
+  };
+};
+
+export const dispatchSettlementReminders = async (req: Request, res: Response) => {
+  try {
+    const dateStr = (req.query.date as string) || "";
+    const dryRun = String(req.query.dryRun || "").toLowerCase() === "true";
+    let now: Date | undefined;
+
+    if (dateStr) {
+      now = new Date(dateStr);
+      if (isNaN(now.getTime())) {
+        return res.status(400).json({ error: "Invalid date query. Use ISO date/time format." });
+      }
+    }
+
+    const result = await dispatchSettlementRemindersJob({ now, dryRun });
+    return res.json({ success: true, ...result });
+  } catch (err: any) {
+    console.error("dispatchSettlementReminders error:", err);
+    return res.status(500).json({ error: "Failed to dispatch settlement reminders.", details: err?.message || err });
+  }
+};
 
 /* ================================================================== */
 /*  Settlement Controller                                              */
@@ -106,6 +318,21 @@ export const createSettlement = async (req: Request, res: Response) => {
       .single();
 
     if (settleErr) throw settleErr;
+
+    // Notify proprietor that this settlement has been received/recorded.
+    try {
+      await notificationModel.create({
+        user_id: proprietorId,
+        type: "payment_received",
+        title: "Settlement Received",
+        message: `Your settlement payment of ${toPhp(parsedAmount)} for this property has been recorded successfully.`,
+        link: "/admin",
+        reference_id: propertyId,
+        reference_type: "property",
+      });
+    } catch (notifErr) {
+      console.warn("Failed to create settlement received notification:", notifErr);
+    }
 
     // 2) Link settlement to bookings
     //    If specific bookingIds provided → allocate across those.
@@ -284,6 +511,14 @@ export const updateSettlementStatus = async (req: Request, res: Response) => {
       return res.status(400).json({ error: "Invalid status." });
     }
 
+    const { data: existing, error: existingErr } = await supabaseAdmin
+      .from("proprietor_settlements")
+      .select("id, status, proprietor_id, property_id, amount")
+      .eq("id", id)
+      .single();
+
+    if (existingErr) throw existingErr;
+
     const { data, error } = await supabaseAdmin
       .from("proprietor_settlements")
       .update({ status, updated_at: new Date().toISOString() })
@@ -292,6 +527,22 @@ export const updateSettlementStatus = async (req: Request, res: Response) => {
       .single();
 
     if (error) throw error;
+
+    if (status === "completed" && existing?.status !== "completed") {
+      try {
+        await notificationModel.create({
+          user_id: existing.proprietor_id,
+          type: "payment_received",
+          title: "Settlement Confirmed",
+          message: `Your settlement payment of ${toPhp(parseFloat(existing.amount) || 0)} has been confirmed.`,
+          link: "/admin",
+          reference_id: existing.property_id,
+          reference_type: "property",
+        });
+      } catch (notifErr) {
+        console.warn("Failed to create settlement confirmation notification:", notifErr);
+      }
+    }
 
     // Refresh materialized view (non-blocking)
     (async () => {
@@ -724,5 +975,355 @@ export const getProprietorMonthlyStatus = async (req: Request, res: Response) =>
   } catch (err: any) {
     console.error("getProprietorMonthlyStatus error:", err);
     return res.status(500).json({ error: "Failed to get monthly settlement status.", details: err?.message || err });
+  }
+};
+
+/**
+ * GET /api/settlements/proprietor/receivables
+ * Proprietor-only receivables view (current + historical summary per property).
+ */
+export const getProprietorReceivables = async (req: Request, res: Response) => {
+  try {
+    const proprietorId = (req as any).user?.id;
+    const proprietorName = [
+      (req as any).user?.first_name,
+      (req as any).user?.last_name,
+    ]
+      .filter(Boolean)
+      .join(" ") || "Proprietor";
+    const proprietorEmail = (req as any).user?.email || "";
+    const { propertyId } = req.query as Record<string, string>;
+
+    if (!proprietorId) {
+      return res.status(401).json({ error: "Unauthorized: proprietor ID required." });
+    }
+
+    let propsQuery = supabaseAdmin
+      .from("properties")
+      .select("id, name, created_at")
+      .eq("owner_id", proprietorId)
+      .eq("is_deleted", false);
+
+    if (propertyId) propsQuery = propsQuery.eq("id", propertyId);
+
+    const { data: properties, error: propsErr } = await propsQuery;
+    if (propsErr) throw propsErr;
+
+    if (!properties || properties.length === 0) {
+      return res.json({
+        summary: {
+          totalPayables: 0,
+          totalSettled: 0,
+          outstandingPayables: 0,
+          propertiesWithBalance: 0,
+        },
+        properties: [],
+      });
+    }
+
+    const propertyIds = properties.map((p: any) => p.id);
+
+    const { data: allBookings, error: bookingsErr } = await supabaseAdmin
+      .from("bookings")
+      .select(
+        "id, property_id, service_fee, status, payment_status, payment_method, service_type, pet_name, checkin, checkout, created_at, finalized_at"
+      )
+      .in("property_id", propertyIds)
+      .eq("is_deleted", false)
+      .in("status", ["completed", "checked_out"])
+      .neq("payment_status", "refunded")
+      .not("finalized_at", "is", null)
+      .order("finalized_at", { ascending: true })
+      .limit(100000);
+
+    if (bookingsErr) throw bookingsErr;
+
+    const bookingIds = (allBookings ?? []).map((b: any) => b.id);
+
+    const { data: links, error: linksErr } = bookingIds.length
+      ? await supabaseAdmin
+          .from("settlement_bookings")
+          .select("booking_id, amount, proprietor_settlements!inner(status)")
+          .in("booking_id", bookingIds)
+      : { data: [], error: null as any };
+
+    if (linksErr) throw linksErr;
+
+    const settledPerBooking: Record<string, number> = {};
+    (links ?? []).forEach((l: any) => {
+      if ((l as any).proprietor_settlements?.status === "completed") {
+        settledPerBooking[l.booking_id] =
+          (settledPerBooking[l.booking_id] || 0) + (parseFloat(l.amount) || 0);
+      }
+    });
+
+    const { data: allSettlements, error: settErr } = await supabaseAdmin
+      .from("proprietor_settlements")
+      .select("property_id, amount, status")
+      .eq("proprietor_id", proprietorId)
+      .in("property_id", propertyIds)
+      .limit(100000);
+
+    if (settErr) throw settErr;
+
+    const completedSettledPerProperty: Record<string, number> = {};
+    (allSettlements ?? []).forEach((s: any) => {
+      if (s.status === "completed") {
+        completedSettledPerProperty[s.property_id] =
+          (completedSettledPerProperty[s.property_id] || 0) + (parseFloat(s.amount) || 0);
+      }
+    });
+
+    const rows = (properties ?? []).map((p: any) => {
+      const propBookings = (allBookings ?? []).filter((b: any) => b.property_id === p.id);
+      const totalPayable = propBookings.reduce(
+        (sum: number, b: any) => sum + (parseFloat(b.service_fee) || 0),
+        0
+      );
+      const totalSettled = completedSettledPerProperty[p.id] || 0;
+      const outstanding = Math.max(0, Math.round((totalPayable - totalSettled) * 100) / 100);
+
+      const bookings = propBookings.map((b: any) => {
+        const fee = parseFloat(b.service_fee) || 0;
+        const settledAmount = Math.round((settledPerBooking[b.id] || 0) * 100) / 100;
+        const outstandingAmount = Math.max(0, Math.round((fee - settledAmount) * 100) / 100);
+
+        return {
+          id: b.id,
+          checkin: b.checkin,
+          checkout: b.checkout,
+          serviceType: b.service_type,
+          paymentMethod: b.payment_method,
+          paymentStatus: b.payment_status,
+          petName: b.pet_name,
+          status: b.status,
+          serviceFee: fee,
+          settledAmount,
+          outstandingAmount,
+          createdAt: b.created_at,
+        };
+      });
+
+      return {
+        propertyId: p.id,
+        propertyName: p.name,
+        ownerId: proprietorId,
+        ownerName: proprietorName,
+        ownerEmail: proprietorEmail,
+        bookingCount: bookings.length,
+        oldestFinalized: propBookings[0]?.finalized_at || null,
+        totalPayable: Math.round(totalPayable * 100) / 100,
+        totalSettled: Math.round(totalSettled * 100) / 100,
+        outstandingPayable: outstanding,
+        bookings,
+      };
+    });
+
+    const totalPayables = rows.reduce((sum: number, r: any) => sum + (r.totalPayable || 0), 0);
+    const totalSettled = rows.reduce((sum: number, r: any) => sum + (r.totalSettled || 0), 0);
+    const outstandingPayables = rows.reduce(
+      (sum: number, r: any) => sum + (r.outstandingPayable || 0),
+      0
+    );
+
+    return res.json({
+      summary: {
+        totalPayables: Math.round(totalPayables * 100) / 100,
+        totalSettled: Math.round(totalSettled * 100) / 100,
+        outstandingPayables: Math.round(outstandingPayables * 100) / 100,
+        propertiesWithBalance: rows.filter((r: any) => r.outstandingPayable > 0).length,
+      },
+      properties: rows,
+    });
+  } catch (err: any) {
+    console.error("getProprietorReceivables error:", err);
+    return res
+      .status(500)
+      .json({ error: "Failed to load proprietor receivables.", details: err?.message || err });
+  }
+};
+
+/**
+ * GET /api/settlements/proprietor/settlements
+ * Proprietor-only settlement history.
+ */
+export const getProprietorSettlements = async (req: Request, res: Response) => {
+  try {
+    const proprietorId = (req as any).user?.id;
+    const { propertyId, status, from, to, limit } = req.query as Record<string, string>;
+
+    if (!proprietorId) {
+      return res.status(401).json({ error: "Unauthorized: proprietor ID required." });
+    }
+
+    let query = supabaseAdmin
+      .from("proprietor_settlements")
+      .select(
+        "id, proprietor_id, property_id, amount, settlement_method, reference_no, notes, status, period_month, settled_at, created_at, updated_at, properties:property_id(name), profiles:created_by(first_name,last_name,email)"
+      )
+      .eq("proprietor_id", proprietorId)
+      .order("settled_at", { ascending: false });
+
+    if (propertyId) query = query.eq("property_id", propertyId);
+    if (status) query = query.eq("status", status);
+    if (from) query = query.gte("settled_at", from);
+    if (to) query = query.lte("settled_at", to);
+    query = query.limit(parseInt(limit || "200", 10));
+
+    const { data, error } = await query;
+    if (error) throw error;
+
+    const settlements = (data ?? []).map((s: any) => ({
+      ...s,
+      propertyName: s.properties?.name || "Unknown",
+      reviewedByName:
+        [s.profiles?.first_name, s.profiles?.last_name].filter(Boolean).join(" ") ||
+        "Pending Review",
+      reviewedByEmail: s.profiles?.email || "",
+      properties: undefined,
+      profiles: undefined,
+    }));
+
+    return res.json({ settlements });
+  } catch (err: any) {
+    console.error("getProprietorSettlements error:", err);
+    return res
+      .status(500)
+      .json({ error: "Failed to load settlement history.", details: err?.message || err });
+  }
+};
+
+/**
+ * POST /api/settlements/proprietor/settlements
+ * Proprietor submits a settlement payment proof for superadmin review.
+ */
+export const submitProprietorSettlement = async (req: Request, res: Response) => {
+  try {
+    const proprietorId = (req as any).user?.id;
+    const {
+      propertyId,
+      amount,
+      method,
+      referenceNo,
+      notes,
+      proofUrl,
+      periodMonth,
+    } = req.body;
+
+    const parsedAmount = parseFloat(amount);
+    if (!proprietorId) {
+      return res.status(401).json({ error: "Unauthorized: proprietor ID required." });
+    }
+    if (!propertyId || !parsedAmount || parsedAmount <= 0) {
+      return res
+        .status(400)
+        .json({ error: "propertyId and a positive amount are required." });
+    }
+
+    const { data: property, error: propErr } = await supabaseAdmin
+      .from("properties")
+      .select("id, name, owner_id")
+      .eq("id", propertyId)
+      .eq("is_deleted", false)
+      .single();
+    if (propErr) throw propErr;
+
+    if (!property || property.owner_id !== proprietorId) {
+      return res.status(403).json({ error: "You can only submit settlements for your own properties." });
+    }
+
+    const { data: allBookings, error: bAllErr } = await supabaseAdmin
+      .from("bookings")
+      .select("id, service_fee")
+      .eq("property_id", propertyId)
+      .eq("is_deleted", false)
+      .in("status", ["completed", "checked_out"])
+      .neq("payment_status", "refunded")
+      .not("finalized_at", "is", null)
+      .limit(100000);
+    if (bAllErr) throw bAllErr;
+
+    const allBookingIds = (allBookings ?? []).map((b: any) => b.id);
+    const totalFees = (allBookings ?? []).reduce(
+      (sum: number, b: any) => sum + (parseFloat(b.service_fee) || 0),
+      0
+    );
+
+    const { data: existingLinks } = allBookingIds.length
+      ? await supabaseAdmin
+          .from("settlement_bookings")
+          .select("booking_id, amount, proprietor_settlements!inner(status)")
+          .in("booking_id", allBookingIds)
+      : { data: [] };
+
+    const settledPerBooking: Record<string, number> = {};
+    (existingLinks ?? []).forEach((l: any) => {
+      if ((l as any).proprietor_settlements?.status === "completed") {
+        settledPerBooking[l.booking_id] =
+          (settledPerBooking[l.booking_id] || 0) + (parseFloat(l.amount) || 0);
+      }
+    });
+    const totalAlreadySettled = Object.values(settledPerBooking).reduce((s, v) => s + v, 0);
+    const totalOutstanding = Math.round((totalFees - totalAlreadySettled) * 100) / 100;
+
+    if (parsedAmount > totalOutstanding + 0.01) {
+      return res.status(400).json({
+        error: `Submitted amount (${parsedAmount}) exceeds outstanding balance (${totalOutstanding}) for this property.`,
+        totalOutstanding,
+      });
+    }
+
+    const composedNotes = [
+      notes?.trim() || null,
+      proofUrl && String(proofUrl).trim() ? `Proof: ${String(proofUrl).trim()}` : null,
+    ].filter(Boolean).join("\n");
+
+    const { data: settlement, error: settleErr } = await supabaseAdmin
+      .from("proprietor_settlements")
+      .insert({
+        proprietor_id: proprietorId,
+        property_id: propertyId,
+        amount: parsedAmount,
+        settlement_method: method || null,
+        reference_no: referenceNo || null,
+        notes: composedNotes || null,
+        period_month: periodMonth || null,
+        settled_at: new Date().toISOString(),
+        created_by: proprietorId,
+        status: "pending",
+      })
+      .select()
+      .single();
+
+    if (settleErr) throw settleErr;
+
+    try {
+      const admins = await getSuperAdminRecipients();
+      await Promise.all(
+        admins.map((admin) =>
+          notificationModel.create({
+            user_id: admin.id,
+            type: "system",
+            title: "New Settlement Submission",
+            message: `A proprietor submitted ${toPhp(parsedAmount)} for ${property.name}. Review and confirm this settlement request.`,
+            link: `/superadmin/revenue?propertyId=${propertyId}`,
+            reference_id: settlement.id,
+            reference_type: "settlement",
+          })
+        )
+      );
+    } catch (notifErr) {
+      console.warn("Failed to notify superadmins for settlement submission:", notifErr);
+    }
+
+    return res.status(201).json({
+      settlement,
+      message: "Settlement request submitted successfully and is pending superadmin review.",
+    });
+  } catch (err: any) {
+    console.error("submitProprietorSettlement error:", err);
+    return res
+      .status(500)
+      .json({ error: "Failed to submit settlement request.", details: err?.message || err });
   }
 };

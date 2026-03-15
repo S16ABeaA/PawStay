@@ -20,6 +20,8 @@ const NOTIFICATION_ICONS: Record<string, string> = {
   property_approved: "🏠",
   property_rejected: "🚫",
   review_received: "⭐",
+  new_ticket: "🎫",
+  ticket_reply: "💬",
   system: "🔔",
   info: "ℹ️",
 };

@@ -388,20 +388,23 @@ export const adminPropertyController = {
         return res.status(404).json({ error: "Property not found or update failed." });
       }
 
-      // Create notification when property is approved
-      if (status === "approved") {
+      // Create notification when property is approved or rejected.
+      if (status === "approved" || status === "rejected") {
         try {
+          const isApproved = status === "approved";
           await notificationModel.create({
             user_id: data.owner_id,
-            type: "property_approved",
-            title: "Property Approved! 🎉",
-            message: `Your property "${data.name}" has been approved and is now live on PawStay.`,
-            link: `/admin/properties/${data.id}`,
+            type: isApproved ? "property_approved" : "property_rejected",
+            title: isApproved ? "Property Approved! 🎉" : "Property Application Rejected",
+            message: isApproved
+              ? `Your property "${data.name}" has been approved and is now live on PawStay.`
+              : `Your property "${data.name}" was rejected.${rejection_reason ? ` Reason: ${rejection_reason}` : " Please review the feedback and resubmit."}`,
+            link: "/admin/services",
             reference_id: data.id,
             reference_type: "property",
           });
         } catch (notifErr) {
-          console.warn("Failed to create notification for property approval:", notifErr);
+          console.warn("Failed to create property status notification:", notifErr);
           // Don't fail the request if notification creation fails
         }
       }

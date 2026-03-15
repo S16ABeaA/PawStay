@@ -4,6 +4,7 @@ import { petModel } from "../models/petModel";
 import { serviceHistoryModel } from "../models/serviceHistoryModel";
 import { supabaseAdmin } from "../config/supabaseAdmin";
 import { notificationModel } from "../models/notificationModel";
+import { getSuperAdminRecipients } from "../services/notificationRecipients";
 
 /**
  * GET /api/bookings/admin/calendar
@@ -306,12 +307,18 @@ export const getTodayCheckInsForOwner = async (req: any, res: any) => {
     const userId = (req as any).user?.id;
     if (!userId) return res.status(401).json({ error: "Unauthorized" });
 
+    const filterPropertyId = req.query.property_id as string | undefined;
+
     // Get properties owned by user
-    const { data: props, error: propsErr } = await supabaseAdmin
+    let propsQuery = supabaseAdmin
       .from('properties')
       .select('id, name')
       .eq('owner_id', userId)
       .eq('is_deleted', false);
+
+    if (filterPropertyId) propsQuery = propsQuery.eq('id', filterPropertyId);
+
+    const { data: props, error: propsErr } = await propsQuery;
 
     if (propsErr) throw propsErr;
     const propertyIds = (props ?? []).map((p: any) => p.id);
@@ -356,11 +363,17 @@ export const getRecentBookingsForOwner = async (req: any, res: any) => {
     const userId = (req as any).user?.id;
     if (!userId) return res.status(401).json({ error: "Unauthorized" });
 
-    const { data: props, error: propsErr } = await supabaseAdmin
+    const filterPropertyId = req.query.property_id as string | undefined;
+
+    let propsQuery = supabaseAdmin
       .from('properties')
       .select('id')
       .eq('owner_id', userId)
       .eq('is_deleted', false);
+
+    if (filterPropertyId) propsQuery = propsQuery.eq('id', filterPropertyId);
+
+    const { data: props, error: propsErr } = await propsQuery;
 
     if (propsErr) throw propsErr;
     const propertyIds = (props ?? []).map((p: any) => p.id);
@@ -393,70 +406,6 @@ export const getRecentBookingsForOwner = async (req: any, res: any) => {
   }
 };
 
-/** GET /api/bookings/mine/:id — fetch a single booking's full details for property owner */
-export const getBookingForOwner = async (req: any, res: any) => {
-  try {
-    const userId = (req as any).user?.id;
-    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
-
-    const bookingId = req.params.id as string;
-    if (!bookingId) return res.status(400).json({ error: 'Missing booking ID' });
-
-    // Get booking
-    const { data: booking, error: bookErr } = await supabaseAdmin
-      .from('bookings')
-      .select('*')
-      .eq('id', bookingId)
-      .eq('is_deleted', false)
-      .single();
-
-    if (bookErr || !booking) {
-      return res.status(404).json({ error: 'Booking not found' });
-    }
-
-    // Verify the owner has access to this booking's property
-    const { data: prop, error: propErr } = await supabaseAdmin
-      .from('properties')
-      .select('id, owner_id')
-      .eq('id', booking.property_id)
-      .single();
-
-    if (propErr || !prop || String(prop.owner_id) !== String(userId)) {
-      return res.status(403).json({ error: 'Forbidden' });
-    }
-
-    return res.json({
-      booking: {
-        id: booking.id,
-        pet_name: booking.pet_name,
-        owner_name: booking.owner_name,
-        owner_email: booking.owner_email,
-        owner_phone: booking.owner_phone,
-        service_name: booking.service_name,
-        service_type: booking.service_type,
-        checkin: booking.checkin,
-        checkout: booking.checkout,
-        status: booking.status,
-        total_price: booking.total_price,
-        payment_method: booking.payment_method,
-        reference_number: booking.reference_number,
-        payment_screenshot_url: booking.payment_screenshot_url,
-        vaccine_record_url: booking.vaccine_record_url,
-        med_cert_url: booking.med_cert_url,
-        special_requirements: booking.special_requirements,
-        pet_type: booking.pet_type,
-        pet_breed: booking.pet_breed,
-        pet_age: booking.pet_age,
-        pet_weight: booking.pet_weight,
-        created_at: booking.created_at,
-      },
-    });
-  } catch (err: any) {
-    console.error('getBookingForOwner error:', err);
-    return res.status(500).json({ error: 'Failed to fetch booking details.' });
-  }
-};
-
 /** GET /api/bookings/mine/list — paginated bookings for proprietor's properties */
 export const listBookingsForOwner = async (req: any, res: any) => {
   try {
@@ -467,12 +416,17 @@ export const listBookingsForOwner = async (req: any, res: any) => {
     const service = req.query.service as string | undefined;
     const page = Number(req.query.page) || 1;
     const limit = Number(req.query.limit) || 50;
+    const filterPropertyId = req.query.property_id as string | undefined;
 
-    const { data: props, error: propsErr } = await supabaseAdmin
+    let propsQuery = supabaseAdmin
       .from('properties')
       .select('id')
       .eq('owner_id', userId)
       .eq('is_deleted', false);
+
+    if (filterPropertyId) propsQuery = propsQuery.eq('id', filterPropertyId);
+
+    const { data: props, error: propsErr } = await propsQuery;
     if (propsErr) throw propsErr;
     const propertyIds = (props ?? []).map((p: any) => p.id);
     if (!propertyIds.length) return res.json({ bookings: [], total: 0 });
@@ -540,6 +494,43 @@ export const listBookingsForOwner = async (req: any, res: any) => {
   } catch (err: any) {
     console.error('listBookingsForOwner error:', err);
     return res.status(500).json({ error: 'Failed to list bookings.' });
+  }
+};
+
+/** GET /api/bookings/mine/:id — get a single booking detail for the owner (with images) */
+export const getBookingForOwner = async (req: any, res: any) => {
+  try {
+    const userId = (req as any).user?.id;
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+
+    const bookingId = req.params.id;
+    if (!bookingId) return res.status(400).json({ error: 'Missing booking ID' });
+
+    // Get the owner's property IDs
+    const { data: props, error: propsErr } = await supabaseAdmin
+      .from('properties')
+      .select('id')
+      .eq('owner_id', userId)
+      .eq('is_deleted', false);
+    if (propsErr) throw propsErr;
+    const propertyIds = (props ?? []).map((p: any) => p.id);
+    if (!propertyIds.length) return res.status(404).json({ error: 'Booking not found' });
+
+    const { data: booking, error } = await supabaseAdmin
+      .from('bookings')
+      .select('*')
+      .eq('id', bookingId)
+      .in('property_id', propertyIds)
+      .eq('is_deleted', false)
+      .maybeSingle();
+
+    if (error) throw error;
+    if (!booking) return res.status(404).json({ error: 'Booking not found' });
+
+    return res.json(booking);
+  } catch (err: any) {
+    console.error('getBookingForOwner error:', err);
+    return res.status(500).json({ error: 'Failed to get booking.' });
   }
 };
 
@@ -916,7 +907,7 @@ export const createBooking = async (req: Request, res: Response) => {
     // Create a service history entry for the pet if we have a pet ID and service info
     if (resolvedPetId && service_type) {
       const serviceTypeMap: Record<string, string> = {
-        boarding: "boarding",
+        boarding: "other",
         grooming: "grooming",
         veterinary: "checkup",
         daycare: "other",
@@ -974,6 +965,32 @@ export const createBooking = async (req: Request, res: Response) => {
       }
     } catch (notifErr) {
       console.error("Failed to create owner notification:", notifErr);
+    }
+
+    // ── Notify super admins for high-value bookings (> PHP 500) ──
+    try {
+      if ((finalTotalPrice ?? 0) > 500) {
+        const superAdmins = await getSuperAdminRecipients();
+        const { data: property } = await supabaseAdmin
+          .from("properties")
+          .select("name")
+          .eq("id", resolvedPropertyId)
+          .single();
+
+        for (const admin of superAdmins) {
+          await notificationModel.create({
+            user_id: admin.id,
+            type: "system",
+            title: "High-Value Booking Alert",
+            message: `A high-value booking worth PHP ${Number(finalTotalPrice).toFixed(2)} was created for ${property?.name || "a property"}.`,
+            link: "/superadmin",
+            reference_id: booking.id,
+            reference_type: "booking",
+          });
+        }
+      }
+    } catch (notifErr) {
+      console.error("Failed to create high-value booking notifications:", notifErr);
     }
 
     return res.status(201).json({ booking });
@@ -1120,18 +1137,7 @@ export const getBooking = async (req: Request, res: Response) => {
     const booking = await bookingModel.getById(req.params.id as string, userId);
     if (!booking) return res.status(404).json({ error: "Booking not found." });
 
-    // Fetch property name for display
-    let propertyName: string | null = null;
-    if (booking.property_id) {
-      const { data: prop } = await supabaseAdmin
-        .from("properties")
-        .select("name")
-        .eq("id", booking.property_id)
-        .single();
-      propertyName = prop?.name ?? null;
-    }
-
-    return res.json({ booking: { ...booking, property_name: propertyName } });
+    return res.json({ booking });
   } catch (err: any) {
     console.error("getBooking error:", err);
     return res.status(500).json({ error: "Failed to fetch booking." });
@@ -1324,598 +1330,409 @@ export const adminDeleteBooking = async (req: Request, res: Response) => {
   }
 };
 
-/**
- * GET /api/bookings/revenue/total
- * Returns the total revenue from all service fees in finalized bookings.
- * Business rule: Revenue = SUM(service_fee) for status in (completed, checked_out), excluding refunded bookings.
- * Super admin only.
- */
-export const getTotalRevenue = async (req: Request, res: Response) => {
+const loadFinalizedBookings = async () => {
+  const { data, error } = await supabaseAdmin
+    .from("bookings")
+    .select("id, property_id, service_fee, service_type, finalized_at, status, payment_status, payment_method, checkin, checkout, pet_name, created_at")
+    .eq("is_deleted", false)
+    .in("status", ["completed", "checked_out"])
+    .neq("payment_status", "refunded")
+    .not("finalized_at", "is", null)
+    .limit(100000);
+
+  if (error) throw error;
+  return data ?? [];
+};
+
+export const getTotalRevenue = async (_req: Request, res: Response) => {
   try {
-    // Revenue is based on finalized bookings only
-    const { data, error } = await supabaseAdmin
-      .from("bookings")
-      .select("service_fee")
-      .eq("is_deleted", false)
-      .in("status", ["completed", "checked_out"])
-      .neq("payment_status", "refunded")
-      .limit(100000);
-
-    if (error) throw error;
-
-    // Calculate total by summing up all service fees
-    const totalRevenue = (data ?? []).reduce((sum: number, booking: any) => {
-      return sum + (parseFloat(booking.service_fee) || 0);
-    }, 0);
-
-    return res.json({ 
-      totalRevenue: totalRevenue,
-      count: data?.length || 0,
-      currency: "PHP"
-    });
+    const bookings = await loadFinalizedBookings();
+    const totalRevenue = bookings.reduce((sum: number, b: any) => sum + (parseFloat(b.service_fee) || 0), 0);
+    return res.json({ totalRevenue: Math.round(totalRevenue * 100) / 100, currency: "PHP" });
   } catch (err: any) {
     console.error("getTotalRevenue error:", err);
-    return res.status(500).json({ error: "Failed to get total revenue.", details: err?.message || err });
+    return res.status(500).json({ error: "Failed to fetch total revenue.", details: err?.message || err });
   }
 };
 
-/**
- * GET /api/bookings/revenue/by-service-type
- * Returns revenue breakdown by service type (boarding, grooming, veterinary, daycare, transport).
- * Only includes finalized bookings.
- * Super admin only.
- */
-export const getRevenueByServiceType = async (req: Request, res: Response) => {
+export const getRevenueByServiceType = async (_req: Request, res: Response) => {
   try {
-    const { data, error } = await supabaseAdmin
-      .from("bookings")
-      .select("service_type, service_fee")
-      .eq("is_deleted", false)
-      .in("status", ["completed", "checked_out"])
-      .neq("payment_status", "refunded")
-      .limit(100000);
+    const bookings = await loadFinalizedBookings();
+    const map = new Map<string, { revenue: number; count: number }>();
 
-    if (error) throw error;
-
-    // Group by service type and sum service fees
-    const revenueByType: Record<string, { total: number; count: number }> = {};
-    
-    (data ?? []).forEach((booking: any) => {
-      const serviceType = booking.service_type || "Unknown";
-      const fee = parseFloat(booking.service_fee) || 0;
-      
-      if (!revenueByType[serviceType]) {
-        revenueByType[serviceType] = { total: 0, count: 0 };
-      }
-      revenueByType[serviceType].total += fee;
-      revenueByType[serviceType].count += 1;
+    bookings.forEach((b: any) => {
+      const key = b.service_type || "other";
+      const row = map.get(key) || { revenue: 0, count: 0 };
+      row.revenue += parseFloat(b.service_fee) || 0;
+      row.count += 1;
+      map.set(key, row);
     });
 
-    // Convert to array and sort by revenue descending
-    const breakdown = Object.entries(revenueByType)
-      .map(([serviceType, { total, count }]) => ({
+    const breakdown = Array.from(map.entries())
+      .map(([serviceType, value]) => ({
         serviceType,
-        revenue: total,
-        count,
+        revenue: Math.round(value.revenue * 100) / 100,
+        count: value.count,
       }))
       .sort((a, b) => b.revenue - a.revenue);
 
     return res.json({ breakdown, currency: "PHP" });
   } catch (err: any) {
     console.error("getRevenueByServiceType error:", err);
-    return res.status(500).json({ error: "Failed to get revenue by service type.", details: err?.message || err });
+    return res.status(500).json({ error: "Failed to fetch service-type revenue.", details: err?.message || err });
   }
 };
 
-/**
- * GET /api/bookings/revenue/by-property
- * Returns revenue breakdown by property (finalized bookings only).
- * Super admin only.
- */
-export const getRevenueByProperty = async (req: Request, res: Response) => {
+export const getRevenueByProperty = async (_req: Request, res: Response) => {
   try {
-    const { data, error } = await supabaseAdmin
-      .from("bookings")
-      .select("property_id, service_fee, properties:property_id(name)")
-      .eq("is_deleted", false)
-      .in("status", ["completed", "checked_out"])
-      .neq("payment_status", "refunded")
-      .limit(100000);
+    const bookings = await loadFinalizedBookings();
+    const propertyIds = [...new Set(bookings.map((b: any) => b.property_id).filter(Boolean))];
 
-    if (error) throw error;
+    const { data: properties, error: propsErr } = await supabaseAdmin
+      .from("properties")
+      .select("id, name")
+      .in("id", propertyIds.length ? propertyIds : ["00000000-0000-0000-0000-000000000000"]);
+    if (propsErr) throw propsErr;
 
-    // Group by property and sum service fees
-    const revenueByProperty: Record<string, { propertyName: string; total: number; count: number }> = {};
-    
-    (data ?? []).forEach((booking: any) => {
-      const propertyId = booking.property_id;
-      const propertyName = booking.properties?.name || "Unknown Property";
-      const fee = parseFloat(booking.service_fee) || 0;
-      
-      if (!revenueByProperty[propertyId]) {
-        revenueByProperty[propertyId] = { propertyName, total: 0, count: 0 };
-      }
-      revenueByProperty[propertyId].total += fee;
-      revenueByProperty[propertyId].count += 1;
+    const propNameMap = new Map((properties ?? []).map((p: any) => [p.id, p.name]));
+    const agg = new Map<string, { revenue: number; count: number }>();
+
+    bookings.forEach((b: any) => {
+      const key = b.property_id;
+      const row = agg.get(key) || { revenue: 0, count: 0 };
+      row.revenue += parseFloat(b.service_fee) || 0;
+      row.count += 1;
+      agg.set(key, row);
     });
 
-    // Convert to array and sort by revenue descending
-    const breakdown = Object.entries(revenueByProperty)
-      .map(([propertyId, { propertyName, total, count }]) => ({
+    const breakdown = Array.from(agg.entries())
+      .map(([propertyId, value]) => ({
         propertyId,
-        propertyName,
-        revenue: total,
-        count,
+        propertyName: propNameMap.get(propertyId) || "Unknown Property",
+        revenue: Math.round(value.revenue * 100) / 100,
+        count: value.count,
       }))
       .sort((a, b) => b.revenue - a.revenue);
 
     return res.json({ breakdown, currency: "PHP" });
   } catch (err: any) {
     console.error("getRevenueByProperty error:", err);
-    return res.status(500).json({ error: "Failed to get revenue by property.", details: err?.message || err });
+    return res.status(500).json({ error: "Failed to fetch property revenue.", details: err?.message || err });
   }
 };
 
-/**
- * GET /api/bookings/revenue/by-location
- * Returns revenue breakdown by location/city (finalized bookings only).
- * Super admin only.
- */
-export const getRevenueByLocation = async (req: Request, res: Response) => {
+export const getRevenueByLocation = async (_req: Request, res: Response) => {
   try {
-    const { data, error } = await supabaseAdmin
-      .from("bookings")
-      .select("service_fee, properties:property_id(city)")
-      .eq("is_deleted", false)
-      .in("status", ["completed", "checked_out"])
-      .neq("payment_status", "refunded")
-      .limit(100000);
+    const bookings = await loadFinalizedBookings();
+    const propertyIds = [...new Set(bookings.map((b: any) => b.property_id).filter(Boolean))];
 
-    if (error) throw error;
+    const { data: properties, error: propsErr } = await supabaseAdmin
+      .from("properties")
+      .select("id, city")
+      .in("id", propertyIds.length ? propertyIds : ["00000000-0000-0000-0000-000000000000"]);
+    if (propsErr) throw propsErr;
 
-    // Group by city and sum service fees
-    const revenueByLocation: Record<string, { total: number; count: number }> = {};
-    
-    (data ?? []).forEach((booking: any) => {
-      const city = booking.properties?.city || "Unknown Location";
-      const fee = parseFloat(booking.service_fee) || 0;
-      
-      if (!revenueByLocation[city]) {
-        revenueByLocation[city] = { total: 0, count: 0 };
-      }
-      revenueByLocation[city].total += fee;
-      revenueByLocation[city].count += 1;
+    const cityMap = new Map((properties ?? []).map((p: any) => [p.id, p.city || "Unknown City"]));
+    const agg = new Map<string, { revenue: number; count: number }>();
+
+    bookings.forEach((b: any) => {
+      const city = cityMap.get(b.property_id) || "Unknown City";
+      const row = agg.get(city) || { revenue: 0, count: 0 };
+      row.revenue += parseFloat(b.service_fee) || 0;
+      row.count += 1;
+      agg.set(city, row);
     });
 
-    // Convert to array and sort by revenue descending
-    const breakdown = Object.entries(revenueByLocation)
-      .map(([city, { total, count }]) => ({
+    const breakdown = Array.from(agg.entries())
+      .map(([city, value]) => ({
         city,
-        revenue: total,
-        count,
+        revenue: Math.round(value.revenue * 100) / 100,
+        count: value.count,
       }))
       .sort((a, b) => b.revenue - a.revenue);
 
     return res.json({ breakdown, currency: "PHP" });
   } catch (err: any) {
     console.error("getRevenueByLocation error:", err);
-    return res.status(500).json({ error: "Failed to get revenue by location.", details: err?.message || err });
+    return res.status(500).json({ error: "Failed to fetch location revenue.", details: err?.message || err });
   }
 };
 
-/**
- * GET /api/bookings/revenue/by-time-period
- * Returns revenue breakdown by time period (daily, weekly, monthly).
- * Only includes finalized bookings.
- * Super admin only.
- */
-export const getRevenueByTimePeriod = async (req: Request, res: Response) => {
+export const getRevenueByTimePeriod = async (_req: Request, res: Response) => {
   try {
-    const { data, error } = await supabaseAdmin
-      .from("bookings")
-      .select("service_fee, created_at")
-      .eq("is_deleted", false)
-      .in("status", ["completed", "checked_out"])
-      .neq("payment_status", "refunded")
-      .limit(100000)
-      .order("created_at", { ascending: false });
-
-    if (error) throw error;
-
+    const bookings = await loadFinalizedBookings();
     const now = new Date();
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const startOfWeek = new Date(today);
-    startOfWeek.setDate(today.getDate() - today.getDay()); // Sunday
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const dayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const weekStart = new Date(dayStart);
+    weekStart.setDate(dayStart.getDate() - dayStart.getDay());
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
 
-    let dailyRevenue = 0;
-    let dailyCount = 0;
-    let weeklyRevenue = 0;
-    let weeklyCount = 0;
-    let monthlyRevenue = 0;
-    let monthlyCount = 0;
+    const sumSince = (start: Date) =>
+      bookings
+        .filter((b: any) => new Date(b.finalized_at).getTime() >= start.getTime())
+        .reduce((sum: number, b: any) => sum + (parseFloat(b.service_fee) || 0), 0);
 
-    (data ?? []).forEach((booking: any) => {
-      const fee = parseFloat(booking.service_fee) || 0;
-      const createdAt = new Date(booking.created_at);
-
-      // Daily (today)
-      if (createdAt >= today) {
-        dailyRevenue += fee;
-        dailyCount += 1;
-      }
-
-      // Weekly (this week)
-      if (createdAt >= startOfWeek) {
-        weeklyRevenue += fee;
-        weeklyCount += 1;
-      }
-
-      // Monthly (this month)
-      if (createdAt >= startOfMonth) {
-        monthlyRevenue += fee;
-        monthlyCount += 1;
-      }
-    });
+    const countSince = (start: Date) =>
+      bookings.filter((b: any) => new Date(b.finalized_at).getTime() >= start.getTime()).length;
 
     return res.json({
       daily: {
-        revenue: dailyRevenue,
-        count: dailyCount,
-        period: "Today"
+        revenue: Math.round(sumSince(dayStart) * 100) / 100,
+        count: countSince(dayStart),
+        period: "Today",
       },
       weekly: {
-        revenue: weeklyRevenue,
-        count: weeklyCount,
-        period: "This Week"
+        revenue: Math.round(sumSince(weekStart) * 100) / 100,
+        count: countSince(weekStart),
+        period: "This Week",
       },
       monthly: {
-        revenue: monthlyRevenue,
-        count: monthlyCount,
-        period: "This Month"
+        revenue: Math.round(sumSince(monthStart) * 100) / 100,
+        count: countSince(monthStart),
+        period: "This Month",
       },
-      currency: "PHP"
-    });
-  } catch (err: any) {
-    console.error("getRevenueByTimePeriod error:", err);
-    return res.status(500).json({ error: "Failed to get revenue by time period.", details: err?.message || err });
-  }
-};
-
-/**
- * GET /api/bookings/revenue/period-comparison
- * Returns revenue comparison between current and previous periods (monthly, quarterly, yearly).
- * Shows percentage change between periods.
- * Only includes finalized bookings.
- * Super admin only.
- */
-export const getRevenuePeriodComparison = async (req: Request, res: Response) => {
-  try {
-    const { data, error } = await supabaseAdmin
-      .from("bookings")
-      .select("service_fee, created_at")
-      .eq("is_deleted", false)
-      .in("status", ["completed", "checked_out"])
-      .neq("payment_status", "refunded")
-      .limit(100000)
-      .order("created_at", { ascending: false });
-
-    if (error) throw error;
-
-    const now = new Date();
-
-    // MONTHLY
-    const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-    const previousMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-    const previousMonthEnd = new Date(currentMonthStart);
-
-    // QUARTERLY
-    const currentQuarter = Math.floor(now.getMonth() / 3);
-    const currentQuarterStart = new Date(now.getFullYear(), currentQuarter * 3, 1);
-    const previousQuarterStart = new Date(now.getFullYear(), (currentQuarter - 1) * 3, 1);
-    const previousQuarterEnd = new Date(currentQuarterStart);
-
-    // YEARLY
-    const currentYearStart = new Date(now.getFullYear(), 0, 1);
-    const previousYearStart = new Date(now.getFullYear() - 1, 0, 1);
-    const previousYearEnd = new Date(currentYearStart);
-
-    let currentMonthRevenue = 0, previousMonthRevenue = 0;
-    let currentQuarterRevenue = 0, previousQuarterRevenue = 0;
-    let currentYearRevenue = 0, previousYearRevenue = 0;
-
-    // Single pass over all bookings
-    (data ?? []).forEach((booking: any) => {
-      const createdAt = new Date(booking.created_at);
-      const fee = parseFloat(booking.service_fee) || 0;
-
-      // Monthly
-      if (createdAt >= currentMonthStart) currentMonthRevenue += fee;
-      else if (createdAt >= previousMonthStart && createdAt < previousMonthEnd) previousMonthRevenue += fee;
-
-      // Quarterly
-      if (createdAt >= currentQuarterStart) currentQuarterRevenue += fee;
-      else if (createdAt >= previousQuarterStart && createdAt < previousQuarterEnd) previousQuarterRevenue += fee;
-
-      // Yearly
-      if (createdAt >= currentYearStart) currentYearRevenue += fee;
-      else if (createdAt >= previousYearStart && createdAt < previousYearEnd) previousYearRevenue += fee;
-    });
-
-    const pctChange = (current: number, previous: number) =>
-      previous > 0 ? ((current - previous) / previous) * 100 : current > 0 ? 100 : 0;
-
-    return res.json({
-      monthly: {
-        current: currentMonthRevenue,
-        previous: previousMonthRevenue,
-        percentageChange: pctChange(currentMonthRevenue, previousMonthRevenue),
-        period: "Monthly"
-      },
-      quarterly: {
-        current: currentQuarterRevenue,
-        previous: previousQuarterRevenue,
-        percentageChange: pctChange(currentQuarterRevenue, previousQuarterRevenue),
-        period: "Quarterly"
-      },
-      yearly: {
-        current: currentYearRevenue,
-        previous: previousYearRevenue,
-        percentageChange: pctChange(currentYearRevenue, previousYearRevenue),
-        period: "Yearly"
-      },
-      currency: "PHP"
-    });
-  } catch (err: any) {
-    console.error("getRevenuePeriodComparison error:", err);
-    return res.status(500).json({ error: "Failed to get revenue period comparison.", details: err?.message || err });
-  }
-};
-
-/**
- * GET /api/bookings/revenue/monthly-series
- * Returns monthly revenue totals for the last N months (default 12).
- * Super admin only.
- */
-export const getRevenueMonthlySeries = async (req: Request, res: Response) => {
-  try {
-    const monthsParam = parseInt((req.query.months as string) || '12', 10);
-    const months = isNaN(monthsParam) ? 12 : Math.max(1, monthsParam);
-
-    const { data, error } = await supabaseAdmin
-      .from('bookings')
-      .select('service_fee, created_at')
-      .eq('is_deleted', false)
-      .in('status', ['completed', 'checked_out'])
-      .neq('payment_status', 'refunded')
-      .limit(100000)
-      .order('created_at', { ascending: true });
-
-    if (error) throw error;
-
-    const now = new Date();
-    const resultMap: Record<string, number> = {};
-
-    // initialize months keys for the last `months` months
-    for (let i = months - 1; i >= 0; i--) {
-      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-      resultMap[key] = 0;
-    }
-
-    (data ?? []).forEach((booking: any) => {
-      const fee = parseFloat(booking.service_fee) || 0;
-      const createdAt = new Date(booking.created_at);
-      const key = `${createdAt.getFullYear()}-${String(createdAt.getMonth() + 1).padStart(2, '0')}`;
-      if (key in resultMap) {
-        resultMap[key] += fee;
-      }
-    });
-
-    const series = Object.keys(resultMap).map((k) => {
-      const [y, m] = k.split('-');
-      return { year: parseInt(y, 10), month: parseInt(m, 10), label: `${y}-${m}`, revenue: resultMap[k] };
-    });
-
-    return res.json({ series, currency: 'PHP' });
-  } catch (err: any) {
-    console.error('getRevenueMonthlySeries error:', err);
-    return res.status(500).json({ error: 'Failed to get monthly revenue series.', details: err?.message || err });
-  }
-};
-
-/* ================================================================== */
-/*  Payables per Property (super_admin only)                          */
-/* ================================================================== */
-
-/**
- * GET /api/bookings/receivables
- * Returns per-property payables data:
- *   - summary: total payables, outstanding payables, # properties with balance, # finalized bookings
- *   - properties: array of { propertyId, propertyName, ownerName, totalPayable,
- *       bookingCount, oldestFinalized, bookings[] }
- * Optional query params:
- *   - status  ("all" | "completed" | "checked_out") default: all finalized
- *   - search  — filter by property name or owner name
- *   - sort    ("amount_desc" | "amount_asc" | "oldest" | "name")
- */
-export const getReceivables = async (req: Request, res: Response) => {
-  try {
-    const statusFilter = (req.query.status as string) || "all";
-    const searchQuery  = ((req.query.search as string) || "").trim().toLowerCase();
-    const sortBy       = (req.query.sort as string) || "amount_desc";
-
-    // 1) Base query: finalized bookings only. Payables are based on service_fee.
-    let query = supabaseAdmin
-      .from("bookings")
-      .select(`
-        id, property_id, checkin, checkout, service_fee,
-        status, payment_status, payment_method, service_type, created_at,
-        pet_name, pet_type,
-        properties:property_id ( name, owner_id, profiles:owner_id ( first_name, last_name, email ) )
-      `)
-      .eq("is_deleted", false)
-      .in("status", ["completed", "checked_out"])
-      .neq("payment_status", "refunded");
-
-    if (statusFilter === "completed") {
-      query = query.eq("status", "completed");
-    } else if (statusFilter === "checked_out") {
-      query = query.eq("status", "checked_out");
-    }
-
-    const { data: bookings, error } = await query.order("checkin", { ascending: true });
-    if (error) throw error;
-
-    // 2) Fetch all completed settlements to subtract from outstanding
-    const allBookingIds = (bookings ?? []).map((b: any) => b.id);
-    let settledByBooking: Record<string, number> = {};
-    if (allBookingIds.length > 0) {
-      // Fetch settlement_bookings for these bookings
-      const { data: sbData } = await supabaseAdmin
-        .from("settlement_bookings")
-        .select("booking_id, amount, proprietor_settlements!inner(status)")
-        .in("booking_id", allBookingIds);
-      (sbData ?? []).forEach((sb: any) => {
-        if ((sb as any).proprietor_settlements?.status === "completed") {
-          const bid = sb.booking_id;
-          settledByBooking[bid] = (settledByBooking[bid] || 0) + (parseFloat(sb.amount) || 0);
-        }
-      });
-    }
-
-    // 3) Group by property
-    const propertyMap: Record<string, {
-      propertyId: string;
-      propertyName: string;
-      ownerId: string;
-      ownerName: string;
-      ownerEmail: string;
-      totalPayable: number;
-      outstandingPayable: number;
-      totalServiceFee: number;
-      totalSettled: number;
-      bookingCount: number;
-      oldestFinalized: string | null;
-      bookings: any[];
-    }> = {};
-
-    (bookings ?? []).forEach((b: any) => {
-      const propId = b.property_id;
-      const propName = b.properties?.name || "Unknown Property";
-      const profile = b.properties?.profiles;
-      const ownerFirst = profile?.first_name || "";
-      const ownerLast  = profile?.last_name || "";
-      const ownerName  = [ownerFirst, ownerLast].filter(Boolean).join(" ") || "Unknown";
-      const ownerEmail = profile?.email || "";
-
-      const ownerId = b.properties?.owner_id || "";
-
-      if (!propertyMap[propId]) {
-        propertyMap[propId] = {
-          propertyId: propId,
-          propertyName: propName,
-          ownerId,
-          ownerName,
-          ownerEmail,
-          totalPayable: 0,
-          outstandingPayable: 0,
-          totalServiceFee: 0,
-          totalSettled: 0,
-          bookingCount: 0,
-          oldestFinalized: null,
-          bookings: [],
-        };
-      }
-
-      const entry = propertyMap[propId];
-      const fee    = parseFloat(b.service_fee) || 0;
-      const settled = settledByBooking[b.id] || 0;
-
-      entry.totalPayable += fee;
-      entry.totalServiceFee += fee;
-      entry.totalSettled += settled;
-      entry.outstandingPayable += Math.max(0, fee - settled);
-      entry.bookingCount += 1;
-
-      if (!entry.oldestFinalized || b.checkin < entry.oldestFinalized) {
-        entry.oldestFinalized = b.checkin;
-      }
-
-      entry.bookings.push({
-        id: b.id,
-        checkin: b.checkin,
-        checkout: b.checkout,
-        serviceFee: fee,
-        settledAmount: settled,
-        outstandingAmount: Math.max(0, fee - settled),
-        status: b.status,
-        paymentStatus: b.payment_status,
-        paymentMethod: b.payment_method,
-        serviceType: b.service_type,
-        petName: b.pet_name,
-        petType: b.pet_type,
-        createdAt: b.created_at,
-      });
-    });
-
-    let properties = Object.values(propertyMap);
-
-    // 4. Search filter
-    if (searchQuery) {
-      properties = properties.filter(
-        (p) =>
-          p.propertyName.toLowerCase().includes(searchQuery) ||
-          p.ownerName.toLowerCase().includes(searchQuery) ||
-          p.ownerEmail.toLowerCase().includes(searchQuery)
-      );
-    }
-
-    // 5) Sort
-    switch (sortBy) {
-      case "amount_asc":
-        properties.sort((a, b) => a.totalPayable - b.totalPayable);
-        break;
-      case "oldest":
-        properties.sort((a, b) => {
-          if (!a.oldestFinalized) return 1;
-          if (!b.oldestFinalized) return -1;
-          return a.oldestFinalized.localeCompare(b.oldestFinalized);
-        });
-        break;
-      case "name":
-        properties.sort((a, b) => a.propertyName.localeCompare(b.propertyName));
-        break;
-      default: // amount_desc
-        properties.sort((a, b) => b.totalPayable - a.totalPayable);
-    }
-
-    // 6) Summary
-    const totalPayables = properties.reduce((s, p) => s + p.totalPayable, 0);
-    const outstandingPayables = properties.reduce((s, p) => s + p.outstandingPayable, 0);
-    const totalFees = properties.reduce((s, p) => s + p.totalServiceFee, 0);
-    const totalSettled = properties.reduce((s, p) => s + p.totalSettled, 0);
-    const totalFinalizedBookings = properties.reduce((s, p) => s + p.bookingCount, 0);
-    const propertiesWithOutstanding = properties.filter((p) => p.outstandingPayable > 0).length;
-
-    return res.json({
-      summary: {
-        totalPayables,
-        outstandingPayables,
-        totalSettled,
-        totalFees,
-        propertiesWithBalance: propertiesWithOutstanding,
-        totalFinalizedBookings,
-
-        // Backward-compat fields used by current UI
-        totalOutstanding: outstandingPayables,
-        totalUnpaidBookings: totalFinalizedBookings,
-      },
-      properties,
       currency: "PHP",
     });
   } catch (err: any) {
+    console.error("getRevenueByTimePeriod error:", err);
+    return res.status(500).json({ error: "Failed to fetch revenue by period.", details: err?.message || err });
+  }
+};
+
+export const getRevenuePeriodComparison = async (_req: Request, res: Response) => {
+  try {
+    const bookings = await loadFinalizedBookings();
+    const now = new Date();
+
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const prevMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+
+    const quarterStartMonth = Math.floor(now.getMonth() / 3) * 3;
+    const quarterStart = new Date(now.getFullYear(), quarterStartMonth, 1);
+    const prevQuarterStart = new Date(now.getFullYear(), quarterStartMonth - 3, 1);
+
+    const yearStart = new Date(now.getFullYear(), 0, 1);
+    const prevYearStart = new Date(now.getFullYear() - 1, 0, 1);
+
+    const sumInRange = (start: Date, end: Date) =>
+      bookings
+        .filter((b: any) => {
+          const t = new Date(b.finalized_at).getTime();
+          return t >= start.getTime() && t < end.getTime();
+        })
+        .reduce((sum: number, b: any) => sum + (parseFloat(b.service_fee) || 0), 0);
+
+    const calc = (current: number, previous: number) => {
+      if (!previous) return current > 0 ? 100 : 0;
+      return ((current - previous) / previous) * 100;
+    };
+
+    const monthlyCurrent = sumInRange(monthStart, now);
+    const monthlyPrevious = sumInRange(prevMonthStart, monthStart);
+    const quarterlyCurrent = sumInRange(quarterStart, now);
+    const quarterlyPrevious = sumInRange(prevQuarterStart, quarterStart);
+    const yearlyCurrent = sumInRange(yearStart, now);
+    const yearlyPrevious = sumInRange(prevYearStart, yearStart);
+
+    return res.json({
+      monthly: {
+        current: Math.round(monthlyCurrent * 100) / 100,
+        previous: Math.round(monthlyPrevious * 100) / 100,
+        percentageChange: Math.round(calc(monthlyCurrent, monthlyPrevious) * 100) / 100,
+        period: "Month vs Previous Month",
+      },
+      quarterly: {
+        current: Math.round(quarterlyCurrent * 100) / 100,
+        previous: Math.round(quarterlyPrevious * 100) / 100,
+        percentageChange: Math.round(calc(quarterlyCurrent, quarterlyPrevious) * 100) / 100,
+        period: "Quarter vs Previous Quarter",
+      },
+      yearly: {
+        current: Math.round(yearlyCurrent * 100) / 100,
+        previous: Math.round(yearlyPrevious * 100) / 100,
+        percentageChange: Math.round(calc(yearlyCurrent, yearlyPrevious) * 100) / 100,
+        period: "Year vs Previous Year",
+      },
+      currency: "PHP",
+    });
+  } catch (err: any) {
+    console.error("getRevenuePeriodComparison error:", err);
+    return res.status(500).json({ error: "Failed to fetch revenue comparison.", details: err?.message || err });
+  }
+};
+
+export const getRevenueMonthlySeries = async (_req: Request, res: Response) => {
+  try {
+    const bookings = await loadFinalizedBookings();
+    const now = new Date();
+    const months = Array.from({ length: 12 }).map((_, index) => {
+      const d = new Date(now.getFullYear(), now.getMonth() - (11 - index), 1);
+      return {
+        key: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`,
+        year: d.getFullYear(),
+        month: d.getMonth() + 1,
+        label: d.toLocaleDateString("en-US", { month: "short", year: "numeric" }),
+        revenue: 0,
+      };
+    });
+
+    const monthMap = new Map(months.map((m) => [m.key, m]));
+    bookings.forEach((b: any) => {
+      const d = new Date(b.finalized_at);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+      const row = monthMap.get(key);
+      if (row) row.revenue += parseFloat(b.service_fee) || 0;
+    });
+
+    const series = months.map((m) => ({
+      year: m.year,
+      month: m.month,
+      label: m.label,
+      revenue: Math.round(m.revenue * 100) / 100,
+    }));
+
+    return res.json({ series, currency: "PHP" });
+  } catch (err: any) {
+    console.error("getRevenueMonthlySeries error:", err);
+    return res.status(500).json({ error: "Failed to fetch monthly revenue series.", details: err?.message || err });
+  }
+};
+
+export const getReceivables = async (req: Request, res: Response) => {
+  try {
+    const { status = "all", search = "", sort = "amount_desc" } = req.query as Record<string, string>;
+
+    let bookingsQuery = supabaseAdmin
+      .from("bookings")
+      .select("id, property_id, service_fee, status, payment_status, payment_method, service_type, pet_name, checkin, checkout, created_at, finalized_at")
+      .eq("is_deleted", false)
+      .neq("payment_status", "refunded")
+      .not("finalized_at", "is", null)
+      .limit(100000);
+
+    if (status && status !== "all") {
+      bookingsQuery = bookingsQuery.eq("status", status);
+    } else {
+      bookingsQuery = bookingsQuery.in("status", ["completed", "checked_out"]);
+    }
+
+    const { data: bookings, error: bookingsErr } = await bookingsQuery;
+    if (bookingsErr) throw bookingsErr;
+
+    const propertyIds = [...new Set((bookings ?? []).map((b: any) => b.property_id).filter(Boolean))];
+    if (propertyIds.length === 0) {
+      return res.json({
+        summary: { totalPayables: 0, totalSettled: 0, outstandingPayables: 0, propertiesWithBalance: 0 },
+        properties: [],
+      });
+    }
+
+    const { data: properties, error: propsErr } = await supabaseAdmin
+      .from("properties")
+      .select("id, name, owner_id")
+      .in("id", propertyIds)
+      .eq("is_deleted", false);
+    if (propsErr) throw propsErr;
+
+    const ownerIds = [...new Set((properties ?? []).map((p: any) => p.owner_id).filter(Boolean))];
+    const { data: owners, error: ownersErr } = await supabaseAdmin
+      .from("profiles")
+      .select("id, first_name, last_name, email")
+      .in("id", ownerIds.length ? ownerIds : ["00000000-0000-0000-0000-000000000000"]);
+    if (ownersErr) throw ownersErr;
+
+    const { data: settlements, error: setErr } = await supabaseAdmin
+      .from("proprietor_settlements")
+      .select("property_id, amount, status")
+      .in("property_id", propertyIds)
+      .limit(100000);
+    if (setErr) throw setErr;
+
+    const propertyMap = new Map((properties ?? []).map((p: any) => [p.id, p]));
+    const ownerMap = new Map((owners ?? []).map((o: any) => [o.id, o]));
+
+    const settledByProperty: Record<string, number> = {};
+    (settlements ?? []).forEach((s: any) => {
+      if (s.status === "completed") {
+        settledByProperty[s.property_id] =
+          (settledByProperty[s.property_id] || 0) + (parseFloat(s.amount) || 0);
+      }
+    });
+
+    let rows = propertyIds.map((propertyId) => {
+      const prop = propertyMap.get(propertyId);
+      const owner = ownerMap.get(prop?.owner_id);
+      const propBookings = (bookings ?? []).filter((b: any) => b.property_id === propertyId);
+      const totalPayable = propBookings.reduce((sum: number, b: any) => sum + (parseFloat(b.service_fee) || 0), 0);
+      const totalSettled = settledByProperty[propertyId] || 0;
+      const outstanding = Math.max(0, Math.round((totalPayable - totalSettled) * 100) / 100);
+
+      return {
+        propertyId,
+        propertyName: prop?.name || "Unknown Property",
+        ownerId: prop?.owner_id || null,
+        ownerName: [owner?.first_name, owner?.last_name].filter(Boolean).join(" ") || "Unknown Owner",
+        ownerEmail: owner?.email || "",
+        bookingCount: propBookings.length,
+        totalPayable: Math.round(totalPayable * 100) / 100,
+        totalSettled: Math.round(totalSettled * 100) / 100,
+        outstandingPayable: outstanding,
+        oldestFinalized: propBookings
+          .map((b: any) => b.finalized_at)
+          .filter(Boolean)
+          .sort((a: string, b: string) => new Date(a).getTime() - new Date(b).getTime())[0] || null,
+        bookings: propBookings.map((b: any) => ({
+          id: b.id,
+          checkin: b.checkin,
+          checkout: b.checkout,
+          serviceType: b.service_type,
+          paymentMethod: b.payment_method,
+          paymentStatus: b.payment_status,
+          petName: b.pet_name,
+          status: b.status,
+          serviceFee: parseFloat(b.service_fee) || 0,
+          settledAmount: 0,
+          outstandingAmount: parseFloat(b.service_fee) || 0,
+          createdAt: b.created_at,
+        })),
+      };
+    });
+
+    if (search?.trim()) {
+      const q = search.toLowerCase();
+      rows = rows.filter(
+        (r) =>
+          r.propertyName.toLowerCase().includes(q) ||
+          r.ownerName.toLowerCase().includes(q) ||
+          r.ownerEmail.toLowerCase().includes(q)
+      );
+    }
+
+    rows.sort((a: any, b: any) => {
+      switch (sort) {
+        case "amount_asc":
+          return a.outstandingPayable - b.outstandingPayable;
+        case "oldest":
+          return new Date(a.oldestFinalized || 0).getTime() - new Date(b.oldestFinalized || 0).getTime();
+        case "name":
+          return a.propertyName.localeCompare(b.propertyName);
+        case "amount_desc":
+        default:
+          return b.outstandingPayable - a.outstandingPayable;
+      }
+    });
+
+    const summary = {
+      totalPayables: Math.round(rows.reduce((s: number, r: any) => s + (r.totalPayable || 0), 0) * 100) / 100,
+      totalSettled: Math.round(rows.reduce((s: number, r: any) => s + (r.totalSettled || 0), 0) * 100) / 100,
+      outstandingPayables:
+        Math.round(rows.reduce((s: number, r: any) => s + (r.outstandingPayable || 0), 0) * 100) / 100,
+      propertiesWithBalance: rows.filter((r: any) => r.outstandingPayable > 0).length,
+    };
+
+    return res.json({ summary, properties: rows, currency: "PHP" });
+  } catch (err: any) {
     console.error("getReceivables error:", err);
-    return res.status(500).json({ error: "Failed to get receivables.", details: err?.message || err });
+    return res.status(500).json({ error: "Failed to fetch receivables.", details: err?.message || err });
   }
 };

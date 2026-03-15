@@ -39,6 +39,7 @@ import AdminServices from "./pages/admin/Services";
 import AdminReviews from "./pages/admin/Reviews";
 import AdminSettings from "./pages/admin/Settings";
 import AdminCalendar from "./pages/admin/Calendar";
+import AdminSettlements from "./pages/admin/Settlements";
 
 // SuperAdmin pages
 import SuperAdminDashboard from "./pages/superadmin/Dashboard";
@@ -129,6 +130,7 @@ const App = () => (
             <Route path="reviews" element={<AdminReviews />} />
             <Route path="settings" element={<AdminSettings />} />
             <Route path="calendar" element={<AdminCalendar />} />
+            <Route path="settlements" element={<AdminSettlements />} />
           </Route>
           
           {/* SuperAdmin routes */}

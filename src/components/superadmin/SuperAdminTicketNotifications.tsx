@@ -125,11 +125,11 @@ export const SuperAdminTicketNotifications = () => {
                   </div>
 
                   <div className="mt-3">
-                    <Link to={`/superadmin/support/${notification.reference_id}`}>
+                    <Link to={`/superadmin/support?ticket=${notification.reference_id}`}>
                       <Button 
                         size="sm" 
                         variant="outline" 
-                        className={`border-white/[0.1] text-white/80 hover:text-${isNewTicket ? 'emerald' : 'cyan'}-400 hover:bg-white/[0.05]`}
+                        className="border-white/[0.1] text-white/80 hover:text-white hover:bg-white/[0.05]"
                       >
                         <MessageSquare className="h-4 w-4 mr-1" />
                         View Ticket

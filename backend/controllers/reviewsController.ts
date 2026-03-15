@@ -1,5 +1,7 @@
 import { Request, Response } from "express";
 import { supabaseAdmin } from "../config/supabaseAdmin";
+import { notificationModel } from "../models/notificationModel";
+import { getSuperAdminRecipients } from "../services/notificationRecipients";
 
 export const reviewsController = {
   myReviews: async (req: Request, res: Response) => {
@@ -173,6 +175,55 @@ export const reviewsController = {
         .single();
 
       if (insertErr) throw insertErr;
+
+      // Notify proprietor about new review and deep-link to the specific review.
+      try {
+        const { data: property } = await supabaseAdmin
+          .from("properties")
+          .select("owner_id, name")
+          .eq("id", booking.property_id)
+          .single();
+
+        if (property?.owner_id) {
+          await notificationModel.create({
+            user_id: property.owner_id,
+            type: "review_received",
+            title: "New Review Received",
+            message: `A customer left a ${Number(rating).toFixed(1)}-star review for ${property.name || "your property"}.`,
+            link: `/admin/reviews?review=${review.id}`,
+            reference_id: review.id,
+            reference_type: "review",
+          });
+        }
+      } catch (notifErr) {
+        console.warn("Failed to create review notification:", notifErr);
+      }
+
+      // Notify super admins for negative reviews (<= 2 stars).
+      try {
+        if (Number(rating) <= 2) {
+          const superAdmins = await getSuperAdminRecipients();
+          const { data: property } = await supabaseAdmin
+            .from("properties")
+            .select("name")
+            .eq("id", booking.property_id)
+            .single();
+
+          for (const admin of superAdmins) {
+            await notificationModel.create({
+              user_id: admin.id,
+              type: "system",
+              title: "Negative Review Alert",
+              message: `A ${Number(rating).toFixed(1)}-star review was posted for ${property?.name || "a property"}.`,
+              link: "/superadmin",
+              reference_id: review.id,
+              reference_type: "review",
+            });
+          }
+        }
+      } catch (notifErr) {
+        console.warn("Failed to create negative review notifications:", notifErr);
+      }
 
       res.status(201).json({ success: true, review });
     } catch (err: any) {

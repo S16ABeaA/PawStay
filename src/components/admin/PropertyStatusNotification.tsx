@@ -11,6 +11,7 @@ interface PropertyNotification {
   title: string;
   message: string;
   type: string;
+  link?: string | null;
   reference_id: string;
   is_read: boolean;
   created_at: string;
@@ -129,7 +130,7 @@ export const PropertyStatusNotification = () => {
                   <div className="mt-3 flex gap-2">
                     {isApproved ? (
                       <>
-                        <Link to={`/admin/properties/${notification.reference_id}`}>
+                        <Link to={notification.link || "/admin/services"}>
                           <Button size="sm" variant="outline" className={`${iconColor} border-emerald-300 hover:bg-emerald-100`}>
                             View Property
                           </Button>
@@ -137,9 +138,11 @@ export const PropertyStatusNotification = () => {
                       </>
                     ) : (
                       <>
-                        <Button size="sm" variant="outline" className="border-red-300 text-red-700 hover:bg-red-100">
-                          View Feedback
-                        </Button>
+                        <Link to={notification.link || "/admin/services"}>
+                          <Button size="sm" variant="outline" className="border-red-300 text-red-700 hover:bg-red-100">
+                            View Feedback
+                          </Button>
+                        </Link>
                       </>
                     )}
                   </div>

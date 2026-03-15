@@ -300,4 +300,35 @@ export const bookingApi = {
   /** Get settlement history for a specific property */
   getPropertySettlements: (propertyId: string) =>
     authHelper.get(`${API_BASE_URL}/api/settlements/property/${propertyId}`),
+
+  /** Get proprietor receivables (own properties only) */
+  getMySettlementReceivables: (params?: { propertyId?: string }) => {
+    const qs = new URLSearchParams();
+    if (params?.propertyId) qs.set("propertyId", params.propertyId);
+    const query = qs.toString();
+    return authHelper.get(`${API_BASE_URL}/api/settlements/proprietor/receivables${query ? "?" + query : ""}`);
+  },
+
+  /** Get proprietor settlement history (own records only) */
+  getMySettlements: (params?: { propertyId?: string; status?: string; from?: string; to?: string; limit?: number }) => {
+    const qs = new URLSearchParams();
+    if (params?.propertyId) qs.set("propertyId", params.propertyId);
+    if (params?.status) qs.set("status", params.status);
+    if (params?.from) qs.set("from", params.from);
+    if (params?.to) qs.set("to", params.to);
+    if (params?.limit) qs.set("limit", String(params.limit));
+    const query = qs.toString();
+    return authHelper.get(`${API_BASE_URL}/api/settlements/proprietor/settlements${query ? "?" + query : ""}`);
+  },
+
+  /** Submit proprietor settlement request for review */
+  submitMySettlement: (data: {
+    propertyId: string;
+    amount: number;
+    method?: string;
+    referenceNo?: string;
+    proofUrl?: string;
+    notes?: string;
+    periodMonth?: string;
+  }) => authHelper.post(`${API_BASE_URL}/api/settlements/proprietor/settlements`, data),
 };

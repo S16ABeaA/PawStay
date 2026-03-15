@@ -29,6 +29,26 @@ const getSuperAdminIds = async (): Promise<string[]> => {
   }
 };
 
+const getAllActiveUsers = async (): Promise<Array<{ id: string; role: string }>> => {
+  try {
+    const { data: users, error } = await supabaseAdmin
+      .from("profiles")
+      .select("id, role")
+      .eq("is_deleted", false);
+
+    if (error) throw error;
+    return (users ?? []).map((u: any) => ({ id: u.id, role: u.role || "user" }));
+  } catch (err) {
+    console.warn("Failed to get active users:", err);
+    return [];
+  }
+};
+
+const getTicketLinkByRole = (role: string, ticketId: string): string => {
+  if (role === "super_admin") return `/superadmin/support?ticket=${ticketId}`;
+  return `/help-center?ticket=${ticketId}`;
+};
+
 /* ─── controller ─── */
 export const supportController = {
   /* ============================================
@@ -175,6 +195,16 @@ export const supportController = {
         sender_avatar: m.profiles?.avatar_url || "",
       }));
 
+      // Opening a ticket marks related chat notifications as read for this user.
+      await supabaseAdmin
+        .from("notifications")
+        .update({ is_read: true })
+        .eq("user_id", user.id)
+        .eq("reference_id", id)
+        .eq("reference_type", "support_ticket")
+        .eq("is_deleted", false)
+        .eq("is_read", false);
+
       return res.json({
         ...ticket,
         user_name: ticket.profiles
@@ -245,9 +275,9 @@ export const supportController = {
 
       if (mErr) throw mErr;
 
-      // Notify super admins about the new ticket
+      // Notify all active users about the new ticket (role-aware links)
       try {
-        const superAdminIds = await getSuperAdminIds();
+        const allUsers = await getAllActiveUsers();
         const userProfile = await supabaseAdmin
           .from("profiles")
           .select("first_name, last_name")
@@ -258,19 +288,21 @@ export const supportController = {
           ? `${userProfile.data.first_name || ""} ${userProfile.data.last_name || ""}`.trim()
           : "A user";
 
-        for (const adminId of superAdminIds) {
+        for (const recipient of allUsers) {
+          if (recipient.id === user.id) continue;
+
           await notificationModel.create({
-            user_id: adminId,
+            user_id: recipient.id,
             type: "new_ticket",
             title: "New Support Ticket",
             message: `${userName} has submitted a new support ticket: "${subject}"`,
-            link: `/admin/support/${ticket.id}`,
+            link: getTicketLinkByRole(recipient.role, ticket.id),
             reference_id: ticket.id,
             reference_type: "support_ticket",
           });
         }
       } catch (notifErr) {
-        console.warn("Failed to notify super admins about new ticket:", notifErr);
+        console.warn("Failed to notify users about new ticket:", notifErr);
         // Don't fail the request if notification creation fails
       }
 
@@ -343,7 +375,7 @@ export const supportController = {
           .eq("id", id);
       }
 
-      // Create notifications based on who sent the message
+      // Notify all active users except sender about new ticket messages.
       try {
         const senderProfile = await supabaseAdmin
           .from("profiles")
@@ -355,31 +387,21 @@ export const supportController = {
           ? `${senderProfile.data.first_name || ""} ${senderProfile.data.last_name || ""}`.trim()
           : "A user";
 
-        if (isStaff) {
-          // Super admin reply -> notify the ticket creator (admin/proprietor)
+        const allUsers = await getAllActiveUsers();
+        const preview = msg.message.length > 60 ? `${msg.message.substring(0, 60)}...` : msg.message;
+
+        for (const recipient of allUsers) {
+          if (recipient.id === user.id) continue;
+
           await notificationModel.create({
-            user_id: ticket.user_id,
+            user_id: recipient.id,
             type: "ticket_reply",
-            title: "New Reply to Your Ticket",
-            message: `A super admin has replied to your support ticket: "${msg.message.substring(0, 50)}..."`,
-            link: `/support/${ticket.id}`,
+            title: "New Ticket Message",
+            message: `${senderName} sent a new message: "${preview}"`,
+            link: getTicketLinkByRole(recipient.role, ticket.id),
             reference_id: ticket.id,
             reference_type: "support_ticket",
           });
-        } else {
-          // User reply -> notify all super admins
-          const superAdminIds = await getSuperAdminIds();
-          for (const adminId of superAdminIds) {
-            await notificationModel.create({
-              user_id: adminId,
-              type: "ticket_reply",
-              title: "New Reply on Support Ticket",
-              message: `${senderName} has replied to a support ticket: "${msg.message.substring(0, 50)}..."`,
-              link: `/admin/support/${ticket.id}`,
-              reference_id: ticket.id,
-              reference_type: "support_ticket",
-            });
-          }
         }
       } catch (notifErr) {
         console.warn("Failed to create ticket reply notification:", notifErr);
@@ -432,6 +454,39 @@ export const supportController = {
     } catch (err: any) {
       console.error("updateTicketStatus error:", err);
       return res.status(500).json({ error: err.message || "Failed to update ticket status" });
+    }
+  },
+
+  /* ============================================
+   * GET /api/support/tickets/unread-indicators
+   * Returns per-ticket unread message indicators
+   * ============================================ */
+  getUnreadIndicators: async (req: Request, res: Response) => {
+    try {
+      const user = (req as any).user;
+
+      const { data, error } = await supabaseAdmin
+        .from("notifications")
+        .select("reference_id")
+        .eq("user_id", user.id)
+        .eq("is_read", false)
+        .eq("is_deleted", false)
+        .eq("reference_type", "support_ticket")
+        .in("type", ["new_ticket", "ticket_reply"]);
+
+      if (error) throw error;
+
+      const indicators: Record<string, number> = {};
+      for (const row of data ?? []) {
+        const ref = String((row as any).reference_id || "").trim();
+        if (!ref) continue;
+        indicators[ref] = (indicators[ref] || 0) + 1;
+      }
+
+      return res.json({ indicators });
+    } catch (err: any) {
+      console.error("getUnreadIndicators error:", err);
+      return res.status(500).json({ error: err.message || "Failed to get unread indicators" });
     }
   },
 };
