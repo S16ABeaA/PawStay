@@ -101,6 +101,7 @@ app.use("/api/bookings", bookingRoutes);
 app.use('/api/favorites', favoritesRoutes);
 app.use('/api/reviews', reviewsRoutes);
 app.use("/api/settings", settingsRoutes);
+app.use('/api/platform-settings', require('./routes/platformSettingsRoute').default);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/support', supportRoutes);
 app.use('/api/analytics', analyticsRoutes);
