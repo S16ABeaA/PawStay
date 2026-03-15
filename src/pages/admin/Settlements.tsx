@@ -55,27 +55,33 @@ const statusClass = (status: string) => {
 const paymentOptions = [
   {
     title: "GCash",
-    value: "0917-000-0000",
-    note: "Use as placeholder account until final wallet details are provided.",
+    value: "",
+    note: "",
     icon: Smartphone,
   },
   {
     title: "Bank Transfer",
-    value: "Bank Name / 0000-0000-0000",
-    note: "Deposit to this placeholder bank number.",
+    value: "",
+    note: "",
     icon: Landmark,
   },
   {
     title: "PayMaya",
-    value: "0998-000-0000",
-    note: "Use this placeholder PayMaya account for payment testing.",
+    value: "",
+    note: "",
     icon: Wallet,
   },
   {
-    title: "Card / Over-the-Counter",
-    value: "Reference at Superadmin Review",
-    note: "Include the payment reference in your settlement submission.",
+    title: "Card",
+    value: "",
+    note: "",
     icon: CreditCard,
+  },
+  {
+    title: "Cash / Cheque",
+    value: "",
+    note: "",
+    icon: Landmark,
   },
 ];
 
@@ -88,6 +94,13 @@ const AdminSettlements = () => {
   const [properties, setProperties] = useState<any[]>([]);
   const [settlements, setSettlements] = useState<any[]>([]);
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [paymentChannels, setPaymentChannels] = useState<any>({
+    gcash: { imageUrl: null, description: "" },
+    paymaya: { imageUrl: null, description: "" },
+    bankTransfer: { imageUrl: null, description: "" },
+    card: { number: "", description: "" },
+    cashCheque: { description: "To be settled personally between owner and proprietor." },
+  });
   const [selectedPropertyId, setSelectedPropertyId] = useState<string>("");
   const [form, setForm] = useState({
     amount: "",
@@ -124,8 +137,24 @@ const AdminSettlements = () => {
   const refreshAll = async (keepPropertyId?: string) => {
     try {
       setLoading(true);
-      await loadReceivables();
-      await loadSettlements(keepPropertyId || selectedPropertyId || undefined);
+      await Promise.all([
+        loadReceivables(),
+        loadSettlements(keepPropertyId || selectedPropertyId || undefined),
+      ]);
+      try {
+        const channelsRes = await bookingApi.getSettlementPaymentChannels();
+        setPaymentChannels(
+          channelsRes?.paymentChannels || {
+            gcash: { imageUrl: null, description: "" },
+            paymaya: { imageUrl: null, description: "" },
+            bankTransfer: { imageUrl: null, description: "" },
+            card: { number: "", description: "" },
+            cashCheque: { description: "To be settled personally between owner and proprietor." },
+          }
+        );
+      } catch (channelErr) {
+        console.warn("Failed to load payment channels", channelErr);
+      }
     } catch (error) {
       console.error("Failed to load settlements dashboard", error);
       toast({
@@ -223,12 +252,51 @@ const AdminSettlements = () => {
 
       <Card className="mb-6">
         <CardHeader>
-          <CardTitle className="text-base">Payment Channels (Placeholders)</CardTitle>
+          <CardTitle className="text-base">Payment Channels</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
             {paymentOptions.map((option) => {
               const Icon = option.icon;
+
+              let imageUrl: string | null = null;
+              let lineOne = option.value;
+              let lineTwo = option.note;
+
+              if (option.title === "GCash") {
+                imageUrl = paymentChannels?.gcash?.imageUrl || null;
+                lineOne = paymentChannels?.gcash?.description || "GCash account image has not been provided by superadmin yet.";
+                lineTwo = "";
+              }
+
+              if (option.title === "PayMaya") {
+                imageUrl = paymentChannels?.paymaya?.imageUrl || null;
+                lineOne = paymentChannels?.paymaya?.description || "PayMaya account image has not been provided by superadmin yet.";
+                lineTwo = "";
+              }
+
+              if (option.title === "Bank Transfer") {
+                imageUrl = paymentChannels?.bankTransfer?.imageUrl || null;
+                lineOne = [paymentChannels?.bankTransfer?.number, paymentChannels?.bankTransfer?.provider]
+                  .filter(Boolean)
+                  .join(" / ") || "Bank details to be provided by superadmin.";
+                lineTwo = "";
+              }
+
+              if (option.title === "Card") {
+                lineOne = [paymentChannels?.card?.number, paymentChannels?.card?.provider]
+                  .filter(Boolean)
+                  .join(" / ") || "Card details to be provided by superadmin.";
+                lineTwo = "Include the payment reference in your settlement submission.";
+              }
+
+              if (option.title === "Cash / Cheque") {
+                lineOne = "";
+                lineTwo =
+                  paymentChannels?.cashCheque?.description ||
+                  "To be settled personally between owner and proprietor.";
+              }
+
               return (
                 <div key={option.title} className="rounded-lg border border-border p-3 bg-secondary/20">
                   <div className="flex items-center gap-2 mb-2">
@@ -237,8 +305,11 @@ const AdminSettlements = () => {
                     </div>
                     <p className="font-semibold">{option.title}</p>
                   </div>
-                  <p className="text-sm font-medium">{option.value}</p>
-                  <p className="text-xs text-muted-foreground mt-1">{option.note}</p>
+                  {imageUrl ? (
+                    <img src={imageUrl} alt={`${option.title} account`} className="w-36 h-36 object-contain rounded-md border border-border bg-white p-2 mb-2" />
+                  ) : null}
+                  {lineOne ? <p className="text-sm font-medium">{lineOne}</p> : null}
+                  {lineTwo ? <p className="text-xs text-muted-foreground mt-1">{lineTwo}</p> : null}
                 </div>
               );
             })}
@@ -336,12 +407,12 @@ const AdminSettlements = () => {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="cash">Cash</SelectItem>
                   <SelectItem value="gcash">GCash</SelectItem>
+                  <SelectItem value="paymaya">PayMaya</SelectItem>
                   <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
                   <SelectItem value="card">Card</SelectItem>
-                  <SelectItem value="cash">Cash</SelectItem>
                   <SelectItem value="check">Check</SelectItem>
-                  <SelectItem value="offset">Offset</SelectItem>
                 </SelectContent>
               </Select>
             </div>

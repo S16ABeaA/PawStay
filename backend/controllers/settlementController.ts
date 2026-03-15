@@ -213,6 +213,184 @@ export const dispatchSettlementReminders = async (req: Request, res: Response) =
   }
 };
 
+const DEFAULT_SETTLEMENT_CHANNELS = {
+  gcash: { imageUrl: null, description: "" },
+  paymaya: { imageUrl: null, description: "" },
+  bankTransfer: { imageUrl: null, number: "", provider: "" },
+  card: { number: "", provider: "" },
+  cashCheque: { description: "To be settled personally between owner and proprietor." },
+};
+
+const toCleanString = (value: any): string => (value === undefined || value === null ? "" : String(value).trim());
+
+const getSettlementPaymentChannelsFromPrefs = (prefs: any) => {
+  const raw = prefs?.settlement_payment_channels || {};
+
+  // Backward compatibility for previous flat keys.
+  const legacyGcash = raw?.gcashQrUrl || null;
+  const legacyPaymaya = raw?.paymayaQrUrl || null;
+
+  return {
+    gcash: {
+      imageUrl: raw?.gcash?.imageUrl || legacyGcash || null,
+      description: raw?.gcash?.description || "",
+    },
+    paymaya: {
+      imageUrl: raw?.paymaya?.imageUrl || legacyPaymaya || null,
+      description: raw?.paymaya?.description || "",
+    },
+    bankTransfer: {
+      imageUrl: raw?.bankTransfer?.imageUrl || null,
+      number: raw?.bankTransfer?.number || "",
+      provider: raw?.bankTransfer?.provider || raw?.bankTransfer?.description || "",
+    },
+    card: {
+      number: raw?.card?.number || "",
+      provider: raw?.card?.provider || raw?.card?.description || "",
+    },
+    cashCheque: {
+      description:
+        raw?.cashCheque?.description ||
+        DEFAULT_SETTLEMENT_CHANNELS.cashCheque.description,
+    },
+  };
+};
+
+/**
+ * GET /api/settlements/payment-channels
+ * Returns platform-level payment account images set by superadmin.
+ */
+export const getSettlementPaymentChannels = async (_req: Request, res: Response) => {
+  try {
+    const { data: superAdmins, error } = await supabaseAdmin
+      .from("profiles")
+      .select("id, notification_prefs, updated_at")
+      .eq("role", "super_admin")
+      .eq("is_deleted", false)
+      .order("updated_at", { ascending: false })
+      .limit(20);
+
+    if (error) throw error;
+
+    const selected = (superAdmins ?? []).find((row: any) => {
+      const channels = getSettlementPaymentChannelsFromPrefs(row.notification_prefs);
+      return !!channels.gcash?.imageUrl || !!channels.paymaya?.imageUrl || !!channels.bankTransfer?.imageUrl;
+    }) || superAdmins?.[0];
+
+    const channels = getSettlementPaymentChannelsFromPrefs(selected?.notification_prefs || {});
+    return res.json({ paymentChannels: channels });
+  } catch (err: any) {
+    console.error("getSettlementPaymentChannels error:", err);
+    return res.status(500).json({
+      error: "Failed to load settlement payment channels.",
+      details: err?.message || err,
+    });
+  }
+};
+
+/**
+ * PUT /api/settlements/payment-channels
+ * Superadmin updates platform-level payment account images.
+ */
+export const updateSettlementPaymentChannels = async (req: Request, res: Response) => {
+  try {
+    const user = (req as any).user;
+    const { paymentChannels, gcashQrUrl, paymayaQrUrl } = req.body || {};
+
+    if (!user?.id) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    const { data: profile, error: profileErr } = await supabaseAdmin
+      .from("profiles")
+      .select("notification_prefs")
+      .eq("id", user.id)
+      .single();
+
+    if (profileErr) throw profileErr;
+
+    const currentChannels = getSettlementPaymentChannelsFromPrefs(profile?.notification_prefs || {});
+    const incoming = paymentChannels || {};
+
+    const normalizedChannels = {
+      gcash: {
+        imageUrl:
+          incoming?.gcash?.imageUrl !== undefined
+            ? (incoming?.gcash?.imageUrl || null)
+            : (gcashQrUrl !== undefined ? (gcashQrUrl || null) : currentChannels.gcash.imageUrl),
+        description:
+          incoming?.gcash?.description !== undefined
+            ? toCleanString(incoming?.gcash?.description)
+            : currentChannels.gcash.description,
+      },
+      paymaya: {
+        imageUrl:
+          incoming?.paymaya?.imageUrl !== undefined
+            ? (incoming?.paymaya?.imageUrl || null)
+            : (paymayaQrUrl !== undefined ? (paymayaQrUrl || null) : currentChannels.paymaya.imageUrl),
+        description:
+          incoming?.paymaya?.description !== undefined
+            ? toCleanString(incoming?.paymaya?.description)
+            : currentChannels.paymaya.description,
+      },
+      bankTransfer: {
+        imageUrl:
+          incoming?.bankTransfer?.imageUrl !== undefined
+            ? (incoming?.bankTransfer?.imageUrl || null)
+            : currentChannels.bankTransfer.imageUrl,
+        number:
+          incoming?.bankTransfer?.number !== undefined
+            ? toCleanString(incoming?.bankTransfer?.number)
+            : currentChannels.bankTransfer.number,
+        provider:
+          incoming?.bankTransfer?.provider !== undefined
+            ? toCleanString(incoming?.bankTransfer?.provider)
+            : (incoming?.bankTransfer?.description !== undefined
+                ? toCleanString(incoming?.bankTransfer?.description)
+                : currentChannels.bankTransfer.provider),
+      },
+      card: {
+        number:
+          incoming?.card?.number !== undefined
+            ? toCleanString(incoming?.card?.number)
+            : currentChannels.card.number,
+        provider:
+          incoming?.card?.provider !== undefined
+            ? toCleanString(incoming?.card?.provider)
+            : (incoming?.card?.description !== undefined
+                ? toCleanString(incoming?.card?.description)
+                : currentChannels.card.provider),
+      },
+      cashCheque: {
+        description:
+          incoming?.cashCheque?.description !== undefined
+            ? toCleanString(incoming?.cashCheque?.description) || DEFAULT_SETTLEMENT_CHANNELS.cashCheque.description
+            : currentChannels.cashCheque.description || DEFAULT_SETTLEMENT_CHANNELS.cashCheque.description,
+      },
+    };
+
+    const mergedPrefs = {
+      ...(profile?.notification_prefs || {}),
+      settlement_payment_channels: normalizedChannels,
+    };
+
+    const { error: updateErr } = await supabaseAdmin
+      .from("profiles")
+      .update({ notification_prefs: mergedPrefs, updated_at: new Date().toISOString() })
+      .eq("id", user.id);
+
+    if (updateErr) throw updateErr;
+
+    return res.json({ paymentChannels: getSettlementPaymentChannelsFromPrefs(mergedPrefs) });
+  } catch (err: any) {
+    console.error("updateSettlementPaymentChannels error:", err);
+    return res.status(500).json({
+      error: "Failed to update settlement payment channels.",
+      details: err?.message || err,
+    });
+  }
+};
+
 /* ================================================================== */
 /*  Settlement Controller                                              */
 /*  Manages proprietor → platform fee payments (settlement of          */
@@ -504,6 +682,7 @@ export const getSettlement = async (req: Request, res: Response) => {
  */
 export const updateSettlementStatus = async (req: Request, res: Response) => {
   try {
+    const adminId = (req as any).user?.id;
     const { id } = req.params;
     const { status } = req.body;
 
@@ -519,9 +698,15 @@ export const updateSettlementStatus = async (req: Request, res: Response) => {
 
     if (existingErr) throw existingErr;
 
+    const updates: any = { status, updated_at: new Date().toISOString() };
+    if (status !== "pending" && adminId) {
+      // Keep created_by aligned with the reviewer so proprietor history shows the superadmin who processed it.
+      updates.created_by = adminId;
+    }
+
     const { data, error } = await supabaseAdmin
       .from("proprietor_settlements")
-      .update({ status, updated_at: new Date().toISOString() })
+      .update(updates)
       .eq("id", id)
       .select()
       .single();

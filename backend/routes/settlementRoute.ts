@@ -15,6 +15,8 @@ import {
   getProprietorReceivables,
   getProprietorSettlements,
   submitProprietorSettlement,
+  getSettlementPaymentChannels,
+  updateSettlementPaymentChannels,
 } from "../controllers/settlementController";
 
 const router = Router();
@@ -27,6 +29,8 @@ router.get("/proprietor/monthly-status", getProprietorMonthlyStatus);
 router.get("/proprietor/receivables", requireAdmin, getProprietorReceivables);
 router.get("/proprietor/settlements", requireAdmin, getProprietorSettlements);
 router.post("/proprietor/settlements", requireAdmin, submitProprietorSettlement);
+router.get("/payment-channels", getSettlementPaymentChannels);
+router.put("/payment-channels", requireSuperAdmin, updateSettlementPaymentChannels);
 
 // Dashboard aggregates (must be before /:id to avoid route conflicts)
 router.get("/monthly-receivables", requireSuperAdmin, getMonthlyReceivables);

@@ -301,6 +301,28 @@ export const bookingApi = {
   getPropertySettlements: (propertyId: string) =>
     authHelper.get(`${API_BASE_URL}/api/settlements/property/${propertyId}`),
 
+  /** Get superadmin settlement payment channels */
+  getSettlementPaymentChannels: (): Promise<{
+    paymentChannels: {
+      gcash: { imageUrl: string | null; description: string };
+      paymaya: { imageUrl: string | null; description: string };
+      bankTransfer: { imageUrl: string | null; number: string; provider: string };
+      card: { number: string; provider: string };
+      cashCheque: { description: string };
+    };
+  }> => authHelper.get(`${API_BASE_URL}/api/settlements/payment-channels`),
+
+  /** Update superadmin settlement payment channels */
+  updateSettlementPaymentChannels: (data: {
+    paymentChannels: {
+      gcash?: { imageUrl?: string | null; description?: string };
+      paymaya?: { imageUrl?: string | null; description?: string };
+      bankTransfer?: { imageUrl?: string | null; number?: string; provider?: string };
+      card?: { number?: string; provider?: string };
+      cashCheque?: { description?: string };
+    };
+  }) => authHelper.put(`${API_BASE_URL}/api/settlements/payment-channels`, data),
+
   /** Get proprietor receivables (own properties only) */
   getMySettlementReceivables: (params?: { propertyId?: string }) => {
     const qs = new URLSearchParams();
