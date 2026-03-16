@@ -6,8 +6,11 @@ import { Switch } from "@/components/ui/switch";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
-import { Globe, Bell, Shield, Palette, Mail } from "lucide-react";
-import { useState } from "react";
+import { Globe, Bell, Shield, Palette, Mail, Loader2 } from "lucide-react";
+import { useState, useEffect } from "react";
+import { authHelper } from "@/helpers/authHelper";
+
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_BACKEND_URL || "http://localhost:5001";
 
 const SuperAdminSettings = () => {
   const { toast } = useToast();
@@ -18,14 +21,62 @@ const SuperAdminSettings = () => {
   const [platformFee, setPlatformFee] = useState<number>(10);
   const [minBookingAmount, setMinBookingAmount] = useState<number>(25);
 
-  const handleSave = () => {
-    toast({
-      title: "Settings saved",
-      description: `Platform settings updated — ${platformName} (${platformFee}% commission).`,
-    });
-    // TODO: persist to backend
-    console.log("Save platform settings", { platformName, supportEmail, platformFee, minBookingAmount });
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    let mounted = true;
+    const fetchSettings = async () => {
+      try {
+        setLoading(true);
+        const data = await authHelper.get(`${API_BASE_URL}/api/platform-settings`);
+        if (mounted && data.settings) {
+          if (data.settings.name) setPlatformName(data.settings.name);
+          if (data.settings.commission_percent !== undefined) setPlatformFee(Number(data.settings.commission_percent));
+        }
+      } catch (error) {
+        console.error("Failed to load platform settings", error);
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    };
+    fetchSettings();
+    return () => { mounted = false; };
+  }, []);
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await authHelper.put(`${API_BASE_URL}/api/platform-settings`, {
+        name: platformName,
+        commission_percent: platformFee
+      });
+      toast({
+        title: "Settings saved",
+        description: `Platform settings updated — ${platformName} (${platformFee}% commission).`,
+      });
+    } catch (error: any) {
+      console.error("Failed to save platform settings", error);
+      toast({
+        title: "Error",
+        description: error?.message || "Failed to save settings.",
+        variant: "destructive"
+      });
+    } finally {
+      setSaving(false);
+    }
   };
+
+  if (loading) {
+    return (
+      <SuperAdminLayout title="Settings" subtitle="Platform configuration and preferences">
+        <div className="flex flex-col items-center justify-center gap-3 py-16">
+          <Loader2 className="h-8 w-8 animate-spin text-[#808080]" />
+          <span className="text-sm text-[#808080]">Loading settings...</span>
+        </div>
+      </SuperAdminLayout>
+    );
+  }
 
   return (
     <SuperAdminLayout title="Settings" subtitle="Platform configuration and preferences">
@@ -151,9 +202,11 @@ const SuperAdminSettings = () => {
 
               <Button
                 onClick={handleSave}
+                disabled={saving}
                 className="bg-[#ffa31a] hover:bg-[#ffa31a]/90 text-[#1b1b1b]"
               >
-                Save Changes
+                {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {saving ? "Saving..." : "Save Changes"}
               </Button>
             </CardContent>
           </Card>
@@ -206,9 +259,11 @@ const SuperAdminSettings = () => {
               </div>
               <Button
                 onClick={handleSave}
+                disabled={saving}
                 className="bg-[#ffa31a] hover:bg-[#ffa31a]/90 text-[#1b1b1b] mt-4"
               >
-                Save Preferences
+                {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {saving ? "Saving..." : "Save Preferences"}
               </Button>
             </CardContent>
           </Card>
@@ -298,9 +353,11 @@ const SuperAdminSettings = () => {
               </div>
               <Button
                 onClick={handleSave}
+                disabled={saving}
                 className="bg-[#ffa31a] hover:bg-[#ffa31a]/90 text-[#1b1b1b] mt-4"
               >
-                Save Email Settings
+                {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {saving ? "Saving..." : "Save Email Settings"}
               </Button>
             </CardContent>
           </Card>
