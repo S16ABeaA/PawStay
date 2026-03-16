@@ -79,12 +79,17 @@ export const reviewsController = {
       const userId = (req as any).user?.id;
       if (!userId) return res.status(401).json({ message: "Unauthorized" });
 
-      const reviewId = req.params.id;
+      const reviewId = String(req.params.id || "");
+      if (!reviewId) return res.status(400).json({ message: "Review ID is required" });
       const { reply } = req.body;
       if (!reply || !String(reply).trim()) return res.status(400).json({ message: "Reply is required" });
 
       // Ensure review exists
-      const { data: reviewRow, error: reviewErr } = await supabaseAdmin.from("reviews").select("id, property_id").eq("id", reviewId).single();
+      const { data: reviewRow, error: reviewErr } = await supabaseAdmin
+        .from("reviews")
+        .select("id, property_id, user_id")
+        .eq("id", reviewId)
+        .single();
       if (reviewErr) throw reviewErr;
 
       // Ensure current user owns the property the review belongs to
@@ -100,6 +105,20 @@ export const reviewsController = {
         .single();
 
       if (updateErr) throw updateErr;
+
+      try {
+        await notificationModel.create({
+          user_id: reviewRow.user_id,
+          type: "system",
+          title: "New Reply to Your Review",
+          message: "A proprietor has replied to your review.",
+          link: "/notifications",
+          reference_id: reviewId,
+          reference_type: "review",
+        });
+      } catch (notifErr) {
+        console.warn("Failed to create review-reply notification:", notifErr);
+      }
 
       res.status(200).json({ success: true, review: data });
     } catch (err: any) {

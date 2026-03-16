@@ -5,6 +5,64 @@ import { serviceHistoryModel } from "../models/serviceHistoryModel";
 import { supabaseAdmin } from "../config/supabaseAdmin";
 import { notificationModel } from "../models/notificationModel";
 import { getSuperAdminRecipients } from "../services/notificationRecipients";
+import {
+  batchSignStorageRefs,
+  getSignedStorageUrl,
+  parseDocumentField,
+  parseStorageRef,
+  uploadDataUrlToBucket,
+} from "../utils/storageMedia";
+
+const PROPERTY_IMAGE_BUCKET = "property-images";
+const BOOKING_DOCUMENT_BUCKET = "booking-documents";
+const BOOKING_PAYMENT_BUCKET = "booking-payments";
+
+const toDocFieldValue = (values: string[]): string | null => {
+  if (!values.length) return null;
+  return values.length === 1 ? values[0] : JSON.stringify(values);
+};
+
+const collectBookingMediaRefs = (booking: any) => {
+  const refs = [] as Array<{ bucket: string; path: string }>;
+
+  const propertyRef = parseStorageRef(booking.property_image, PROPERTY_IMAGE_BUCKET);
+  if (propertyRef) refs.push(propertyRef);
+
+  const paymentRef = parseStorageRef(booking.payment_screenshot_url, BOOKING_PAYMENT_BUCKET);
+  if (paymentRef) refs.push(paymentRef);
+
+  const vaccineDocs = parseDocumentField(booking.vaccine_record_url).values;
+  for (const doc of vaccineDocs) {
+    const ref = parseStorageRef(doc, BOOKING_DOCUMENT_BUCKET);
+    if (ref) refs.push(ref);
+  }
+
+  const medDocs = parseDocumentField(booking.med_cert_url).values;
+  for (const doc of medDocs) {
+    const ref = parseStorageRef(doc, BOOKING_DOCUMENT_BUCKET);
+    if (ref) refs.push(ref);
+  }
+
+  return refs;
+};
+
+const signBookingMedia = (booking: any, signedMap: Record<string, string>) => {
+  const vaccineDocs = parseDocumentField(booking.vaccine_record_url).values
+    .map((url) => getSignedStorageUrl(url, signedMap, BOOKING_DOCUMENT_BUCKET))
+    .filter((url): url is string => Boolean(url));
+
+  const medDocs = parseDocumentField(booking.med_cert_url).values
+    .map((url) => getSignedStorageUrl(url, signedMap, BOOKING_DOCUMENT_BUCKET))
+    .filter((url): url is string => Boolean(url));
+
+  return {
+    ...booking,
+    property_image: getSignedStorageUrl(booking.property_image, signedMap, PROPERTY_IMAGE_BUCKET),
+    payment_screenshot_url: getSignedStorageUrl(booking.payment_screenshot_url, signedMap, BOOKING_PAYMENT_BUCKET),
+    vaccine_record_url: toDocFieldValue(vaccineDocs),
+    med_cert_url: toDocFieldValue(medDocs),
+  };
+};
 
 /**
  * GET /api/bookings/admin/calendar
@@ -294,7 +352,10 @@ export const adminCreateWalkin = async (req: Request, res: Response) => {
       }
     }
 
-    return res.status(201).json({ booking });
+    const createdBookingMediaRefs = collectBookingMediaRefs(booking);
+    const createdBookingSignedMap = await batchSignStorageRefs(createdBookingMediaRefs);
+
+    return res.status(201).json({ booking: signBookingMedia(booking, createdBookingSignedMap) });
   } catch (err: any) {
     console.error("adminCreateWalkin error:", err);
     return res.status(500).json({ error: "Failed to create walk-in booking.", details: err?.message || err });
@@ -490,7 +551,11 @@ export const listBookingsForOwner = async (req: any, res: any) => {
       };
     });
 
-    return res.json({ bookings: normalized, total: Number(count ?? normalized.length) });
+    const mediaRefs = normalized.flatMap((booking: any) => collectBookingMediaRefs(booking));
+    const signedMap = await batchSignStorageRefs(mediaRefs);
+    const signedBookings = normalized.map((booking: any) => signBookingMedia(booking, signedMap));
+
+    return res.json({ bookings: signedBookings, total: Number(count ?? signedBookings.length) });
   } catch (err: any) {
     console.error('listBookingsForOwner error:', err);
     return res.status(500).json({ error: 'Failed to list bookings.' });
@@ -527,14 +592,17 @@ export const getBookingForOwner = async (req: any, res: any) => {
     if (error) throw error;
     if (!booking) return res.status(404).json({ error: 'Booking not found' });
 
-    return res.json(booking);
+    const mediaRefs = collectBookingMediaRefs(booking);
+    const signedMap = await batchSignStorageRefs(mediaRefs);
+
+    return res.json(signBookingMedia(booking, signedMap));
   } catch (err: any) {
     console.error('getBookingForOwner error:', err);
     return res.status(500).json({ error: 'Failed to get booking.' });
   }
 };
 
-/** POST /api/bookings/:id/status — owner can change booking status (confirm/cancel) */
+/** POST /api/bookings/:id/status — owner can change booking status (confirm/complete/cancel) */
 export const updateBookingStatusForOwner = async (req: any, res: any) => {
   try {
     const userId = (req as any).user?.id;
@@ -547,7 +615,7 @@ export const updateBookingStatusForOwner = async (req: any, res: any) => {
     // Fetch booking and property owner
     const { data: booking, error: bookErr } = await supabaseAdmin
       .from('bookings')
-      .select('id, property_id, status')
+      .select('id, property_id, status, user_id, payment_method, payment_status, service_name, service_type, checkin, total_price')
       .eq('id', bookingId)
       .eq('is_deleted', false)
       .single();
@@ -565,17 +633,83 @@ export const updateBookingStatusForOwner = async (req: any, res: any) => {
     }
 
     // Only allow certain transitions
-    const allowed = ['confirmed', 'cancelled'];
+    const allowed = ['confirmed', 'completed', 'cancelled'];
     if (!allowed.includes(newStatus)) return res.status(400).json({ error: 'Invalid status' });
+
+    const updateData: Record<string, any> = { status: newStatus };
+
+    // Business rule: cash bookings become paid once proprietor confirms.
+    if (
+      (newStatus === 'confirmed' || newStatus === 'completed') &&
+      booking.payment_method === 'cash' &&
+      (!booking.payment_status || booking.payment_status === 'unpaid')
+    ) {
+      updateData.payment_status = 'paid';
+      updateData.paid_at = new Date().toISOString();
+    }
 
     const { data: updated, error: updErr } = await supabaseAdmin
       .from('bookings')
-      .update({ status: newStatus })
+      .update(updateData)
       .eq('id', bookingId)
       .select()
       .single();
 
     if (updErr) throw updErr;
+
+    try {
+      const svcLabel = booking.service_name || booking.service_type || 'your service';
+      const dateStr = new Date(booking.checkin).toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+      });
+
+      const STATUS_NOTIF: Record<string, { type: string; title: string; message: string }> = {
+        confirmed: {
+          type: 'booking_confirmed',
+          title: 'Booking Confirmed',
+          message: `Your booking for ${svcLabel} on ${dateStr} has been confirmed.`,
+        },
+        completed: {
+          type: 'system',
+          title: 'Booking Completed',
+          message: `Your booking for ${svcLabel} on ${dateStr} has been marked as completed.`,
+        },
+        cancelled: {
+          type: 'booking_cancelled',
+          title: 'Booking Cancelled',
+          message: `Your booking for ${svcLabel} on ${dateStr} has been cancelled.`,
+        },
+      };
+
+      const notif = STATUS_NOTIF[newStatus];
+      if (notif) {
+        await notificationModel.create({
+          user_id: booking.user_id,
+          type: notif.type,
+          title: notif.title,
+          message: notif.message,
+          link: '/my-bookings',
+          reference_id: bookingId,
+          reference_type: 'booking',
+        });
+      }
+
+      if (updateData.payment_status === 'paid') {
+        await notificationModel.create({
+          user_id: booking.user_id,
+          type: 'payment_received',
+          title: 'Payment Confirmed',
+          message: `Your cash payment of ₱${Number(booking.total_price || 0).toFixed(2)} has been marked as paid.`,
+          link: '/my-bookings',
+          reference_id: bookingId,
+          reference_type: 'booking',
+        });
+      }
+    } catch (notifErr) {
+      console.error('Failed to create owner status-change notification:', notifErr);
+    }
 
     return res.json({ booking: updated });
   } catch (err: any) {
@@ -835,6 +969,54 @@ export const createBooking = async (req: Request, res: Response) => {
 
     let resolvedPetId = pet_id || null;
 
+    const uploadBase = `bookings/${userId}/${Date.now()}`;
+    const vaccineParsed = parseDocumentField(vaccine_record_url ?? null).values;
+    const medParsed = parseDocumentField(med_cert_url ?? null).values;
+
+    const uploadedVaccineDocs: string[] = [];
+    for (let idx = 0; idx < vaccineParsed.length; idx += 1) {
+      const source = vaccineParsed[idx];
+      if (!source) continue;
+      if (/^data:/i.test(source)) {
+        const uploadedPath = await uploadDataUrlToBucket(
+          source,
+          BOOKING_DOCUMENT_BUCKET,
+          `${uploadBase}/vaccine-${idx + 1}`
+        );
+        if (uploadedPath) uploadedVaccineDocs.push(uploadedPath);
+      } else {
+        uploadedVaccineDocs.push(source);
+      }
+    }
+
+    const uploadedMedDocs: string[] = [];
+    for (let idx = 0; idx < medParsed.length; idx += 1) {
+      const source = medParsed[idx];
+      if (!source) continue;
+      if (/^data:/i.test(source)) {
+        const uploadedPath = await uploadDataUrlToBucket(
+          source,
+          BOOKING_DOCUMENT_BUCKET,
+          `${uploadBase}/medical-${idx + 1}`
+        );
+        if (uploadedPath) uploadedMedDocs.push(uploadedPath);
+      } else {
+        uploadedMedDocs.push(source);
+      }
+    }
+
+    let uploadedPaymentProof: string | null = payment_screenshot_url || null;
+    if (uploadedPaymentProof && /^data:/i.test(uploadedPaymentProof)) {
+      uploadedPaymentProof = await uploadDataUrlToBucket(
+        uploadedPaymentProof,
+        BOOKING_PAYMENT_BUCKET,
+        `${uploadBase}/payment-proof`
+      );
+    }
+
+    const finalVaccineRecordUrl = toDocFieldValue(uploadedVaccineDocs);
+    const finalMedCertUrl = toDocFieldValue(uploadedMedDocs);
+
     // If no pet_id provided but pet details given, create a new pet
     if (!resolvedPetId && pet_name) {
       try {
@@ -871,8 +1053,8 @@ export const createBooking = async (req: Request, res: Response) => {
           pet_age: pet_age || null,
           pet_weight: pet_weight || null,
           special_requirements: special_requirements || null,
-          med_cert_url: med_cert_url || null,
-          vaccine_record_url: vaccine_record_url || null,
+          med_cert_url: finalMedCertUrl,
+          vaccine_record_url: finalVaccineRecordUrl,
           service_name: service_name || null,
           service_type: service_type || null,
           owner_name: owner_name || null,
@@ -884,7 +1066,7 @@ export const createBooking = async (req: Request, res: Response) => {
           total_price: finalTotalPrice,
           payment_method: payment_method || null,
           reference_number: reference_number || null,
-          payment_screenshot_url: payment_screenshot_url || null,
+          payment_screenshot_url: uploadedPaymentProof,
           notes: null,
           source: "web",
           created_by: null,
@@ -1011,7 +1193,7 @@ export const checkPaymentStatus = async (req: Request, res: Response) => {
 
     const { data: booking, error } = await supabaseAdmin
       .from("bookings")
-      .select("id, payment_status, payment_method, total_price, paid_at, status")
+      .select("id, property_id, service_name, service_type, checkin, payment_status, payment_method, total_price, paid_at, status")
       .eq("id", bookingId)
       .eq("user_id", userId)
       .eq("is_deleted", false)
@@ -1019,6 +1201,58 @@ export const checkPaymentStatus = async (req: Request, res: Response) => {
 
     if (error && error.code !== "PGRST116") throw error;
     if (!booking) return res.status(404).json({ error: "Booking not found." });
+
+    const shouldAutoSettleCash =
+      booking.payment_method === "cash" &&
+      (!booking.payment_status || booking.payment_status === "unpaid") &&
+      ["confirmed", "completed", "checked_in", "checked_out"].includes(booking.status);
+
+    if (shouldAutoSettleCash) {
+      const nowIso = new Date().toISOString();
+      const { error: settleErr } = await supabaseAdmin
+        .from("bookings")
+        .update({ payment_status: "paid", paid_at: nowIso })
+        .eq("id", bookingId)
+        .eq("user_id", userId)
+        .eq("is_deleted", false)
+        .eq("payment_method", "cash")
+        .or("payment_status.is.null,payment_status.eq.unpaid");
+
+      if (!settleErr) {
+        booking.payment_status = "paid";
+        booking.paid_at = nowIso;
+      }
+    }
+
+    // Notify proprietor when customer checks payment status from My Bookings.
+    try {
+      const { data: property } = await supabaseAdmin
+        .from("properties")
+        .select("owner_id, name")
+        .eq("id", booking.property_id)
+        .single();
+
+      if (property?.owner_id) {
+        const svcLabel = booking.service_name || booking.service_type || "a booking";
+        const statusLabel = booking.payment_status === "paid"
+          ? "paid"
+          : booking.payment_status === "partially_refunded"
+            ? "partially refunded"
+            : booking.payment_status || "unpaid";
+
+        await notificationModel.create({
+          user_id: property.owner_id,
+          type: "info",
+          title: "Customer Checked Payment",
+          message: `A customer checked payment status for ${svcLabel} (${new Date(booking.checkin).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}). Current status: ${statusLabel}.`,
+          link: "/admin/bookings",
+          reference_id: booking.id,
+          reference_type: "booking",
+        });
+      }
+    } catch (notifErr) {
+      console.error("Failed to create check-payment notification:", notifErr);
+    }
 
     return res.json({
       id: booking.id,
@@ -1121,7 +1355,40 @@ export const listBookings = async (req: Request, res: Response) => {
     if (!userId) return res.status(401).json({ error: "Unauthorized" });
 
     const bookings = await bookingModel.getByUser(userId);
-    return res.json({ bookings });
+
+    const shouldSettle = (bookings ?? []).filter(
+      (b: any) =>
+        b.payment_method === "cash" &&
+        (!b.payment_status || b.payment_status === "unpaid") &&
+        ["confirmed", "completed", "checked_in", "checked_out"].includes(b.status)
+    );
+
+    if (shouldSettle.length > 0) {
+      const ids = shouldSettle.map((b: any) => b.id);
+      const nowIso = new Date().toISOString();
+
+      await supabaseAdmin
+        .from("bookings")
+        .update({ payment_status: "paid", paid_at: nowIso })
+        .in("id", ids)
+        .eq("user_id", userId)
+        .eq("is_deleted", false)
+        .eq("payment_method", "cash")
+        .or("payment_status.is.null,payment_status.eq.unpaid");
+
+      for (const b of bookings as any[]) {
+        if (ids.includes(b.id)) {
+          b.payment_status = "paid";
+          b.paid_at = nowIso;
+        }
+      }
+    }
+
+    const mediaRefs = (bookings ?? []).flatMap((booking: any) => collectBookingMediaRefs(booking));
+    const signedMap = await batchSignStorageRefs(mediaRefs);
+    const signedBookings = (bookings ?? []).map((booking: any) => signBookingMedia(booking, signedMap));
+
+    return res.json({ bookings: signedBookings });
   } catch (err: any) {
     console.error("listBookings error:", err);
     return res.status(500).json({ error: "Failed to fetch bookings." });
@@ -1137,7 +1404,10 @@ export const getBooking = async (req: Request, res: Response) => {
     const booking = await bookingModel.getById(req.params.id as string, userId);
     if (!booking) return res.status(404).json({ error: "Booking not found." });
 
-    return res.json({ booking });
+    const mediaRefs = collectBookingMediaRefs(booking);
+    const signedMap = await batchSignStorageRefs(mediaRefs);
+
+    return res.json({ booking: signBookingMedia(booking, signedMap) });
   } catch (err: any) {
     console.error("getBooking error:", err);
     return res.status(500).json({ error: "Failed to fetch booking." });
@@ -1230,7 +1500,7 @@ export const adminUpdateBookingStatus = async (req: Request, res: Response) => {
     if (!bookingId) return res.status(400).json({ error: "Missing booking id" });
     const { status } = req.body;
 
-    const validStatuses = ["pending", "confirmed", "cancelled"];
+    const validStatuses = ["pending", "confirmed", "completed", "cancelled"];
     if (!status || !validStatuses.includes(status)) {
       return res.status(400).json({ error: `Invalid status. Must be one of: ${validStatuses.join(", ")}` });
     }
@@ -1248,7 +1518,10 @@ export const adminUpdateBookingStatus = async (req: Request, res: Response) => {
       }
     }
 
-    const updated = await bookingModel.updateStatus(bookingId, status);
+    const updated = await bookingModel.updateStatus(bookingId, status, {
+      autoMarkPaidOnConfirm: true,
+      autoMarkCashPaidOnComplete: true,
+    });
 
     // ── Notify the customer about the status change ──
     try {
@@ -1265,6 +1538,7 @@ export const adminUpdateBookingStatus = async (req: Request, res: Response) => {
 
         const STATUS_NOTIF: Record<string, { type: string; title: string; message: string }> = {
           confirmed:   { type: 'booking_confirmed',  title: 'Booking Confirmed',  message: `Your booking for ${svcLabel} on ${dateStr} has been confirmed.` },
+          completed:   { type: 'booking_completed',  title: 'Booking Completed',  message: `Your booking for ${svcLabel} on ${dateStr} has been marked as completed.` },
           cancelled:   { type: 'booking_cancelled',  title: 'Booking Cancelled',   message: `Your booking for ${svcLabel} on ${dateStr} has been cancelled.` },
         };
 

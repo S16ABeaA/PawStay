@@ -1,5 +1,12 @@
 import { supabaseAdmin } from "../config/supabaseAdmin";
 import { supabaseClient } from "../config/supabaseClient";
+import {
+  batchSignStorageRefs,
+  getSignedStorageUrl,
+  parseStorageRef,
+} from "../utils/storageMedia";
+
+const PROPERTY_IMAGE_BUCKET = "property-images";
 
 
 export type HotelFilters = {
@@ -451,8 +458,18 @@ export async function getProperties(filters: HotelFilters = {}) {
     }
   }
 
+  const imageRefs = rows
+    .flatMap((p: any) => [p.cover_image ?? p.images?.[0], ...(p.images ?? [])])
+    .map((raw) => parseStorageRef(raw, PROPERTY_IMAGE_BUCKET))
+    .filter((ref): ref is { bucket: string; path: string } => !!ref);
+  const signedMap = await batchSignStorageRefs(imageRefs);
+
   return rows.map((p: any) => ({
     ...p,
+    cover_image: getSignedStorageUrl(p.cover_image ?? p.images?.[0], signedMap, PROPERTY_IMAGE_BUCKET),
+    images: (p.images ?? [])
+      .map((img: string) => getSignedStorageUrl(img, signedMap, PROPERTY_IMAGE_BUCKET))
+      .filter(Boolean),
     cheapest_service_price: cheapestByProperty.get(String(p.id)) ?? null,
   }));
 }
@@ -519,6 +536,12 @@ export async function getRandomProperties(limit: number = 6) {
 
   if (!data || data.length === 0) return [];
 
+  const imageRefs = data
+    .flatMap((p: any) => [p.cover_image ?? p.images?.[0], ...(p.images ?? [])])
+    .map((raw) => parseStorageRef(raw, PROPERTY_IMAGE_BUCKET))
+    .filter((ref): ref is { bucket: string; path: string } => !!ref);
+  const signedMap = await batchSignStorageRefs(imageRefs);
+
   // Enrich with cheapest service price
   return data.map((p: any) => {
     const activeServices = p.property_services?.filter((s: any) => s.is_active) || [];
@@ -527,6 +550,10 @@ export async function getRandomProperties(limit: number = 6) {
       : null;
     return {
       ...p,
+      cover_image: getSignedStorageUrl(p.cover_image ?? p.images?.[0], signedMap, PROPERTY_IMAGE_BUCKET),
+      images: (p.images ?? [])
+        .map((img: string) => getSignedStorageUrl(img, signedMap, PROPERTY_IMAGE_BUCKET))
+        .filter(Boolean),
       cheapest_service_price: cheapestPrice,
     };
   });
@@ -575,8 +602,17 @@ export async function getPropertyById(id: string) {
   const pricingRow = Array.isArray(rawPricing) ? rawPricing[0] : rawPricing;
   const paymentOpts = pricingRow?.payment_options || {};
 
+  const imageRefs = [data.cover_image ?? data.images?.[0], ...(data.images ?? [])]
+    .map((raw) => parseStorageRef(raw, PROPERTY_IMAGE_BUCKET))
+    .filter((ref): ref is { bucket: string; path: string } => !!ref);
+  const signedMap = await batchSignStorageRefs(imageRefs);
+
   return {
     ...data,
+    cover_image: getSignedStorageUrl(data.cover_image ?? data.images?.[0], signedMap, PROPERTY_IMAGE_BUCKET),
+    images: (data.images ?? [])
+      .map((img: string) => getSignedStorageUrl(img, signedMap, PROPERTY_IMAGE_BUCKET))
+      .filter(Boolean),
     cheapest_service_price: cheapestPrice,
     qrCodeGCash: paymentOpts.gcash_qr_url || null,
     qrCodePayMaya: paymentOpts.paymaya_qr_url || null,
