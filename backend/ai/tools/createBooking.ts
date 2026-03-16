@@ -1,4 +1,5 @@
 import { backendApiClient } from "../http/backendApiClient";
+import { TOOL_INPUT_SCHEMA_TEXT } from "../schemas";
 import { ToolContext, ToolDefinition } from "../types";
 
 export interface CreateBookingArgs {
@@ -22,7 +23,7 @@ interface CreateBookingResult {
 export const createBookingTool: ToolDefinition<CreateBookingArgs, CreateBookingResult> = {
   name: "create_booking",
   description: "Create a booking for a user and service",
-  inputSchema: "{ user_id: string, service_id: string, date: string, time: string }",
+  inputSchema: TOOL_INPUT_SCHEMA_TEXT.create_booking,
   run: async (args, context?: ToolContext) => {
     const response = await backendApiClient.request<any>("/api/bookings", {
       method: "POST",

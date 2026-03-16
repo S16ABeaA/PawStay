@@ -1,4 +1,5 @@
 import { backendApiClient } from "../http/backendApiClient";
+import { TOOL_INPUT_SCHEMA_TEXT } from "../schemas";
 import { ToolContext, ToolDefinition } from "../types";
 
 export interface CancelBookingArgs {
@@ -17,7 +18,7 @@ interface CancelBookingResult {
 export const cancelBookingTool: ToolDefinition<CancelBookingArgs, CancelBookingResult> = {
   name: "cancel_booking",
   description: "Cancel an existing booking",
-  inputSchema: "{ booking_id: string }",
+  inputSchema: TOOL_INPUT_SCHEMA_TEXT.cancel_booking,
   run: async (args, context?: ToolContext) => {
     const response = await backendApiClient.request<any>(`/api/bookings/${args.booking_id}/cancel`, {
       method: "PATCH",

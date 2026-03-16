@@ -1,4 +1,5 @@
 import { backendApiClient } from "../http/backendApiClient";
+import { TOOL_INPUT_SCHEMA_TEXT } from "../schemas";
 import { ToolContext, ToolDefinition } from "../types";
 
 export interface GetUserBookingsArgs {
@@ -23,7 +24,7 @@ interface GetUserBookingsResult {
 export const getUserBookingsTool: ToolDefinition<GetUserBookingsArgs, GetUserBookingsResult> = {
   name: "get_user_bookings",
   description: "Get bookings for a specific user",
-  inputSchema: "{ user_id: string }",
+  inputSchema: TOOL_INPUT_SCHEMA_TEXT.get_user_bookings,
   run: async (_args, context?: ToolContext) => {
     const response = await backendApiClient.request<any>("/api/bookings/mine", {
       method: "GET",

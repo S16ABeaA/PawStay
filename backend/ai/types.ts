@@ -1,6 +1,10 @@
 export type ToolName =
   | "search_services"
-  | "get_reviews"
+  | "get_review_count"
+  | "read_image_text"
+  | "get_pets"
+  | "get_pet_profile"
+  | "get_pet_service_history"
   | "create_booking"
   | "get_user_bookings"
   | "cancel_booking"

@@ -1,5 +1,6 @@
-import { backendApiClient } from "../http/backendApiClient";
-import { ToolDefinition } from "../types";
+import { backendApiClient } from "../../http/backendApiClient";
+import { TOOL_INPUT_SCHEMA_TEXT } from "../../schemas";
+import { ToolDefinition } from "../../types";
 
 export interface GetReviewCountArgs {
   propertyId?: string;
@@ -46,9 +47,9 @@ const extractReviewStats = (response: any): { avgRating: number | null; totalRev
 };
 
 export const getReviewCountTool: ToolDefinition<GetReviewCountArgs, GetReviewCountResult> = {
-  name: "get_reviews",
+  name: "get_review_count",
   description: "Get average rating and total review count for a property",
-  inputSchema: "{ propertyId: string }",
+  inputSchema: TOOL_INPUT_SCHEMA_TEXT.get_review_count,
   run: async (args) => {
     const source = (args || {}) as GetReviewCountArgs;
     const propertyId = String(source.propertyId || "").trim();

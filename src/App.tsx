@@ -32,6 +32,7 @@ import RequireAdmin from "./components/RequireAdmin";
 import RequireSuperAdmin from "./components/RequireSuperAdmin";
 import { AdminPropertyProvider } from "./hooks/useAdminProperty";
 import AiChat from "./pages/AiChat";
+import PetAnalyzerPage from "./pages/PetAnalyzerPage";
 import { AiChatButton } from "./components/ai/AiChatButton";
 
 
@@ -145,6 +146,7 @@ const App = () => (
           <Route path="/superadmin/amenities" element={<RequireSuperAdmin><SuperAdminAmenities /></RequireSuperAdmin>} />
           
           <Route path="/ai-chat" element={<AiChat />} />
+          <Route path="/pet-analyzer" element={<PetAnalyzerPage />} />
           
           <Route path="*" element={<NotFound />} />
         </Routes>
