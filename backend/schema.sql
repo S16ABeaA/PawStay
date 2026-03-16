@@ -1020,3 +1020,20 @@ begin
   return v_result;
 end;
 $$;
+
+
+-- ============================================================
+-- SITE SETTINGS  (single-row platform configuration)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS site_settings (
+  key text PRIMARY KEY DEFAULT 'site',
+  website_name text NOT NULL DEFAULT 'PawStay',
+  payment_qr text,
+  commission numeric NOT NULL DEFAULT 10,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+INSERT INTO site_settings (key, website_name, commission)
+VALUES ('site', 'PawStay', 10)
+ON CONFLICT (key) DO NOTHING;
