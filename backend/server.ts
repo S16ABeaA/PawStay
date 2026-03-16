@@ -27,6 +27,7 @@ import {
   dispatchWeeklyReportNotificationsJob,
 } from './services/notificationJobs';
 import aiRoutes from './routes/aiRoute';
+import platformSettingsRoutes from './routes/platformSettingsRoute';
  
 dotenv.config({ path: '../.env' });
 dotenv.config();
@@ -112,6 +113,7 @@ app.use('/api/support', supportRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/settlements', settlementRoutes);
 app.use('/api/ai', aiRoutes);
+app.use('/api/platform-settings', platformSettingsRoutes);
 
 // Simple health/root route
 app.get('/', (_req, res) => {

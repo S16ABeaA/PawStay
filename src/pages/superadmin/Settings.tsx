@@ -7,11 +7,52 @@ import { Switch } from "@/components/ui/switch";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
-import { Globe, Bell, Shield, Mail, Upload, X } from "lucide-react";
+import { Globe, Bell, Shield, Mail, Upload, X, Loader2 } from "lucide-react";
 import { bookingApi } from "@/services/bookingApi";
+import { authHelper } from "@/helpers/authHelper";
+
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_BACKEND_URL || "http://localhost:5001";
 
 const SuperAdminSettings = () => {
   const { toast } = useToast();
+
+  // Platform general settings
+  const [platformName, setPlatformName] = useState<string>("PawStay");
+  const [supportEmail, setSupportEmail] = useState<string>("support@pawstay.com");
+  const [platformFee, setPlatformFee] = useState<number>(10);
+  const [minBookingAmount, setMinBookingAmount] = useState<number>(25);
+  const [loadingGeneral, setLoadingGeneral] = useState(true);
+  const [savingGeneral, setSavingGeneral] = useState(false);
+
+  useEffect(() => {
+    let mounted = true;
+    authHelper.get(`${API_BASE_URL}/api/platform-settings`)
+      .then(data => {
+        if (mounted && data.settings) {
+          if (data.settings.name) setPlatformName(data.settings.name);
+          if (data.settings.commission_percent !== undefined) setPlatformFee(Number(data.settings.commission_percent));
+        }
+      })
+      .catch(err => console.error("Failed to load platform settings", err))
+      .finally(() => { if (mounted) setLoadingGeneral(false); });
+    return () => { mounted = false; };
+  }, []);
+
+  const handleSaveGeneral = async () => {
+    setSavingGeneral(true);
+    try {
+      await authHelper.put(`${API_BASE_URL}/api/platform-settings`, {
+        name: platformName,
+        commission_percent: platformFee,
+      });
+      toast({ title: "Settings saved", description: `Platform settings updated — ${platformName} (${platformFee}% commission).` });
+    } catch (error: any) {
+      toast({ title: "Error", description: error?.message || "Failed to save settings.", variant: "destructive" });
+    } finally {
+      setSavingGeneral(false);
+    }
+  };
+
   const [paymentChannels, setPaymentChannels] = useState({
     gcash: { imageUrl: "", description: "" },
     paymaya: { imageUrl: "", description: "" },
@@ -61,10 +102,7 @@ const SuperAdminSettings = () => {
   }, []);
 
   const handleSave = () => {
-    toast({
-      title: "Settings saved",
-      description: "Platform settings have been updated successfully.",
-    });
+    toast({ title: "Settings saved", description: "Platform settings have been updated successfully." });
   };
 
   const handleImageUpload = (e: ChangeEvent<HTMLInputElement>, target: "gcash" | "paymaya" | "bankTransfer") => {
@@ -183,18 +221,26 @@ const SuperAdminSettings = () => {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
+              {loadingGeneral ? (
+                <div className="flex items-center gap-2 py-4 text-[#808080]">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <span className="text-sm">Loading settings...</span>
+                </div>
+              ) : (
               <div className="grid md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label className="text-white/80">Platform Name</Label>
                   <Input
-                    defaultValue="PawStay"
+                    value={platformName}
+                    onChange={(e) => setPlatformName(e.target.value)}
                     className="bg-[#292929] border-white/[0.09] text-white"
                   />
                 </div>
                 <div className="space-y-2">
                   <Label className="text-white/80">Support Email</Label>
                   <Input
-                    defaultValue="support@pawstay.com"
+                    value={supportEmail}
+                    onChange={(e) => setSupportEmail(e.target.value)}
                     className="bg-[#292929] border-white/[0.09] text-white"
                   />
                 </div>
@@ -202,7 +248,8 @@ const SuperAdminSettings = () => {
                   <Label className="text-white/80">Platform Fee (%)</Label>
                   <Input
                     type="number"
-                    defaultValue="10"
+                    value={String(platformFee)}
+                    onChange={(e) => setPlatformFee(Number(e.target.value || 0))}
                     className="bg-[#292929] border-white/[0.09] text-white"
                   />
                 </div>
@@ -210,11 +257,13 @@ const SuperAdminSettings = () => {
                   <Label className="text-white/80">Minimum Booking Amount</Label>
                   <Input
                     type="number"
-                    defaultValue="25"
+                    value={String(minBookingAmount)}
+                    onChange={(e) => setMinBookingAmount(Number(e.target.value || 0))}
                     className="bg-[#292929] border-white/[0.09] text-white"
                   />
                 </div>
               </div>
+              )}
 
               <div className="space-y-4 pt-4 border-t border-white/[0.06]">
                 <div className="flex items-center justify-between">
@@ -245,10 +294,12 @@ const SuperAdminSettings = () => {
               </div>
 
               <Button
-                onClick={handleSave}
+                onClick={handleSaveGeneral}
+                disabled={savingGeneral || loadingGeneral}
                 className="bg-[#ffa31a] hover:bg-[#ffa31a]/90 text-[#1b1b1b]"
               >
-                Save Changes
+                {savingGeneral && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {savingGeneral ? "Saving..." : "Save Changes"}
               </Button>
 
               <div className="space-y-4 pt-4 border-t border-white/[0.06]">
