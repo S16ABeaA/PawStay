@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { platformSettingsController } from "../controllers/platformSettingsController";
-import { authMiddleware } from "../middleware/authMiddleware";
+import { authMiddleware, requireSuperAdmin } from "../middleware/authMiddleware";
 
 const router = Router();
 
@@ -8,6 +8,6 @@ const router = Router();
 router.get("/", platformSettingsController.getPlatformSettings);
 
 // protected update endpoint
-router.put("/", authMiddleware, platformSettingsController.updatePlatformSettings);
+router.put("/", authMiddleware, requireSuperAdmin, platformSettingsController.updatePlatformSettings);
 
 export default router;

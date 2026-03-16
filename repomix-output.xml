@@ -27220,6 +27220,397 @@ SELECT
 FROM current_period cp, prev_period pp;
 </file>
 
+<file path="backend/controllers/settingsController.ts">
+import { Request, Response } from "express";
+import { supabaseAdmin } from "../config/supabaseAdmin";
+
+// ─── Helper: get a specific property (or first) owned by the authenticated user ───
+async function getOwnerProperty(ownerId: string, propertyId?: string | null) {
+  // If a specific property_id is given, verify it belongs to this owner
+  if (propertyId) {
+    const { data, error } = await supabaseAdmin
+      .from("properties")
+      .select("id")
+      .eq("id", propertyId)
+      .eq("owner_id", ownerId)
+      .eq("is_deleted", false)
+      .maybeSingle();
+
+    if (error) throw error;
+    if (data) return data;
+    // Fall through to default if the given id is invalid
+  }
+
+  // Fallback: first property
+  const { data, error } = await supabaseAdmin
+    .from("properties")
+    .select("id")
+    .eq("owner_id", ownerId)
+    .eq("is_deleted", false)
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data; // null when no property exists yet
+}
+
+export const settingsController = {
+  // ════════════════════════════════════════════════
+  // GET /api/settings — load all settings for the logged-in owner
+  // ════════════════════════════════════════════════
+  getSettings: async (req: Request, res: Response) => {
+    try {
+      const user = (req as any).user;
+      if (!user) return res.status(401).json({ error: "Unauthorized" });
+
+      // 1. Profile (notification prefs)
+      const { data: profile, error: profileErr } = await supabaseAdmin
+        .from("profiles")
+        .select("notification_prefs")
+        .eq("id", user.id)
+        .single();
+
+      if (profileErr) throw profileErr;
+
+      // 2. Property (business info) — respect optional property_id query param
+      const qsPropertyId = req.query.property_id as string | undefined;
+      const property = await getOwnerProperty(user.id, qsPropertyId);
+
+      let business: any = null;
+      let availability: any = null;
+      let payment: any = null;
+      let propertySetup: any = null;
+      let propertyId: string | null = null;
+
+      if (property) {
+        propertyId = property.id;
+
+        // Business info from properties table
+        const { data: propData, error: propErr } = await supabaseAdmin
+          .from("properties")
+          .select("name, phone, website, description, address, capacity")
+          .eq("id", propertyId)
+          .single();
+
+        if (propErr) throw propErr;
+        business = propData;
+
+        // Availability from property_setup
+        const { data: setup } = await supabaseAdmin
+          .from("property_setup")
+          .select("operating_hours, policies, booking_rules, compliance, health_safety, vet_availability, sanitation_protocols, emergency_contact")
+          .eq("property_id", propertyId)
+          .maybeSingle();
+
+        availability = setup?.operating_hours || {};
+        propertySetup = setup || {};
+
+        // Payment from property_pricing
+        const { data: pricing } = await supabaseAdmin
+          .from("property_pricing")
+          .select("payment_options")
+          .eq("property_id", propertyId)
+          .maybeSingle();
+
+        payment = pricing?.payment_options || {};
+      }
+
+      return res.json({
+        propertyId,
+        business: business || {
+          name: "",
+          phone: "",
+          website: "",
+          description: "",
+          address: "",
+          capacity: 0,
+        },
+        notifications: profile?.notification_prefs || {
+          newBookings: true,
+          bookingReminders: true,
+          newReviews: true,
+          marketingUpdates: false,
+        },
+        availability: {
+          maxCapacity: business?.capacity || 0,
+          minStay: availability?.minStay ?? 1,
+          checkInTime: availability?.checkInTime || availability?.dailyOpenTime || "09:00",
+          checkOutTime: availability?.checkOutTime || availability?.dailyCloseTime || "17:00",
+          sameDayBookings: availability?.sameDayBookings ?? true,
+        },
+        payment: {
+          acceptedMethods: payment?.accepted_methods || payment?.methods || [],
+          gcashQrUrl: payment?.gcash_qr_url || null,
+          paymayaQrUrl: payment?.paymaya_qr_url || null,
+        },
+        propertySetup: {
+          unvaccinatedPolicy: propertySetup?.policies?.unvaccinatedPolicy || false,
+          unvaccinatedPolicyDetails: propertySetup?.policies?.unvaccinatedPolicyDetails || "",
+          breedRestrictions: propertySetup?.policies?.breedRestrictions || false,
+          breedRestrictionsDetails: propertySetup?.policies?.breedRestrictionsDetails || "",
+          aggressivePolicy: propertySetup?.policies?.aggressivePolicy || false,
+          aggressivePolicyDetails: propertySetup?.policies?.aggressivePolicyDetails || "",
+          bookingRules: Array.isArray(propertySetup?.booking_rules) ? propertySetup.booking_rules : [],
+          complianceRequirements: Array.isArray(propertySetup?.compliance) ? propertySetup.compliance : [],
+          vaccinationRequirements: Array.isArray(propertySetup?.health_safety) ? propertySetup.health_safety : [],
+          emergencyProcedures: propertySetup?.emergency_contact || "",
+          vetAvailability: Array.isArray(propertySetup?.vet_availability) ? propertySetup.vet_availability : [],
+          isolationSanitationProtocols: Array.isArray(propertySetup?.sanitation_protocols) ? propertySetup.sanitation_protocols : [],
+        },
+      });
+    } catch (err: any) {
+      console.error("[Settings] getSettings error:", err.message);
+      return res.status(500).json({ error: err.message });
+    }
+  },
+
+  // ════════════════════════════════════════════════
+  // PUT /api/settings/business — update business info
+  // ════════════════════════════════════════════════
+  updateBusiness: async (req: Request, res: Response) => {
+    try {
+      const user = (req as any).user;
+      if (!user) return res.status(401).json({ error: "Unauthorized" });
+
+      const bodyPropertyId = req.body.property_id as string | undefined;
+      const property = await getOwnerProperty(user.id, bodyPropertyId);
+      if (!property) return res.status(404).json({ error: "No property found for this account." });
+
+      const { name, phone, website, description, address } = req.body;
+
+      const updates: Record<string, any> = { updated_at: new Date().toISOString() };
+      if (name !== undefined) updates.name = name;
+      if (phone !== undefined) updates.phone = phone;
+      if (website !== undefined) updates.website = website;
+      if (description !== undefined) updates.description = description;
+      if (address !== undefined) updates.address = address;
+
+      const { error } = await supabaseAdmin
+        .from("properties")
+        .update(updates)
+        .eq("id", property.id);
+
+      if (error) throw error;
+
+      return res.json({ success: true });
+    } catch (err: any) {
+      console.error("[Settings] updateBusiness error:", err.message);
+      return res.status(500).json({ error: err.message });
+    }
+  },
+
+  // ════════════════════════════════════════════════
+  // PUT /api/settings/notifications — update notification prefs
+  // ════════════════════════════════════════════════
+  updateNotifications: async (req: Request, res: Response) => {
+    try {
+      const user = (req as any).user;
+      if (!user) return res.status(401).json({ error: "Unauthorized" });
+
+      const { newBookings, bookingReminders, newReviews, marketingUpdates } = req.body;
+
+      const prefs: Record<string, boolean> = {};
+      if (newBookings !== undefined) prefs.newBookings = newBookings;
+      if (bookingReminders !== undefined) prefs.bookingReminders = bookingReminders;
+      if (newReviews !== undefined) prefs.newReviews = newReviews;
+      if (marketingUpdates !== undefined) prefs.marketingUpdates = marketingUpdates;
+
+      const { error } = await supabaseAdmin
+        .from("profiles")
+        .update({
+          notification_prefs: prefs,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", user.id);
+
+      if (error) throw error;
+
+      return res.json({ success: true });
+    } catch (err: any) {
+      console.error("[Settings] updateNotifications error:", err.message);
+      return res.status(500).json({ error: err.message });
+    }
+  },
+
+  // ════════════════════════════════════════════════
+  // PUT /api/settings/availability — update availability settings
+  // ════════════════════════════════════════════════
+  updateAvailability: async (req: Request, res: Response) => {
+    try {
+      const user = (req as any).user;
+      if (!user) return res.status(401).json({ error: "Unauthorized" });
+
+      const bodyPropertyId = req.body.property_id as string | undefined;
+      const property = await getOwnerProperty(user.id, bodyPropertyId);
+      if (!property) return res.status(404).json({ error: "No property found for this account." });
+
+      const { maxCapacity, minStay, checkInTime, checkOutTime, sameDayBookings } = req.body;
+
+      // Update capacity in properties table
+      if (maxCapacity !== undefined) {
+        const { error: capErr } = await supabaseAdmin
+          .from("properties")
+          .update({ capacity: maxCapacity, updated_at: new Date().toISOString() })
+          .eq("id", property.id);
+        if (capErr) throw capErr;
+      }
+
+      // Update operating_hours in property_setup — merge with existing
+      const { data: existing } = await supabaseAdmin
+        .from("property_setup")
+        .select("operating_hours")
+        .eq("property_id", property.id)
+        .maybeSingle();
+
+      const mergedHours = {
+        ...(existing?.operating_hours || {}),
+        checkInTime: checkInTime ?? existing?.operating_hours?.checkInTime ?? "09:00",
+        checkOutTime: checkOutTime ?? existing?.operating_hours?.checkOutTime ?? "17:00",
+        minStay: minStay ?? existing?.operating_hours?.minStay ?? 1,
+        sameDayBookings: sameDayBookings ?? existing?.operating_hours?.sameDayBookings ?? true,
+      };
+
+      const { error } = await supabaseAdmin
+        .from("property_setup")
+        .upsert(
+          {
+            property_id: property.id,
+            operating_hours: mergedHours,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: "property_id" }
+        );
+
+      if (error) throw error;
+
+      return res.json({ success: true });
+    } catch (err: any) {
+      console.error("[Settings] updateAvailability error:", err.message);
+      return res.status(500).json({ error: err.message });
+    }
+  },
+
+  // ════════════════════════════════════════════════
+  // PUT /api/settings/payment — update payment settings
+  // ════════════════════════════════════════════════
+  updatePayment: async (req: Request, res: Response) => {
+    try {
+      const user = (req as any).user;
+      if (!user) return res.status(401).json({ error: "Unauthorized" });
+
+      const bodyPropertyId = req.body.property_id as string | undefined;
+      const property = await getOwnerProperty(user.id, bodyPropertyId);
+      if (!property) return res.status(404).json({ error: "No property found for this account." });
+
+      const { acceptedMethods, gcashQrUrl, paymayaQrUrl } = req.body;
+
+      // Merge with existing payment_options
+      const { data: existing } = await supabaseAdmin
+        .from("property_pricing")
+        .select("payment_options")
+        .eq("property_id", property.id)
+        .maybeSingle();
+
+      const merged = {
+        ...(existing?.payment_options || {}),
+        accepted_methods: acceptedMethods ?? existing?.payment_options?.accepted_methods ?? [],
+        gcash_qr_url: gcashQrUrl !== undefined ? gcashQrUrl : (existing?.payment_options?.gcash_qr_url ?? null),
+        paymaya_qr_url: paymayaQrUrl !== undefined ? paymayaQrUrl : (existing?.payment_options?.paymaya_qr_url ?? null),
+      };
+
+      const { error } = await supabaseAdmin
+        .from("property_pricing")
+        .upsert(
+          {
+            property_id: property.id,
+            payment_options: merged,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: "property_id" }
+        );
+
+      if (error) throw error;
+
+      return res.json({ success: true });
+    } catch (err: any) {
+      console.error("[Settings] updatePayment error:", err.message);
+      return res.status(500).json({ error: err.message });
+    }
+  },
+
+  // ════════════════════════════════════════════════
+  // PUT /api/settings/property-setup — update property setup
+  // ════════════════════════════════════════════════
+  updatePropertySetup: async (req: Request, res: Response) => {
+    try {
+      const user = (req as any).user;
+      if (!user) return res.status(401).json({ error: "Unauthorized" });
+
+      const bodyPropertyId = req.body.property_id as string | undefined;
+      const property = await getOwnerProperty(user.id, bodyPropertyId);
+      if (!property) return res.status(404).json({ error: "No property found for this account." });
+
+      const {
+        unvaccinatedPolicy,
+        unvaccinatedPolicyDetails,
+        breedRestrictions,
+        breedRestrictionsDetails,
+        aggressivePolicy,
+        aggressivePolicyDetails,
+        bookingRules,
+        complianceRequirements,
+        vaccinationRequirements,
+        emergencyProcedures,
+        vetAvailability,
+        isolationSanitationProtocols,
+      } = req.body;
+
+      // Merge with existing columns in property_setup
+      const { data: existing } = await supabaseAdmin
+        .from("property_setup")
+        .select("policies, booking_rules, compliance, health_safety, vet_availability, sanitation_protocols, emergency_contact")
+        .eq("property_id", property.id)
+        .maybeSingle();
+
+      const mergedPolicies = {
+        ...(existing?.policies || {}),
+        unvaccinatedPolicy: unvaccinatedPolicy ?? existing?.policies?.unvaccinatedPolicy ?? false,
+        unvaccinatedPolicyDetails: unvaccinatedPolicyDetails ?? existing?.policies?.unvaccinatedPolicyDetails ?? "",
+        breedRestrictions: breedRestrictions ?? existing?.policies?.breedRestrictions ?? false,
+        breedRestrictionsDetails: breedRestrictionsDetails ?? existing?.policies?.breedRestrictionsDetails ?? "",
+        aggressivePolicy: aggressivePolicy ?? existing?.policies?.aggressivePolicy ?? false,
+        aggressivePolicyDetails: aggressivePolicyDetails ?? existing?.policies?.aggressivePolicyDetails ?? "",
+      };
+
+      const { error } = await supabaseAdmin
+        .from("property_setup")
+        .upsert(
+          {
+            property_id: property.id,
+            policies: mergedPolicies,
+            booking_rules: bookingRules ?? existing?.booking_rules ?? [],
+            compliance: complianceRequirements ?? existing?.compliance ?? [],
+            health_safety: vaccinationRequirements ?? existing?.health_safety ?? [],
+            vet_availability: vetAvailability ?? existing?.vet_availability ?? [],
+            sanitation_protocols: isolationSanitationProtocols ?? existing?.sanitation_protocols ?? [],
+            emergency_contact: emergencyProcedures ?? existing?.emergency_contact ?? "",
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: "property_id" }
+        );
+
+      if (error) throw error;
+
+      return res.json({ success: true });
+    } catch (err: any) {
+      console.error("[Settings] updatePropertySetup error:", err.message);
+      return res.status(500).json({ error: err.message });
+    }
+  },
+};
+</file>
+
 <file path="backend/middleware/authMiddleware.ts">
 import { Request, Response, NextFunction } from "express";
 import { supabaseClient } from "../config/supabaseClient";
@@ -32565,397 +32956,6 @@ export const settingsApi = {
 }
 </file>
 
-<file path="backend/controllers/settingsController.ts">
-import { Request, Response } from "express";
-import { supabaseAdmin } from "../config/supabaseAdmin";
-
-// ─── Helper: get a specific property (or first) owned by the authenticated user ───
-async function getOwnerProperty(ownerId: string, propertyId?: string | null) {
-  // If a specific property_id is given, verify it belongs to this owner
-  if (propertyId) {
-    const { data, error } = await supabaseAdmin
-      .from("properties")
-      .select("id")
-      .eq("id", propertyId)
-      .eq("owner_id", ownerId)
-      .eq("is_deleted", false)
-      .maybeSingle();
-
-    if (error) throw error;
-    if (data) return data;
-    // Fall through to default if the given id is invalid
-  }
-
-  // Fallback: first property
-  const { data, error } = await supabaseAdmin
-    .from("properties")
-    .select("id")
-    .eq("owner_id", ownerId)
-    .eq("is_deleted", false)
-    .order("created_at", { ascending: true })
-    .limit(1)
-    .maybeSingle();
-
-  if (error) throw error;
-  return data; // null when no property exists yet
-}
-
-export const settingsController = {
-  // ════════════════════════════════════════════════
-  // GET /api/settings — load all settings for the logged-in owner
-  // ════════════════════════════════════════════════
-  getSettings: async (req: Request, res: Response) => {
-    try {
-      const user = (req as any).user;
-      if (!user) return res.status(401).json({ error: "Unauthorized" });
-
-      // 1. Profile (notification prefs)
-      const { data: profile, error: profileErr } = await supabaseAdmin
-        .from("profiles")
-        .select("notification_prefs")
-        .eq("id", user.id)
-        .single();
-
-      if (profileErr) throw profileErr;
-
-      // 2. Property (business info) — respect optional property_id query param
-      const qsPropertyId = req.query.property_id as string | undefined;
-      const property = await getOwnerProperty(user.id, qsPropertyId);
-
-      let business: any = null;
-      let availability: any = null;
-      let payment: any = null;
-      let propertySetup: any = null;
-      let propertyId: string | null = null;
-
-      if (property) {
-        propertyId = property.id;
-
-        // Business info from properties table
-        const { data: propData, error: propErr } = await supabaseAdmin
-          .from("properties")
-          .select("name, phone, website, description, address, capacity")
-          .eq("id", propertyId)
-          .single();
-
-        if (propErr) throw propErr;
-        business = propData;
-
-        // Availability from property_setup
-        const { data: setup } = await supabaseAdmin
-          .from("property_setup")
-          .select("operating_hours, policies, booking_rules, compliance, health_safety, vet_availability, sanitation_protocols, emergency_contact")
-          .eq("property_id", propertyId)
-          .maybeSingle();
-
-        availability = setup?.operating_hours || {};
-        propertySetup = setup || {};
-
-        // Payment from property_pricing
-        const { data: pricing } = await supabaseAdmin
-          .from("property_pricing")
-          .select("payment_options")
-          .eq("property_id", propertyId)
-          .maybeSingle();
-
-        payment = pricing?.payment_options || {};
-      }
-
-      return res.json({
-        propertyId,
-        business: business || {
-          name: "",
-          phone: "",
-          website: "",
-          description: "",
-          address: "",
-          capacity: 0,
-        },
-        notifications: profile?.notification_prefs || {
-          newBookings: true,
-          bookingReminders: true,
-          newReviews: true,
-          marketingUpdates: false,
-        },
-        availability: {
-          maxCapacity: business?.capacity || 0,
-          minStay: availability?.minStay ?? 1,
-          checkInTime: availability?.checkInTime || availability?.dailyOpenTime || "09:00",
-          checkOutTime: availability?.checkOutTime || availability?.dailyCloseTime || "17:00",
-          sameDayBookings: availability?.sameDayBookings ?? true,
-        },
-        payment: {
-          acceptedMethods: payment?.accepted_methods || payment?.methods || [],
-          gcashQrUrl: payment?.gcash_qr_url || null,
-          paymayaQrUrl: payment?.paymaya_qr_url || null,
-        },
-        propertySetup: {
-          unvaccinatedPolicy: propertySetup?.policies?.unvaccinatedPolicy || false,
-          unvaccinatedPolicyDetails: propertySetup?.policies?.unvaccinatedPolicyDetails || "",
-          breedRestrictions: propertySetup?.policies?.breedRestrictions || false,
-          breedRestrictionsDetails: propertySetup?.policies?.breedRestrictionsDetails || "",
-          aggressivePolicy: propertySetup?.policies?.aggressivePolicy || false,
-          aggressivePolicyDetails: propertySetup?.policies?.aggressivePolicyDetails || "",
-          bookingRules: Array.isArray(propertySetup?.booking_rules) ? propertySetup.booking_rules : [],
-          complianceRequirements: Array.isArray(propertySetup?.compliance) ? propertySetup.compliance : [],
-          vaccinationRequirements: Array.isArray(propertySetup?.health_safety) ? propertySetup.health_safety : [],
-          emergencyProcedures: propertySetup?.emergency_contact || "",
-          vetAvailability: Array.isArray(propertySetup?.vet_availability) ? propertySetup.vet_availability : [],
-          isolationSanitationProtocols: Array.isArray(propertySetup?.sanitation_protocols) ? propertySetup.sanitation_protocols : [],
-        },
-      });
-    } catch (err: any) {
-      console.error("[Settings] getSettings error:", err.message);
-      return res.status(500).json({ error: err.message });
-    }
-  },
-
-  // ════════════════════════════════════════════════
-  // PUT /api/settings/business — update business info
-  // ════════════════════════════════════════════════
-  updateBusiness: async (req: Request, res: Response) => {
-    try {
-      const user = (req as any).user;
-      if (!user) return res.status(401).json({ error: "Unauthorized" });
-
-      const bodyPropertyId = req.body.property_id as string | undefined;
-      const property = await getOwnerProperty(user.id, bodyPropertyId);
-      if (!property) return res.status(404).json({ error: "No property found for this account." });
-
-      const { name, phone, website, description, address } = req.body;
-
-      const updates: Record<string, any> = { updated_at: new Date().toISOString() };
-      if (name !== undefined) updates.name = name;
-      if (phone !== undefined) updates.phone = phone;
-      if (website !== undefined) updates.website = website;
-      if (description !== undefined) updates.description = description;
-      if (address !== undefined) updates.address = address;
-
-      const { error } = await supabaseAdmin
-        .from("properties")
-        .update(updates)
-        .eq("id", property.id);
-
-      if (error) throw error;
-
-      return res.json({ success: true });
-    } catch (err: any) {
-      console.error("[Settings] updateBusiness error:", err.message);
-      return res.status(500).json({ error: err.message });
-    }
-  },
-
-  // ════════════════════════════════════════════════
-  // PUT /api/settings/notifications — update notification prefs
-  // ════════════════════════════════════════════════
-  updateNotifications: async (req: Request, res: Response) => {
-    try {
-      const user = (req as any).user;
-      if (!user) return res.status(401).json({ error: "Unauthorized" });
-
-      const { newBookings, bookingReminders, newReviews, marketingUpdates } = req.body;
-
-      const prefs: Record<string, boolean> = {};
-      if (newBookings !== undefined) prefs.newBookings = newBookings;
-      if (bookingReminders !== undefined) prefs.bookingReminders = bookingReminders;
-      if (newReviews !== undefined) prefs.newReviews = newReviews;
-      if (marketingUpdates !== undefined) prefs.marketingUpdates = marketingUpdates;
-
-      const { error } = await supabaseAdmin
-        .from("profiles")
-        .update({
-          notification_prefs: prefs,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", user.id);
-
-      if (error) throw error;
-
-      return res.json({ success: true });
-    } catch (err: any) {
-      console.error("[Settings] updateNotifications error:", err.message);
-      return res.status(500).json({ error: err.message });
-    }
-  },
-
-  // ════════════════════════════════════════════════
-  // PUT /api/settings/availability — update availability settings
-  // ════════════════════════════════════════════════
-  updateAvailability: async (req: Request, res: Response) => {
-    try {
-      const user = (req as any).user;
-      if (!user) return res.status(401).json({ error: "Unauthorized" });
-
-      const bodyPropertyId = req.body.property_id as string | undefined;
-      const property = await getOwnerProperty(user.id, bodyPropertyId);
-      if (!property) return res.status(404).json({ error: "No property found for this account." });
-
-      const { maxCapacity, minStay, checkInTime, checkOutTime, sameDayBookings } = req.body;
-
-      // Update capacity in properties table
-      if (maxCapacity !== undefined) {
-        const { error: capErr } = await supabaseAdmin
-          .from("properties")
-          .update({ capacity: maxCapacity, updated_at: new Date().toISOString() })
-          .eq("id", property.id);
-        if (capErr) throw capErr;
-      }
-
-      // Update operating_hours in property_setup — merge with existing
-      const { data: existing } = await supabaseAdmin
-        .from("property_setup")
-        .select("operating_hours")
-        .eq("property_id", property.id)
-        .maybeSingle();
-
-      const mergedHours = {
-        ...(existing?.operating_hours || {}),
-        checkInTime: checkInTime ?? existing?.operating_hours?.checkInTime ?? "09:00",
-        checkOutTime: checkOutTime ?? existing?.operating_hours?.checkOutTime ?? "17:00",
-        minStay: minStay ?? existing?.operating_hours?.minStay ?? 1,
-        sameDayBookings: sameDayBookings ?? existing?.operating_hours?.sameDayBookings ?? true,
-      };
-
-      const { error } = await supabaseAdmin
-        .from("property_setup")
-        .upsert(
-          {
-            property_id: property.id,
-            operating_hours: mergedHours,
-            updated_at: new Date().toISOString(),
-          },
-          { onConflict: "property_id" }
-        );
-
-      if (error) throw error;
-
-      return res.json({ success: true });
-    } catch (err: any) {
-      console.error("[Settings] updateAvailability error:", err.message);
-      return res.status(500).json({ error: err.message });
-    }
-  },
-
-  // ════════════════════════════════════════════════
-  // PUT /api/settings/payment — update payment settings
-  // ════════════════════════════════════════════════
-  updatePayment: async (req: Request, res: Response) => {
-    try {
-      const user = (req as any).user;
-      if (!user) return res.status(401).json({ error: "Unauthorized" });
-
-      const bodyPropertyId = req.body.property_id as string | undefined;
-      const property = await getOwnerProperty(user.id, bodyPropertyId);
-      if (!property) return res.status(404).json({ error: "No property found for this account." });
-
-      const { acceptedMethods, gcashQrUrl, paymayaQrUrl } = req.body;
-
-      // Merge with existing payment_options
-      const { data: existing } = await supabaseAdmin
-        .from("property_pricing")
-        .select("payment_options")
-        .eq("property_id", property.id)
-        .maybeSingle();
-
-      const merged = {
-        ...(existing?.payment_options || {}),
-        accepted_methods: acceptedMethods ?? existing?.payment_options?.accepted_methods ?? [],
-        gcash_qr_url: gcashQrUrl !== undefined ? gcashQrUrl : (existing?.payment_options?.gcash_qr_url ?? null),
-        paymaya_qr_url: paymayaQrUrl !== undefined ? paymayaQrUrl : (existing?.payment_options?.paymaya_qr_url ?? null),
-      };
-
-      const { error } = await supabaseAdmin
-        .from("property_pricing")
-        .upsert(
-          {
-            property_id: property.id,
-            payment_options: merged,
-            updated_at: new Date().toISOString(),
-          },
-          { onConflict: "property_id" }
-        );
-
-      if (error) throw error;
-
-      return res.json({ success: true });
-    } catch (err: any) {
-      console.error("[Settings] updatePayment error:", err.message);
-      return res.status(500).json({ error: err.message });
-    }
-  },
-
-  // ════════════════════════════════════════════════
-  // PUT /api/settings/property-setup — update property setup
-  // ════════════════════════════════════════════════
-  updatePropertySetup: async (req: Request, res: Response) => {
-    try {
-      const user = (req as any).user;
-      if (!user) return res.status(401).json({ error: "Unauthorized" });
-
-      const bodyPropertyId = req.body.property_id as string | undefined;
-      const property = await getOwnerProperty(user.id, bodyPropertyId);
-      if (!property) return res.status(404).json({ error: "No property found for this account." });
-
-      const {
-        unvaccinatedPolicy,
-        unvaccinatedPolicyDetails,
-        breedRestrictions,
-        breedRestrictionsDetails,
-        aggressivePolicy,
-        aggressivePolicyDetails,
-        bookingRules,
-        complianceRequirements,
-        vaccinationRequirements,
-        emergencyProcedures,
-        vetAvailability,
-        isolationSanitationProtocols,
-      } = req.body;
-
-      // Merge with existing columns in property_setup
-      const { data: existing } = await supabaseAdmin
-        .from("property_setup")
-        .select("policies, booking_rules, compliance, health_safety, vet_availability, sanitation_protocols, emergency_contact")
-        .eq("property_id", property.id)
-        .maybeSingle();
-
-      const mergedPolicies = {
-        ...(existing?.policies || {}),
-        unvaccinatedPolicy: unvaccinatedPolicy ?? existing?.policies?.unvaccinatedPolicy ?? false,
-        unvaccinatedPolicyDetails: unvaccinatedPolicyDetails ?? existing?.policies?.unvaccinatedPolicyDetails ?? "",
-        breedRestrictions: breedRestrictions ?? existing?.policies?.breedRestrictions ?? false,
-        breedRestrictionsDetails: breedRestrictionsDetails ?? existing?.policies?.breedRestrictionsDetails ?? "",
-        aggressivePolicy: aggressivePolicy ?? existing?.policies?.aggressivePolicy ?? false,
-        aggressivePolicyDetails: aggressivePolicyDetails ?? existing?.policies?.aggressivePolicyDetails ?? "",
-      };
-
-      const { error } = await supabaseAdmin
-        .from("property_setup")
-        .upsert(
-          {
-            property_id: property.id,
-            policies: mergedPolicies,
-            booking_rules: bookingRules ?? existing?.booking_rules ?? [],
-            compliance: complianceRequirements ?? existing?.compliance ?? [],
-            health_safety: vaccinationRequirements ?? existing?.health_safety ?? [],
-            vet_availability: vetAvailability ?? existing?.vet_availability ?? [],
-            sanitation_protocols: isolationSanitationProtocols ?? existing?.sanitation_protocols ?? [],
-            emergency_contact: emergencyProcedures ?? existing?.emergency_contact ?? "",
-            updated_at: new Date().toISOString(),
-          },
-          { onConflict: "property_id" }
-        );
-
-      if (error) throw error;
-
-      return res.json({ success: true });
-    } catch (err: any) {
-      console.error("[Settings] updatePropertySetup error:", err.message);
-      return res.status(500).json({ error: err.message });
-    }
-  },
-};
-</file>
-
 <file path="backend/package.json">
 {
   "name": "pawstay-backend",
@@ -34474,322 +34474,6 @@ const SuperAdminDashboard = () => {
 };
 
 export default SuperAdminDashboard;
-</file>
-
-<file path="src/pages/superadmin/Settings.tsx">
-import SuperAdminLayout from "@/components/superadmin/SuperAdminLayout";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useToast } from "@/hooks/use-toast";
-import { Globe, Bell, Shield, Palette, Mail } from "lucide-react";
-import { useState } from "react";
-
-const SuperAdminSettings = () => {
-  const { toast } = useToast();
-
-  // controlled settings
-  const [platformName, setPlatformName] = useState<string>("PawStay");
-  const [supportEmail, setSupportEmail] = useState<string>("support@pawstay.com");
-  const [platformFee, setPlatformFee] = useState<number>(10);
-  const [minBookingAmount, setMinBookingAmount] = useState<number>(25);
-
-  const handleSave = () => {
-    toast({
-      title: "Settings saved",
-      description: `Platform settings updated — ${platformName} (${platformFee}% commission).`,
-    });
-    // TODO: persist to backend
-    console.log("Save platform settings", { platformName, supportEmail, platformFee, minBookingAmount });
-  };
-
-  return (
-    <SuperAdminLayout title="Settings" subtitle="Platform configuration and preferences">
-      <Tabs defaultValue="general" className="space-y-6 sa-slide-in">
-        <TabsList className="bg-[#292929] border border-white/[0.07]">
-          <TabsTrigger value="general" className="gap-2 text-[#808080] data-[state=active]:bg-[#ffa31a] data-[state=active]:text-[#1b1b1b] data-[state=active]:font-semibold">
-            <Globe className="h-4 w-4" />
-            General
-          </TabsTrigger>
-          <TabsTrigger value="notifications" className="gap-2 text-[#808080] data-[state=active]:bg-[#ffa31a] data-[state=active]:text-[#1b1b1b] data-[state=active]:font-semibold">
-            <Bell className="h-4 w-4" />
-            Notifications
-          </TabsTrigger>
-          <TabsTrigger value="security" className="gap-2 text-[#808080] data-[state=active]:bg-[#ffa31a] data-[state=active]:text-[#1b1b1b] data-[state=active]:font-semibold">
-            <Shield className="h-4 w-4" />
-            Security
-          </TabsTrigger>
-          <TabsTrigger value="email" className="gap-2 text-[#808080] data-[state=active]:bg-[#ffa31a] data-[state=active]:text-[#1b1b1b] data-[state=active]:font-semibold">
-            <Mail className="h-4 w-4" />
-            Email
-          </TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="general">
-          {/* Website Info Table */}
-          <Card className="bg-[#292929] border-white/[0.07] sa-card mb-4">
-            <CardHeader>
-              <CardTitle className="text-white">Website Info</CardTitle>
-              <CardDescription className="text-[#808080]">Quick view of the platform name and commission</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="overflow-auto">
-                <table className="w-full text-sm text-left table-auto">
-                  <thead>
-                    <tr className="text-[#808080]">
-                      <th className="px-4 py-2">Name</th>
-                      <th className="px-4 py-2">Commission (%)</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr className="bg-[#292929] border-t border-white/[0.06]">
-                      <td className="px-4 py-3 text-white">{platformName}</td>
-                      <td className="px-4 py-3 text-white">{platformFee}%</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-[#292929] border-white/[0.07] sa-card">
-            <CardHeader>
-              <CardTitle className="text-white">Platform Settings</CardTitle>
-              <CardDescription className="text-[#808080]">
-                General platform configuration
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="grid md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label className="text-white/80">Platform Name</Label>
-                  <Input
-                    value={platformName}
-                    onChange={(e) => setPlatformName(e.target.value)}
-                    className="bg-[#292929] border-white/[0.09] text-white"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-white/80">Support Email</Label>
-                  <Input
-                    value={supportEmail}
-                    onChange={(e) => setSupportEmail(e.target.value)}
-                    className="bg-[#292929] border-white/[0.09] text-white"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-white/80">Platform Fee (%)</Label>
-                  <Input
-                    type="number"
-                    value={String(platformFee)}
-                    onChange={(e) => setPlatformFee(Number(e.target.value || 0))}
-                    className="bg-[#292929] border-white/[0.09] text-white"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-white/80">Minimum Booking Amount</Label>
-                  <Input
-                    type="number"
-                    value={String(minBookingAmount)}
-                    onChange={(e) => setMinBookingAmount(Number(e.target.value || 0))}
-                    className="bg-[#292929] border-white/[0.09] text-white"
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-4 pt-4 border-t border-white/[0.06]">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="font-medium text-white">Maintenance Mode</p>
-                    <p className="text-sm text-[#808080]">
-                      Take the platform offline for maintenance
-                    </p>
-                  </div>
-                  <Switch />
-                </div>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="font-medium text-white">New Registrations</p>
-                    <p className="text-sm text-[#808080]">Allow new users to sign up</p>
-                  </div>
-                  <Switch defaultChecked />
-                </div>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="font-medium text-white">Property Applications</p>
-                    <p className="text-sm text-[#808080]">
-                      Accept new property listing applications
-                    </p>
-                  </div>
-                  <Switch defaultChecked />
-                </div>
-              </div>
-
-              <Button
-                onClick={handleSave}
-                className="bg-[#ffa31a] hover:bg-[#ffa31a]/90 text-[#1b1b1b]"
-              >
-                Save Changes
-              </Button>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="notifications">
-          <Card className="bg-[#292929] border-white/[0.07] sa-card">
-            <CardHeader>
-              <CardTitle className="text-white">Notification Settings</CardTitle>
-              <CardDescription className="text-[#808080]">
-                Configure admin notification preferences
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="font-medium text-white">New Property Applications</p>
-                  <p className="text-sm text-[#808080]">
-                    Get notified when new properties apply
-                  </p>
-                </div>
-                <Switch defaultChecked />
-              </div>
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="font-medium text-white">High-Value Bookings</p>
-                  <p className="text-sm text-slate-400">
-                    Alert for bookings over ₱500
-                  </p>
-                </div>
-                <Switch defaultChecked />
-              </div>
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="font-medium text-white">Negative Reviews</p>
-                  <p className="text-sm text-[#808080]">
-                    Alert for reviews with 2 stars or less
-                  </p>
-                </div>
-                <Switch defaultChecked />
-              </div>
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="font-medium text-white">Weekly Reports</p>
-                  <p className="text-sm text-[#808080]">
-                    Receive weekly performance summary
-                  </p>
-                </div>
-                <Switch defaultChecked />
-              </div>
-              <Button
-                onClick={handleSave}
-                className="bg-[#ffa31a] hover:bg-[#ffa31a]/90 text-[#1b1b1b] mt-4"
-              >
-                Save Preferences
-              </Button>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="security">
-          <Card className="bg-[#292929] border-white/[0.07] sa-card">
-            <CardHeader>
-              <CardTitle className="text-white">Security Settings</CardTitle>
-              <CardDescription className="text-[#808080]">
-                Platform security configuration
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="font-medium text-white">Two-Factor Authentication</p>
-                  <p className="text-sm text-[#808080]">
-                    Require 2FA for all admin accounts
-                  </p>
-                </div>
-                <Switch defaultChecked />
-              </div>
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="font-medium text-white">Session Timeout</p>
-                  <p className="text-sm text-[#808080]">
-                    Auto-logout after 30 minutes of inactivity
-                  </p>
-                </div>
-                <Switch defaultChecked />
-              </div>
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="font-medium text-white">Login Alerts</p>
-                  <p className="text-sm text-[#808080]">
-                    Email notification on new device login
-                  </p>
-                </div>
-                <Switch defaultChecked />
-              </div>
-              <div className="pt-4 border-t border-white/[0.06]">
-                <Button variant="destructive">Force Logout All Users</Button>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="email">
-          <Card className="bg-[#292929] border-white/[0.07] sa-card">
-            <CardHeader>
-              <CardTitle className="text-white">Email Configuration</CardTitle>
-              <CardDescription className="text-[#808080]">
-                Configure email sending settings
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label className="text-white/80">SMTP Host</Label>
-                  <Input
-                    defaultValue="smtp.sendgrid.net"
-                    className="bg-[#292929] border-white/[0.09] text-white"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-white/80">SMTP Port</Label>
-                  <Input
-                    defaultValue="587"
-                    className="bg-[#292929] border-white/[0.09] text-white"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-white/80">From Email</Label>
-                  <Input
-                    defaultValue="noreply@pawstay.com"
-                    className="bg-[#292929] border-white/[0.09] text-white"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-white/80">From Name</Label>
-                  <Input
-                    defaultValue="PawStay"
-                    className="bg-[#292929] border-white/[0.09] text-white"
-                  />
-                </div>
-              </div>
-              <Button
-                onClick={handleSave}
-                className="bg-[#ffa31a] hover:bg-[#ffa31a]/90 text-[#1b1b1b] mt-4"
-              >
-                Save Email Settings
-              </Button>
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
-    </SuperAdminLayout>
-  );
-};
-
-export default SuperAdminSettings;
 </file>
 
 <file path="src/pages/user/ListProperty/sections/PropertySetupSections/PropertySetup01.tsx">
@@ -38806,6 +38490,379 @@ const Header = () => {
 };
 
 export default Header;
+</file>
+
+<file path="src/pages/superadmin/Settings.tsx">
+import SuperAdminLayout from "@/components/superadmin/SuperAdminLayout";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useToast } from "@/hooks/use-toast";
+import { Globe, Bell, Shield, Palette, Mail, Loader2 } from "lucide-react";
+import { useState, useEffect } from "react";
+import { authHelper } from "@/helpers/authHelper";
+
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_BACKEND_URL || "http://localhost:5001";
+
+const SuperAdminSettings = () => {
+  const { toast } = useToast();
+
+  // controlled settings
+  const [platformName, setPlatformName] = useState<string>("PawStay");
+  const [supportEmail, setSupportEmail] = useState<string>("support@pawstay.com");
+  const [platformFee, setPlatformFee] = useState<number>(10);
+  const [minBookingAmount, setMinBookingAmount] = useState<number>(25);
+
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    let mounted = true;
+    const fetchSettings = async () => {
+      try {
+        setLoading(true);
+        const data = await authHelper.get(`${API_BASE_URL}/api/platform-settings`);
+        if (mounted && data.settings) {
+          if (data.settings.name) setPlatformName(data.settings.name);
+          if (data.settings.commission_percent !== undefined) setPlatformFee(Number(data.settings.commission_percent));
+        }
+      } catch (error) {
+        console.error("Failed to load platform settings", error);
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    };
+    fetchSettings();
+    return () => { mounted = false; };
+  }, []);
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await authHelper.put(`${API_BASE_URL}/api/platform-settings`, {
+        name: platformName,
+        commission_percent: platformFee
+      });
+      toast({
+        title: "Settings saved",
+        description: `Platform settings updated — ${platformName} (${platformFee}% commission).`,
+      });
+    } catch (error: any) {
+      console.error("Failed to save platform settings", error);
+      toast({
+        title: "Error",
+        description: error?.message || "Failed to save settings.",
+        variant: "destructive"
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <SuperAdminLayout title="Settings" subtitle="Platform configuration and preferences">
+        <div className="flex flex-col items-center justify-center gap-3 py-16">
+          <Loader2 className="h-8 w-8 animate-spin text-[#808080]" />
+          <span className="text-sm text-[#808080]">Loading settings...</span>
+        </div>
+      </SuperAdminLayout>
+    );
+  }
+
+  return (
+    <SuperAdminLayout title="Settings" subtitle="Platform configuration and preferences">
+      <Tabs defaultValue="general" className="space-y-6 sa-slide-in">
+        <TabsList className="bg-[#292929] border border-white/[0.07]">
+          <TabsTrigger value="general" className="gap-2 text-[#808080] data-[state=active]:bg-[#ffa31a] data-[state=active]:text-[#1b1b1b] data-[state=active]:font-semibold">
+            <Globe className="h-4 w-4" />
+            General
+          </TabsTrigger>
+          <TabsTrigger value="notifications" className="gap-2 text-[#808080] data-[state=active]:bg-[#ffa31a] data-[state=active]:text-[#1b1b1b] data-[state=active]:font-semibold">
+            <Bell className="h-4 w-4" />
+            Notifications
+          </TabsTrigger>
+          <TabsTrigger value="security" className="gap-2 text-[#808080] data-[state=active]:bg-[#ffa31a] data-[state=active]:text-[#1b1b1b] data-[state=active]:font-semibold">
+            <Shield className="h-4 w-4" />
+            Security
+          </TabsTrigger>
+          <TabsTrigger value="email" className="gap-2 text-[#808080] data-[state=active]:bg-[#ffa31a] data-[state=active]:text-[#1b1b1b] data-[state=active]:font-semibold">
+            <Mail className="h-4 w-4" />
+            Email
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="general">
+          {/* Website Info Table */}
+          <Card className="bg-[#292929] border-white/[0.07] sa-card mb-4">
+            <CardHeader>
+              <CardTitle className="text-white">Website Info</CardTitle>
+              <CardDescription className="text-[#808080]">Quick view of the platform name and commission</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="overflow-auto">
+                <table className="w-full text-sm text-left table-auto">
+                  <thead>
+                    <tr className="text-[#808080]">
+                      <th className="px-4 py-2">Name</th>
+                      <th className="px-4 py-2">Commission (%)</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr className="bg-[#292929] border-t border-white/[0.06]">
+                      <td className="px-4 py-3 text-white">{platformName}</td>
+                      <td className="px-4 py-3 text-white">{platformFee}%</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-[#292929] border-white/[0.07] sa-card">
+            <CardHeader>
+              <CardTitle className="text-white">Platform Settings</CardTitle>
+              <CardDescription className="text-[#808080]">
+                General platform configuration
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="grid md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label className="text-white/80">Platform Name</Label>
+                  <Input
+                    value={platformName}
+                    onChange={(e) => setPlatformName(e.target.value)}
+                    className="bg-[#292929] border-white/[0.09] text-white"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-white/80">Support Email</Label>
+                  <Input
+                    value={supportEmail}
+                    onChange={(e) => setSupportEmail(e.target.value)}
+                    className="bg-[#292929] border-white/[0.09] text-white"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-white/80">Platform Fee (%)</Label>
+                  <Input
+                    type="number"
+                    value={String(platformFee)}
+                    onChange={(e) => setPlatformFee(Number(e.target.value || 0))}
+                    className="bg-[#292929] border-white/[0.09] text-white"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-white/80">Minimum Booking Amount</Label>
+                  <Input
+                    type="number"
+                    value={String(minBookingAmount)}
+                    onChange={(e) => setMinBookingAmount(Number(e.target.value || 0))}
+                    className="bg-[#292929] border-white/[0.09] text-white"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-4 pt-4 border-t border-white/[0.06]">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="font-medium text-white">Maintenance Mode</p>
+                    <p className="text-sm text-[#808080]">
+                      Take the platform offline for maintenance
+                    </p>
+                  </div>
+                  <Switch />
+                </div>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="font-medium text-white">New Registrations</p>
+                    <p className="text-sm text-[#808080]">Allow new users to sign up</p>
+                  </div>
+                  <Switch defaultChecked />
+                </div>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="font-medium text-white">Property Applications</p>
+                    <p className="text-sm text-[#808080]">
+                      Accept new property listing applications
+                    </p>
+                  </div>
+                  <Switch defaultChecked />
+                </div>
+              </div>
+
+              <Button
+                onClick={handleSave}
+                disabled={saving}
+                className="bg-[#ffa31a] hover:bg-[#ffa31a]/90 text-[#1b1b1b]"
+              >
+                {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {saving ? "Saving..." : "Save Changes"}
+              </Button>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="notifications">
+          <Card className="bg-[#292929] border-white/[0.07] sa-card">
+            <CardHeader>
+              <CardTitle className="text-white">Notification Settings</CardTitle>
+              <CardDescription className="text-[#808080]">
+                Configure admin notification preferences
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-medium text-white">New Property Applications</p>
+                  <p className="text-sm text-[#808080]">
+                    Get notified when new properties apply
+                  </p>
+                </div>
+                <Switch defaultChecked />
+              </div>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-medium text-white">High-Value Bookings</p>
+                  <p className="text-sm text-slate-400">
+                    Alert for bookings over ₱500
+                  </p>
+                </div>
+                <Switch defaultChecked />
+              </div>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-medium text-white">Negative Reviews</p>
+                  <p className="text-sm text-[#808080]">
+                    Alert for reviews with 2 stars or less
+                  </p>
+                </div>
+                <Switch defaultChecked />
+              </div>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-medium text-white">Weekly Reports</p>
+                  <p className="text-sm text-[#808080]">
+                    Receive weekly performance summary
+                  </p>
+                </div>
+                <Switch defaultChecked />
+              </div>
+              <Button
+                onClick={handleSave}
+                disabled={saving}
+                className="bg-[#ffa31a] hover:bg-[#ffa31a]/90 text-[#1b1b1b] mt-4"
+              >
+                {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {saving ? "Saving..." : "Save Preferences"}
+              </Button>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="security">
+          <Card className="bg-[#292929] border-white/[0.07] sa-card">
+            <CardHeader>
+              <CardTitle className="text-white">Security Settings</CardTitle>
+              <CardDescription className="text-[#808080]">
+                Platform security configuration
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-medium text-white">Two-Factor Authentication</p>
+                  <p className="text-sm text-[#808080]">
+                    Require 2FA for all admin accounts
+                  </p>
+                </div>
+                <Switch defaultChecked />
+              </div>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-medium text-white">Session Timeout</p>
+                  <p className="text-sm text-[#808080]">
+                    Auto-logout after 30 minutes of inactivity
+                  </p>
+                </div>
+                <Switch defaultChecked />
+              </div>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-medium text-white">Login Alerts</p>
+                  <p className="text-sm text-[#808080]">
+                    Email notification on new device login
+                  </p>
+                </div>
+                <Switch defaultChecked />
+              </div>
+              <div className="pt-4 border-t border-white/[0.06]">
+                <Button variant="destructive">Force Logout All Users</Button>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="email">
+          <Card className="bg-[#292929] border-white/[0.07] sa-card">
+            <CardHeader>
+              <CardTitle className="text-white">Email Configuration</CardTitle>
+              <CardDescription className="text-[#808080]">
+                Configure email sending settings
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label className="text-white/80">SMTP Host</Label>
+                  <Input
+                    defaultValue="smtp.sendgrid.net"
+                    className="bg-[#292929] border-white/[0.09] text-white"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-white/80">SMTP Port</Label>
+                  <Input
+                    defaultValue="587"
+                    className="bg-[#292929] border-white/[0.09] text-white"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-white/80">From Email</Label>
+                  <Input
+                    defaultValue="noreply@pawstay.com"
+                    className="bg-[#292929] border-white/[0.09] text-white"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-white/80">From Name</Label>
+                  <Input
+                    defaultValue="PawStay"
+                    className="bg-[#292929] border-white/[0.09] text-white"
+                  />
+                </div>
+              </div>
+              <Button
+                onClick={handleSave}
+                disabled={saving}
+                className="bg-[#ffa31a] hover:bg-[#ffa31a]/90 text-[#1b1b1b] mt-4"
+              >
+                {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {saving ? "Saving..." : "Save Email Settings"}
+              </Button>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
+    </SuperAdminLayout>
+  );
+};
+
+export default SuperAdminSettings;
 </file>
 
 <file path="src/pages/Booking.tsx">
