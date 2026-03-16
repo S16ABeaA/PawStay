@@ -1653,6 +1653,41 @@ ALTER TABLE public.profiles
   ]));
 </file>
 
+<file path="backend/migrations/admin_settings.sql">
+-- ============================================================
+-- Admin Settings — ensure supporting columns exist
+-- The Settings page reads/writes:
+--   • properties        → business info (name, phone, website, description, address)
+--   • profiles           → notification_prefs  (jsonb)
+--   • property_setup     → operating_hours     (jsonb — check-in/out, min stay, same-day)
+--   • property_pricing   → payment_options     (jsonb — methods, QR URLs)
+--
+-- All columns already exist in schema.sql.
+-- This migration only adds the qr_codes jsonb column to property_pricing
+-- if you want to store QR separately (optional — we embed them in payment_options).
+-- ============================================================
+
+-- Nothing to create — all tables/columns already exist in the schema.
+-- This file is kept as documentation for the Settings page data mapping.
+
+-- payment_options jsonb structure used by Settings:
+-- {
+--   "accepted_methods": ["GCash", "Cash", "PayMaya", "Credit/Debit"],
+--   "gcash_qr_url": "https://...",
+--   "paymaya_qr_url": "https://..."
+-- }
+
+-- operating_hours jsonb structure used by Settings (availability):
+-- Existing fields are preserved. Settings adds/updates:
+-- {
+--   ...existing fields,
+--   "checkInTime": "09:00",
+--   "checkOutTime": "17:00",
+--   "minStay": 1,
+--   "sameDayBookings": true
+-- }
+</file>
+
 <file path="backend/migrations/consolidate_booking_function.sql">
 -- ============================================================
 -- Consolidated migration: create_booking_if_available function
@@ -17217,41 +17252,6 @@ END;
 $$;
 </file>
 
-<file path="backend/migrations/admin_settings.sql">
--- ============================================================
--- Admin Settings — ensure supporting columns exist
--- The Settings page reads/writes:
---   • properties        → business info (name, phone, website, description, address)
---   • profiles           → notification_prefs  (jsonb)
---   • property_setup     → operating_hours     (jsonb — check-in/out, min stay, same-day)
---   • property_pricing   → payment_options     (jsonb — methods, QR URLs)
---
--- All columns already exist in schema.sql.
--- This migration only adds the qr_codes jsonb column to property_pricing
--- if you want to store QR separately (optional — we embed them in payment_options).
--- ============================================================
-
--- Nothing to create — all tables/columns already exist in the schema.
--- This file is kept as documentation for the Settings page data mapping.
-
--- payment_options jsonb structure used by Settings:
--- {
---   "accepted_methods": ["GCash", "Cash", "PayMaya", "Credit/Debit"],
---   "gcash_qr_url": "https://...",
---   "paymaya_qr_url": "https://..."
--- }
-
--- operating_hours jsonb structure used by Settings (availability):
--- Existing fields are preserved. Settings adds/updates:
--- {
---   ...existing fields,
---   "checkInTime": "09:00",
---   "checkOutTime": "17:00",
---   "minStay": 1,
---   "sameDayBookings": true
--- }
-</file>
-
 <file path="backend/models/amenitiesModel.ts">
 import { supabaseAdmin } from "../config/supabaseAdmin";
 
@@ -17616,22 +17616,6 @@ router.get("/", favoritesController.getUserFavorites);
 router.post("/", favoritesController.addFavorite);
 router.delete("/:property_id", favoritesController.removeFavorite);
 router.get("/check/:property_id", favoritesController.checkFavorite);
-
-export default router;
-</file>
-
-<file path="backend/routes/platformSettingsRoute.ts">
-import { Router } from "express";
-import { platformSettingsController } from "../controllers/platformSettingsController";
-import { authMiddleware } from "../middleware/authMiddleware";
-
-const router = Router();
-
-// public read endpoint
-router.get("/", platformSettingsController.getPlatformSettings);
-
-// protected update endpoint
-router.put("/", authMiddleware, platformSettingsController.updatePlatformSettings);
 
 export default router;
 </file>
@@ -28416,6 +28400,22 @@ router.post("/promote", authMiddleware, requireSuperAdmin, authController.promot
 router.get("/users", authMiddleware, requireSuperAdmin, authController.listUsers);
 router.patch("/users/:id/ban", authMiddleware, requireSuperAdmin, authController.banUser);
 router.delete("/users/:id", authMiddleware, requireSuperAdmin, authController.deleteUser);
+
+export default router;
+</file>
+
+<file path="backend/routes/platformSettingsRoute.ts">
+import { Router } from "express";
+import { platformSettingsController } from "../controllers/platformSettingsController";
+import { authMiddleware, requireSuperAdmin } from "../middleware/authMiddleware";
+
+const router = Router();
+
+// public read endpoint
+router.get("/", platformSettingsController.getPlatformSettings);
+
+// protected update endpoint
+router.put("/", authMiddleware, requireSuperAdmin, platformSettingsController.updatePlatformSettings);
 
 export default router;
 </file>

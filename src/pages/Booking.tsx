@@ -26,6 +26,8 @@ import { petApi } from "@/services/petApi";
 import { bookingApi } from "@/services/bookingApi";
 import { authApi } from "@/services/authApi";
 
+const BACKEND_URL = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_BACKEND_URL || "http://localhost:5001";
+
 type BookingLocationState = {
   shop?: {
     type?: "grooming" | "veterinary" | "hotel";
@@ -176,10 +178,30 @@ const Booking = () => {
     fetchPaymentOptions();
   }, [shop?.propertyId]);
 
-  // Merge: prefer API-fetched QR codes over navigation state
+  // ── Fetch platform-level QR codes as fallback ──
+  const [platformQR, setPlatformQR] = useState<{ gcash: string | null; paymaya: string | null }>({
+    gcash: null,
+    paymaya: null,
+  });
+
+  useEffect(() => {
+    fetch(`${BACKEND_URL}/api/platform-settings`)
+      .then(res => res.ok ? res.json() : null)
+      .then(data => {
+        if (data?.settings) {
+          setPlatformQR({
+            gcash: data.settings.gcash_qr || null,
+            paymaya: data.settings.paymaya_qr || null,
+          });
+        }
+      })
+      .catch(err => console.error("Failed to fetch platform QR codes:", err));
+  }, []);
+
+  // Merge: property QR → navigation state QR → platform fallback QR
   const shopQRCodes = {
-    gcash: fetchedQR.gcash || shop?.qrCodeGCash || null,
-    paymaya: fetchedQR.paymaya || shop?.qrCodePayMaya || null,
+    gcash: fetchedQR.gcash || shop?.qrCodeGCash || platformQR.gcash || null,
+    paymaya: fetchedQR.paymaya || shop?.qrCodePayMaya || platformQR.paymaya || null,
   };
 
   // Merge accepted payment methods: prefer API-fetched

@@ -1028,7 +1028,8 @@ $$;
 CREATE TABLE IF NOT EXISTS site_settings (
   key text PRIMARY KEY DEFAULT 'site',
   website_name text NOT NULL DEFAULT 'PawStay',
-  payment_qr text,
+  gcash_qr text,
+  paymaya_qr text,
   commission numeric NOT NULL DEFAULT 10,
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now()
