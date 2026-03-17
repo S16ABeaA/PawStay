@@ -10,9 +10,13 @@ export const SUPPORTED_TOOL_NAMES: readonly ToolName[] = [
   "get_pets",
   "get_pet_profile",
   "get_pet_service_history",
+  "predict_next_booking",
   "create_booking",
   "get_user_bookings",
   "cancel_booking",
+  "check_availability",
+  "get_cancellation_policy",
+  "get_booking_summary",
   "get_provider_revenue",
 ] as const;
 
@@ -26,9 +30,13 @@ export const TOOL_INPUT_SCHEMA_TEXT: Record<ToolName, string> = {
   get_pets: "{}",
   get_pet_profile: "{ pet_id: string }",
   get_pet_service_history: "{ pet_id?: string, pet_name?: string }",
+  predict_next_booking: "{ pet_id?: string, pet_name?: string, include_breed_recommendations?: boolean, include_health_recommendations?: boolean, include_booking_pattern?: boolean }",
   create_booking: "{ user_id: string, service_id: string, date: string, time: string }",
   get_user_bookings: "{ user_id: string }",
   cancel_booking: "{ booking_id: string }",
+  check_availability: "{ property_id: string, date: string, time_slots?: string[] }",
+  get_cancellation_policy: "{ property_id?: string, property_name?: string }",
+  get_booking_summary: "{ booking_id?: string }",
   get_provider_revenue: "{ provider_id: string, month?: string }",
 };
 
@@ -109,6 +117,31 @@ export const GEMINI_TOOL_SCHEMAS: Record<ToolName, GeminiParameterSchema> = {
       },
     },
   },
+  predict_next_booking: {
+    type: SchemaType.OBJECT,
+    properties: {
+      pet_id: {
+        type: SchemaType.STRING,
+        description: "Pet profile ID",
+      },
+      pet_name: {
+        type: SchemaType.STRING,
+        description: "Exact pet name when ID is unknown",
+      },
+      include_breed_recommendations: {
+        type: SchemaType.BOOLEAN,
+        description: "Include breed-specific service recommendations (default: true)",
+      },
+      include_health_recommendations: {
+        type: SchemaType.BOOLEAN,
+        description: "Include health-related service recommendations (default: true)",
+      },
+      include_booking_pattern: {
+        type: SchemaType.BOOLEAN,
+        description: "Analyze historical booking patterns (default: true)",
+      },
+    },
+  },
   create_booking: {
     type: SchemaType.OBJECT,
     properties: {
@@ -132,6 +165,32 @@ export const GEMINI_TOOL_SCHEMAS: Record<ToolName, GeminiParameterSchema> = {
       booking_id: { type: SchemaType.STRING, description: "Booking ID to cancel" },
     },
     required: ["booking_id"],
+  },
+  check_availability: {
+    type: SchemaType.OBJECT,
+    properties: {
+      property_id: { type: SchemaType.STRING, description: "Property ID to check availability for" },
+      date: { type: SchemaType.STRING, description: "Date to check availability (YYYY-MM-DD)" },
+      time_slots: {
+        type: SchemaType.ARRAY,
+        description: "Optional array of time slots to check (e.g., ['09:00', '14:00'])",
+        items: { type: SchemaType.STRING },
+      },
+    },
+    required: ["property_id", "date"],
+  },
+  get_cancellation_policy: {
+    type: SchemaType.OBJECT,
+    properties: {
+      property_id: { type: SchemaType.STRING, description: "Property ID to get cancellation policy for" },
+      property_name: { type: SchemaType.STRING, description: "Property name (can be partial) to search for cancellation policy by name instead of ID" },
+    },
+  },
+  get_booking_summary: {
+    type: SchemaType.OBJECT,
+    properties: {
+      booking_id: { type: SchemaType.STRING, description: "Booking ID to get summary for. If not provided, retrieves the most recent booking for the authenticated user." },
+    },
   },
   get_provider_revenue: {
     type: SchemaType.OBJECT,
@@ -202,6 +261,14 @@ export const sanitizeToolArgs = (
         pet_id: asString(args.pet_id) || asString(args.id),
         pet_name: asString(args.pet_name) || asString(args.name),
       };
+    case "predict_next_booking":
+      return {
+        pet_id: asString(args.pet_id) || asString(args.id),
+        pet_name: asString(args.pet_name) || asString(args.name),
+        include_breed_recommendations: args.include_breed_recommendations !== undefined ? Boolean(args.include_breed_recommendations) : undefined,
+        include_health_recommendations: args.include_health_recommendations !== undefined ? Boolean(args.include_health_recommendations) : undefined,
+        include_booking_pattern: args.include_booking_pattern !== undefined ? Boolean(args.include_booking_pattern) : undefined,
+      };
     case "create_booking":
       return {
         user_id: asString(args.user_id),
@@ -213,6 +280,20 @@ export const sanitizeToolArgs = (
       return { user_id: asString(args.user_id) };
     case "cancel_booking":
       return { booking_id: asString(args.booking_id) };
+    case "check_availability":
+      return {
+        property_id: asString(args.property_id),
+        date: asString(args.date),
+        time_slots: Array.isArray(args.time_slots) ? args.time_slots : undefined,
+      };
+    case "get_cancellation_policy":
+      return {
+        property_id: asString(args.property_id),
+      };
+    case "get_booking_summary":
+      return {
+        booking_id: asString(args.booking_id) || undefined,
+      };
     case "get_provider_revenue":
       return {
         provider_id: asString(args.provider_id),
@@ -253,6 +334,11 @@ export const validateToolArgs = (
         errors.push("pet_id or pet_name is required");
       }
       break;
+    case "predict_next_booking":
+      if (!requiredString("pet_id") && !requiredString("pet_name")) {
+        errors.push("pet_id or pet_name is required");
+      }
+      break;
     case "create_booking": {
       if (!requiredString("user_id")) errors.push("user_id is required");
       if (!requiredString("service_id")) errors.push("service_id is required");
@@ -274,6 +360,20 @@ export const validateToolArgs = (
       break;
     case "cancel_booking":
       if (!requiredString("booking_id")) errors.push("booking_id is required");
+      break;
+    case "check_availability":
+      if (!requiredString("property_id")) errors.push("property_id is required");
+      if (!requiredString("date")) {
+        errors.push("date is required");
+      } else if (!/^\d{4}-\d{2}-\d{2}$/.test(String(args.date))) {
+        errors.push("date must be YYYY-MM-DD");
+      }
+      break;
+    case "get_cancellation_policy":
+      if (!requiredString("property_id")) errors.push("property_id is required");
+      break;
+    case "get_booking_summary":
+      // booking_id is optional - if not provided, will retrieve most recent booking
       break;
     case "get_provider_revenue":
       if (!requiredString("provider_id")) errors.push("provider_id is required");
