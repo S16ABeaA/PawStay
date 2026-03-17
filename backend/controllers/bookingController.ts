@@ -697,7 +697,7 @@ export const updateBookingStatusForOwner = async (req: any, res: any) => {
           type: notif.type,
           title: notif.title,
           message: notif.message,
-          link: '/my-bookings',
+          link: `/my-bookings?bookingId=${bookingId}`,
           reference_id: bookingId,
           reference_type: 'booking',
         });
@@ -709,7 +709,7 @@ export const updateBookingStatusForOwner = async (req: any, res: any) => {
           type: 'payment_received',
           title: 'Payment Confirmed',
           message: `Your cash payment of ₱${Number(booking.total_price || 0).toFixed(2)} has been marked as paid.`,
-          link: '/my-bookings',
+          link: `/my-bookings?bookingId=${bookingId}`,
           reference_id: bookingId,
           reference_type: 'booking',
         });
@@ -1126,7 +1126,7 @@ export const createBooking = async (req: Request, res: Response) => {
         type: "info",
         title: "Booking Submitted",
         message: `Your booking for ${svcLabel} on ${new Date(checkin).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })} has been submitted and is awaiting confirmation.`,
-        link: "/my-bookings",
+        link: `/my-bookings?bookingId=${booking.id}`,
         reference_id: booking.id,
         reference_type: "booking",
       });
@@ -1149,7 +1149,7 @@ export const createBooking = async (req: Request, res: Response) => {
           type: "payment_received",
           title: "New Booking — Action Required",
           message: `A new booking for ${svcLabel} at ${property.name || "your property"} on ${new Date(checkin).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })} needs confirmation.`,
-          link: "/admin/bookings",
+          link: `/admin/bookings?bookingId=${booking.id}`,
           reference_id: booking.id,
           reference_type: "booking",
         });
@@ -1174,7 +1174,7 @@ export const createBooking = async (req: Request, res: Response) => {
             type: "system",
             title: "High-Value Booking Alert",
             message: `A high-value booking worth PHP ${Number(finalTotalPrice).toFixed(2)} was created for ${property?.name || "a property"}.`,
-            link: "/superadmin",
+            link: `/superadmin?bookingId=${booking.id}`,
             reference_id: booking.id,
             reference_type: "booking",
           });
@@ -1254,7 +1254,7 @@ export const checkPaymentStatus = async (req: Request, res: Response) => {
           type: "info",
           title: "Customer Checked Payment",
           message: `A customer checked payment status for ${svcLabel} (${new Date(booking.checkin).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}). Current status: ${statusLabel}.`,
-          link: "/admin/bookings",
+          link: `/admin/bookings?bookingId=${booking.id}`,
           reference_id: booking.id,
           reference_type: "booking",
         });
@@ -1341,7 +1341,7 @@ export const adminUpdatePaymentStatus = async (req: Request, res: Response) => {
           type: payment_status === "paid" ? "payment_received" : "info",
           title: `Payment ${statusLabel.charAt(0).toUpperCase() + statusLabel.slice(1)}`,
           message: `Your payment for ${svcLabel} has been marked as ${statusLabel}.`,
-          link: "/my-bookings",
+          link: `/my-bookings?bookingId=${bookingId}`,
           reference_id: bookingId,
           reference_type: "booking",
         });
@@ -1558,7 +1558,7 @@ export const adminUpdateBookingStatus = async (req: Request, res: Response) => {
             type: notif.type,
             title: notif.title,
             message: notif.message,
-            link: '/my-bookings',
+            link: `/my-bookings?bookingId=${bookingId}`,
             reference_id: bookingId,
             reference_type: 'booking',
           });

@@ -20,7 +20,6 @@ interface PropertyNotification {
 export const PropertyStatusNotification = () => {
   const [notifications, setNotifications] = useState<PropertyNotification[]>([]);
   const [loading, setLoading] = useState(true);
-  const [dismissed, setDismissed] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     const fetchPropertyNotifications = async () => {
@@ -31,7 +30,7 @@ export const PropertyStatusNotification = () => {
         
         // Filter for property-related notifications only
         const propertyNotifs = (data.notifications || []).filter((n: PropertyNotification) =>
-          ["property_approved", "property_rejected", "property_suspended"].includes(n.type)
+          ["property_approved", "property_rejected", "property_suspended"].includes(n.type) && !n.is_read
         );
         
         setNotifications(propertyNotifs.slice(0, 3)); // Show latest 3
@@ -45,10 +44,23 @@ export const PropertyStatusNotification = () => {
     fetchPropertyNotifications();
   }, []);
 
-  const handleDismiss = (id: string) => {
-    const newDismissed = new Set(dismissed);
-    newDismissed.add(id);
-    setDismissed(newDismissed);
+  const resolvePropertyLink = (notification: PropertyNotification) => {
+    if (notification.link && notification.link.includes("propertyId=")) {
+      return notification.link;
+    }
+    return `/admin/services?propertyId=${notification.reference_id}`;
+  };
+
+  const handleDismiss = async (id: string) => {
+    // Optimistic remove so the card disappears immediately.
+    setNotifications((prev) => prev.filter((n) => n.id !== id));
+
+    try {
+      const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5001";
+      await authHelper.delete(`${API_BASE_URL}/api/notifications/${id}`);
+    } catch (err) {
+      console.error("Failed to dismiss notification:", err);
+    }
   };
 
   const markAsRead = async (id: string) => {
@@ -60,8 +72,6 @@ export const PropertyStatusNotification = () => {
     }
   };
 
-  const visibleNotifications = notifications.filter(n => !dismissed.has(n.id));
-
   if (loading) {
     return (
       <div className="mb-6 p-4 rounded-lg border border-slate-200 bg-slate-50 flex items-center gap-3">
@@ -71,13 +81,13 @@ export const PropertyStatusNotification = () => {
     );
   }
 
-  if (visibleNotifications.length === 0) {
+  if (notifications.length === 0) {
     return null;
   }
 
   return (
     <div className="mb-6 space-y-3">
-      {visibleNotifications.map((notification) => {
+      {notifications.map((notification) => {
         const isApproved = notification.type === "property_approved";
         const isRejected = notification.type === "property_rejected";
         const Icon = isApproved ? CheckCircle2 : XCircle;
@@ -139,7 +149,7 @@ export const PropertyStatusNotification = () => {
                   <div className="mt-3 flex gap-2">
                     {isApproved ? (
                       <>
-                        <Link to={notification.link || "/admin/services"}>
+                        <Link to={resolvePropertyLink(notification)}>
                           <Button size="sm" variant="outline" className={`${iconColor} border-emerald-300 hover:bg-emerald-100`}>
                             View Property
                           </Button>
@@ -147,7 +157,7 @@ export const PropertyStatusNotification = () => {
                       </>
                     ) : isRejected ? (
                       <>
-                        <Link to={notification.link || "/admin/services"}>
+                        <Link to={resolvePropertyLink(notification)}>
                           <Button size="sm" variant="outline" className="border-red-300 text-red-700 hover:bg-red-100">
                             View Feedback
                           </Button>
@@ -155,7 +165,7 @@ export const PropertyStatusNotification = () => {
                       </>
                     ) : (
                       <>
-                        <Link to={notification.link || "/admin/services"}>
+                        <Link to={resolvePropertyLink(notification)}>
                           <Button size="sm" variant="outline" className="border-amber-300 text-amber-800 hover:bg-amber-100">
                             Review Status
                           </Button>

@@ -50,6 +50,28 @@ const TYPE_LABELS: Record<string, string> = {
   info: "Info",
 };
 
+function resolveNotificationLink(notification: Notification): string | null {
+  const baseLink = notification.link;
+
+  if (notification.reference_type === "booking" && notification.reference_id) {
+    if (baseLink?.startsWith("/admin/")) {
+      return `/admin/bookings?bookingId=${notification.reference_id}`;
+    }
+    if (baseLink?.startsWith("/superadmin")) {
+      return baseLink;
+    }
+    return `/my-bookings?bookingId=${notification.reference_id}`;
+  }
+
+  if (notification.reference_type === "property" && notification.reference_id) {
+    if (baseLink?.startsWith("/admin/")) {
+      return `/admin/services?propertyId=${notification.reference_id}`;
+    }
+  }
+
+  return baseLink;
+}
+
 function formatDate(dateStr: string): string {
   return new Date(dateStr).toLocaleDateString("en-US", {
     month: "short",
@@ -188,8 +210,9 @@ const Notifications = () => {
     if (!notification.is_read) {
       await handleMarkRead(notification.id);
     }
-    if (notification.link) {
-      navigate(notification.link);
+    const target = resolveNotificationLink(notification);
+    if (target) {
+      navigate(target);
     }
   };
 

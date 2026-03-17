@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { Card, CardContent } from "@/components/ui/card";
@@ -140,6 +140,7 @@ function isImageUrl(url: string): boolean {
 
 const MyBookings = () => {
   const { toast } = useToast();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
   const [reviewedBookings, setReviewedBookings] = useState<Set<string>>(new Set());
@@ -149,6 +150,9 @@ const MyBookings = () => {
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [checkingPayment, setCheckingPayment] = useState<string | null>(null);
   const [isPageBlocking, notifyLoaderFinished] = useBlockingPageLoad(loading, 800);
+  const [activeTab, setActiveTab] = useState<"upcoming" | "past">("upcoming");
+
+  const requestedBookingId = searchParams.get("bookingId");
 
   const fetchBookings = async () => {
     try {
@@ -195,6 +199,15 @@ const MyBookings = () => {
   useEffect(() => {
     fetchBookings();
   }, []);
+
+  useEffect(() => {
+    if (loading || !requestedBookingId || bookings.length === 0) return;
+    const targetBooking = bookings.find((b) => b.id === requestedBookingId);
+    if (!targetBooking) return;
+
+    setActiveTab(isUpcoming(targetBooking) ? "upcoming" : "past");
+    setDetailBooking((prev) => (prev?.id === targetBooking.id ? prev : targetBooking));
+  }, [bookings, loading, requestedBookingId]);
 
   // Check which past bookings already have reviews
   useEffect(() => {
@@ -280,7 +293,7 @@ const MyBookings = () => {
               </CardContent>
             </Card>
           ) : (
-            <Tabs defaultValue="upcoming" className="space-y-6">
+            <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as "upcoming" | "past")} className="space-y-6">
               <TabsList className="grid w-full grid-cols-2">
                 <TabsTrigger value="upcoming">
                   Current & Upcoming ({upcoming.length})
@@ -344,7 +357,16 @@ const MyBookings = () => {
         <BookingDetailDialog
           booking={detailBooking}
           open={!!detailBooking}
-          onOpenChange={(open) => { if (!open) setDetailBooking(null); }}
+          onOpenChange={(open) => {
+            if (!open) {
+              setDetailBooking(null);
+              if (requestedBookingId) {
+                const next = new URLSearchParams(searchParams);
+                next.delete("bookingId");
+                setSearchParams(next, { replace: true });
+              }
+            }
+          }}
           onPreviewImage={setImagePreview}
           isReviewed={reviewedBookings.has(detailBooking.id)}
           onWriteReview={() => {

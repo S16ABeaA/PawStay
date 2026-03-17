@@ -427,7 +427,7 @@ export const adminPropertyController = {
               : isRejected
                 ? `Your property "${data.name}" was rejected.${rejection_reason ? ` Reason: ${rejection_reason}` : " Please review the feedback and resubmit."}`
                 : `Your property "${data.name}" has been suspended and is temporarily hidden from customers.`,
-            link: "/admin/services",
+            link: `/admin/services?propertyId=${data.id}`,
             reference_id: data.id,
             reference_type: "property",
           });

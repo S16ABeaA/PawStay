@@ -1,6 +1,23 @@
 import { Request, Response } from "express";
-import { getProperties, getPropertyById, getRandomProperties, HotelFilters } from "../services/property.service";
+import { getProperties, getPropertyById, HotelFilters } from "../services/property.service";
 import { supabaseAdmin } from "../config/supabaseAdmin";
+
+const normalizeText = (value: unknown): string =>
+  String(value || "")
+    .trim()
+    .toLowerCase();
+
+const parseCityFromAddress = (address?: string | null): string | null => {
+  if (!address) return null;
+  const parts = String(address)
+    .split("|")
+    .map((p) => p.trim())
+    .filter(Boolean);
+
+  if (parts.length >= 3) return parts[2].toLowerCase();
+  if (parts.length > 0) return parts[parts.length - 1].toLowerCase();
+  return null;
+};
 
 export const propertyController = {
   searchProperties: async (req: Request, res: Response) => {
@@ -86,6 +103,133 @@ export const propertyController = {
       res.status(200).json({ properties });
     } catch (err: any) {
       res.status(500).json({ message: err.message || "Failed to fetch random properties" });
+    }
+  },
+
+  recommendedProperties: async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).user?.id;
+      if (!userId) return res.status(401).json({ message: "Unauthorized" });
+
+      const source = req.method === "GET" ? req.query : req.body;
+      const limitRaw = Number(source?.limit);
+      const limit = Number.isFinite(limitRaw)
+        ? Math.min(Math.max(limitRaw, 1), 18)
+        : 6;
+
+      const allProperties = await getProperties({});
+      if (!allProperties.length) {
+        return res.status(200).json({ properties: [] });
+      }
+
+      const [profileRes, petsRes, bookingsRes] = await Promise.all([
+        supabaseAdmin
+          .from("profiles")
+          .select("address")
+          .eq("id", userId)
+          .maybeSingle(),
+        supabaseAdmin
+          .from("pets")
+          .select("species, breed")
+          .eq("owner_id", userId)
+          .eq("is_deleted", false),
+        supabaseAdmin
+          .from("bookings")
+          .select("property_id, service_type, pet_type, pet_breed, properties:property_id(city, property_type)")
+          .eq("user_id", userId)
+          .eq("is_deleted", false)
+          .order("created_at", { ascending: false })
+          .limit(100),
+      ]);
+
+      if (profileRes.error) throw profileRes.error;
+      if (petsRes.error) throw petsRes.error;
+      if (bookingsRes.error) throw bookingsRes.error;
+
+      const profileCity = parseCityFromAddress(profileRes.data?.address);
+      const bookingRows = bookingsRes.data ?? [];
+      const userPets = petsRes.data ?? [];
+
+      const propertyVisitCount = new Map<string, number>();
+      const preferredPropertyTypes = new Set<string>();
+      const citiesFromBookings = new Map<string, number>();
+      const preferredPetTypes = new Set<string>();
+
+      for (const booking of bookingRows as any[]) {
+        if (booking.property_id) {
+          const key = String(booking.property_id);
+          propertyVisitCount.set(key, (propertyVisitCount.get(key) || 0) + 1);
+        }
+
+        const bookingCity = normalizeText(booking?.properties?.city);
+        if (bookingCity) {
+          citiesFromBookings.set(bookingCity, (citiesFromBookings.get(bookingCity) || 0) + 1);
+        }
+
+        const bookingPropertyType = booking?.properties?.property_type;
+        if (Array.isArray(bookingPropertyType)) {
+          for (const t of bookingPropertyType) {
+            const normalized = normalizeText(t);
+            if (normalized) preferredPropertyTypes.add(normalized);
+          }
+        } else {
+          const normalized = normalizeText(bookingPropertyType);
+          if (normalized) preferredPropertyTypes.add(normalized);
+        }
+
+        const bookingPetType = normalizeText(booking.pet_type);
+        if (bookingPetType) preferredPetTypes.add(bookingPetType);
+      }
+
+      for (const pet of userPets as any[]) {
+        const species = normalizeText(pet.species);
+        if (species) preferredPetTypes.add(species);
+      }
+
+      const fallbackCity = [...citiesFromBookings.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || null;
+      const targetCity = profileCity || fallbackCity;
+
+      const scored = allProperties.map((property: any) => {
+        let score = 0;
+
+        const city = normalizeText(property.city || property.address);
+        if (targetCity && city) {
+          if (city === targetCity) score += 35;
+          else if (city.includes(targetCity) || targetCity.includes(city)) score += 20;
+        }
+
+        const visitCount = propertyVisitCount.get(String(property.id)) || 0;
+        score += Math.min(24, visitCount * 8);
+
+        const propertyTypes = Array.isArray(property.property_type)
+          ? property.property_type.map((t: unknown) => normalizeText(t)).filter(Boolean)
+          : [normalizeText(property.property_type)].filter(Boolean);
+        if (propertyTypes.some((t: string) => preferredPropertyTypes.has(t))) {
+          score += 14;
+        }
+
+        const acceptedPetTypes = Array.isArray(property.pet_types_accepted)
+          ? property.pet_types_accepted.map((t: unknown) => normalizeText(t)).filter(Boolean)
+          : [];
+        if (acceptedPetTypes.some((t: string) => preferredPetTypes.has(t))) {
+          score += 12;
+        }
+
+        score += Math.min(10, Number(property.rating || 0) * 2);
+        score += Math.min(5, Math.log10(Number(property.review_count || 0) + 1) * 3);
+        if (property.featured) score += 3;
+
+        // Small tie-breaker noise to avoid repeating identical orders.
+        score += Math.random() * 0.2;
+
+        return { property, score };
+      });
+
+      scored.sort((a, b) => b.score - a.score);
+      return res.status(200).json({ properties: scored.slice(0, limit).map((row) => row.property) });
+    } catch (err: any) {
+      console.error("[recommendedProperties]", err);
+      return res.status(500).json({ message: err.message || "Failed to fetch recommended properties" });
     }
   },
 

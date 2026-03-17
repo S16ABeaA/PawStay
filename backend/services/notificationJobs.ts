@@ -61,7 +61,7 @@ export const dispatchBookingLifecycleNotificationsJob = async () => {
       type: "booking_reminder",
       title: "Booking Reminder",
       message: `Reminder: Your booking for ${svcLabel} is scheduled for tomorrow.`,
-      link: "/my-bookings",
+      link: `/my-bookings?bookingId=${booking.id}`,
       reference_id: booking.id,
       reference_type: "booking",
     });
@@ -93,7 +93,7 @@ export const dispatchBookingLifecycleNotificationsJob = async () => {
       type: "booking_completed",
       title: "Booking Completed",
       message: `Your booking for ${svcLabel} has been completed. We hope your pet had a great stay!`,
-      link: "/my-bookings",
+      link: `/my-bookings?bookingId=${booking.id}`,
       reference_id: booking.id,
       reference_type: "booking",
     });
