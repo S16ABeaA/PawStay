@@ -298,6 +298,14 @@ export const AiChatPanel = ({ className }: AiChatPanelProps) => {
         ocrResult.status === "fulfilled" ? String(ocrResult.value?.text || "").trim() : "";
       const predictions = imagePredictions.status === "fulfilled" ? imagePredictions.value : [];
       const { detectedSpecies, likelyBreeds, animalPredictions, calibratedConfidence } = getAnimalDetections(predictions);
+      // If classifier + detection found no animal signals, reply with a friendly fallback
+      const looksLikePet = (Array.isArray(predictions) && predictions.length > 0 && detectedSpecies) || (likelyBreeds && likelyBreeds.length > 0);
+      if (!looksLikePet) {
+        const msg = "Hmm, I don't see a pet in this photo! Try uploading a clear picture of your dog or cat for breed and health analysis. Or just type your question below. 🐾";
+        setRows((prev) => [...prev, makeRow({ role: "assistant", content: msg })]);
+        setLoading(false);
+        return;
+      }
 
       const primaryBreed = likelyBreeds[0] || "Unknown";
       const otherLikelyBreeds = likelyBreeds.slice(1, 3);

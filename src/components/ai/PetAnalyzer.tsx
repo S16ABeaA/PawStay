@@ -498,7 +498,9 @@ export default function PetAnalyzer() {
 
       const looksLikePet = hasPetSignal(classifierPredictions) || taggedPredictions.length > 0;
       if (!looksLikePet) {
-        setError("That doesn't look like a pet photo. Please try another image.");
+        setError(
+          "Hmm, I don't see a pet in this photo! Try uploading a clear picture of your dog or cat and I'll analyze their breed, health, and recommend the best PawStay services for them. 🐾\n\nIf you have a question instead, just type it below!",
+        );
         setLoading(false);
         return;
       }
@@ -585,7 +587,9 @@ export default function PetAnalyzer() {
       });
 
       if (response.error === "not_a_pet") {
-        setError("That doesn't look like a pet photo. Please try another image.");
+        setError(
+          "Hmm, I don't see a pet in this photo! Try uploading a clear picture of your dog or cat and I'll analyze their breed, health, and recommend the best PawStay services for them. 🐾\n\nIf you have a question instead, just type it below!",
+        );
         setLoading(false);
         return;
       }
