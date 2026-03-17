@@ -123,6 +123,8 @@ const isImageUrl = (url: string): boolean =>
    const [loading, setLoading] = useState(true);
    const [serviceDetailOpen, setServiceDetailOpen] = useState(false);
    const [selectedService, setSelectedService] = useState<ServiceHistory | null>(null);
+   const [allHistoryOpen, setAllHistoryOpen] = useState(false);
+   const [selectedPetForHistory, setSelectedPetForHistory] = useState<Pet | null>(null);
    const [bookingDetail, setBookingDetail] = useState<any>(null);
    const [bookingLoading, setBookingLoading] = useState(false);
    const [imagePreview, setImagePreview] = useState<string | null>(null);
@@ -145,6 +147,11 @@ const isImageUrl = (url: string): boolean =>
        }
      }
    };
+
+  const handleViewAllHistory = (pet: Pet) => {
+    setSelectedPetForHistory(pet);
+    setAllHistoryOpen(true);
+  };
 
    const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>, isEdit: boolean = false) => {
      const file = e.target.files?.[0];
@@ -594,7 +601,7 @@ const isImageUrl = (url: string): boolean =>
                        </p>
                      ) : (
                        <div className="space-y-3">
-                         {(pet.serviceHistory ?? []).map((service) => {
+                         {(pet.serviceHistory ?? []).slice(0, 3).map((service) => {
                            const { icon, className: iconClass } = getServiceTypeIcon(service.type);
                            return (
                              <div
@@ -617,6 +624,18 @@ const isImageUrl = (url: string): boolean =>
                              </div>
                            );
                          })}
+
+                         {(pet.serviceHistory?.length ?? 0) > 3 && (
+                           <div className="pt-1 flex justify-center">
+                             <Button
+                               variant="outline"
+                               size="sm"
+                               onClick={() => handleViewAllHistory(pet)}
+                             >
+                               View All ({pet.serviceHistory?.length})
+                             </Button>
+                           </div>
+                         )}
                        </div>
                      )}
                    </CardContent>
@@ -625,6 +644,57 @@ const isImageUrl = (url: string): boolean =>
              </div>
            )}
          </div>
+
+         {/* All Service History Dialog */}
+         <Dialog open={allHistoryOpen} onOpenChange={setAllHistoryOpen}>
+           <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+             <DialogHeader>
+               <DialogTitle>
+                 {selectedPetForHistory ? `${selectedPetForHistory.name}'s Service History` : "Service History"}
+               </DialogTitle>
+               <DialogDescription>
+                 Showing all recorded services. Click an item to view full details.
+               </DialogDescription>
+             </DialogHeader>
+
+             {!selectedPetForHistory || !selectedPetForHistory.serviceHistory || selectedPetForHistory.serviceHistory.length === 0 ? (
+               <p className="text-sm text-muted-foreground py-6 text-center">No service history yet</p>
+             ) : (
+               <div className="space-y-3">
+                 {(selectedPetForHistory.serviceHistory ?? []).map((service) => {
+                   const { icon, className: iconClass } = getServiceTypeIcon(service.type);
+                   return (
+                     <div
+                       key={service.id}
+                       className="flex items-center gap-3 p-3 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors cursor-pointer"
+                       onClick={() => {
+                         setAllHistoryOpen(false);
+                         handleServiceClick(service);
+                       }}
+                     >
+                       <div className={`h-10 w-10 rounded-full flex items-center justify-center ${iconClass}`}>
+                         {icon}
+                       </div>
+                       <div className="flex-1 min-w-0">
+                         <p className="text-sm font-medium truncate">{service.serviceName}</p>
+                         {service.notes && (
+                           <p className="text-xs text-muted-foreground truncate">{service.notes}</p>
+                         )}
+                       </div>
+                       <Badge variant="outline" className="shrink-0">
+                         {getDaysAgo(service.date)}
+                       </Badge>
+                     </div>
+                   );
+                 })}
+               </div>
+             )}
+
+             <div className="flex justify-center pt-2">
+               <Button variant="outline" onClick={() => setAllHistoryOpen(false)}>Close</Button>
+             </div>
+           </DialogContent>
+         </Dialog>
 
          {/* Service Detail Dialog */}
          <Dialog open={serviceDetailOpen} onOpenChange={setServiceDetailOpen}>

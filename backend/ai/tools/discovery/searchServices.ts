@@ -1,5 +1,6 @@
-import { backendApiClient } from "../http/backendApiClient";
-import { ToolDefinition } from "../types";
+import { backendApiClient } from "../../http/backendApiClient";
+import { TOOL_INPUT_SCHEMA_TEXT } from "../../schemas";
+import { ToolDefinition } from "../../types";
 
 export interface SearchServicesArgs {
   location?: string;
@@ -103,7 +104,7 @@ const toQueryString = (v: string | string[] | undefined): string | undefined => 
 export const searchServicesTool: ToolDefinition<SearchServicesArgs, SearchServicesResult> = {
   name: "search_services",
   description: "Search pet services by location, service type, dates, pet filters, price, amenities, and geo radius",
-  inputSchema: "{ location?: string, service_type?: string, checkin?: string, checkout?: string, timeSlot?: string, petType?: string|string[], dogSize?: string|string[], propertyType?: string, serviceCategory?: string, minPrice?: number, maxPrice?: number, rating?: number, amenities?: string|string[], keyword?: string, lat?: number, lng?: number, radiusKm?: number }",
+  inputSchema: TOOL_INPUT_SCHEMA_TEXT.search_services,
   run: async (args, context) => {
     // If caller didn't provide a location or service_type, try to infer from the user's message
     const msg = String(context?.userMessage ?? "").trim();

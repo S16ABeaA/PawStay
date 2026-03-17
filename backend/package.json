@@ -20,7 +20,8 @@
     "dev": "nodemon --watch '*.ts' --exec ts-node server.ts",
     "start": "node dist/server.js",
     "build": "tsc",
-    "serve": "node dist/server.js"
+    "serve": "node dist/server.js",
+    "test:ai-schemas": "ts-node ai/schemas/schemaValidation.smoke.ts"
   },
   "devDependencies": {
     "@types/cookie-parser": "^1.4.10",

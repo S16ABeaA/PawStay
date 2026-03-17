@@ -16,6 +16,7 @@
 import { Content } from "@google/generative-ai";
 import { sessionMemory } from "./memory/sessionMemory";
 import { PET_PLATFORM_SYSTEM_PROMPT } from "./prompts/systemPrompt";
+import { sanitizeToolArgs, SUPPORTED_TOOLS, validateToolArgs } from "./schemas";
 import { defaultTools } from "./tools";
 import { AgentRunInput, AgentRunOutput, ToolDefinition, ToolName } from "./types";
 import {
@@ -23,19 +24,6 @@ import {
   getGeminiToolSchema,
   GeminiToolDeclaration,
 } from "./geminiClient";
-
-/* ------------------------------------------------------------------ */
-/*  Supported tool names for validation                                */
-/* ------------------------------------------------------------------ */
-
-const SUPPORTED_TOOLS: Set<string> = new Set<string>([
-  "search_services",
-  "get_review_count",
-  "create_booking",
-  "get_user_bookings",
-  "cancel_booking",
-  "get_provider_revenue",
-]);
 
 /* ------------------------------------------------------------------ */
 /*  Agent class                                                        */
@@ -63,6 +51,22 @@ export class PetPlatformAgent {
     // 1. Persist the user message in session memory
     // --------------------------------------------------
     sessionMemory.append(sessionId, { role: "user", content: userMessage });
+
+    if (this.isAddPetNavigationIntent(userMessage)) {
+      const reply =
+        "You can add your pet profile in **My Pets**. Tap here to continue: [Go to My Pets](/my-pets).";
+
+      sessionMemory.append(sessionId, {
+        role: "assistant",
+        content: reply,
+      });
+
+      return {
+        reply,
+        usedTools: [],
+        toolActivity: [],
+      };
+    }
 
     // --------------------------------------------------
     // 2. Build Gemini conversation history from session
@@ -94,7 +98,12 @@ export class PetPlatformAgent {
       if (!tool) return { error: `Tool not configured: ${name}` };
 
       // Sanitize args to only allow expected fields
-      const safeArgs = this.sanitizeArgs(name as ToolName, args);
+      const toolName = name as ToolName;
+      const safeArgs = sanitizeToolArgs(toolName, args);
+      const validation = validateToolArgs(toolName, safeArgs);
+      if (!validation.ok) {
+        return { error: `Invalid arguments for ${name}: ${validation.errors.join(", ")}` };
+      }
 
       try {
         return await tool.run(safeArgs, {
@@ -183,51 +192,21 @@ export class PetPlatformAgent {
     return contents;
   }
 
-  /**
-   * Sanitize tool arguments to only include expected fields.
-   * Prevents prompt injection of unexpected parameters.
-   */
-  private sanitizeArgs(
-    tool: ToolName,
-    args: Record<string, unknown>,
-  ): Record<string, unknown> {
-    const asString = (value: unknown): string | undefined => {
-      if (value === undefined || value === null) return undefined;
-      const str = String(value).trim();
-      return str || undefined;
-    };
+  private isAddPetNavigationIntent(message: string): boolean {
+    const text = String(message || "").toLowerCase();
+    if (!text) return false;
 
-    switch (tool) {
-      case "search_services":
-        return {
-          location: asString(args.location),
-          service_type: asString(args.service_type),
-        };
-      case "get_review_count":
-        return {
-          propertyId:
-            asString(args.propertyId) ||
-            asString(args.property_id),
-        };
-      case "create_booking":
-        return {
-          user_id: asString(args.user_id),
-          service_id: asString(args.service_id),
-          date: asString(args.date),
-          time: asString(args.time),
-        };
-      case "get_user_bookings":
-        return { user_id: asString(args.user_id) };
-      case "cancel_booking":
-        return { booking_id: asString(args.booking_id) };
-      case "get_provider_revenue":
-        return {
-          provider_id: asString(args.provider_id),
-          month: asString(args.month),
-        };
-      default:
-        return {};
-    }
+    const mentionsPet = /\bpet\b|\bpets\b/.test(text);
+    const asksAddLocation =
+      /\bwhere\b/.test(text) &&
+      (/\badd\b/.test(text) || /\bcreate\b/.test(text) || /\bregister\b/.test(text));
+    const directAddIntent =
+      /\bhow\s+to\s+add\b/.test(text) ||
+      /\badd\s+(a\s+)?(new\s+)?pet\b/.test(text) ||
+      /\bcreate\s+(a\s+)?pet\b/.test(text) ||
+      /\bregister\s+(a\s+)?pet\b/.test(text);
+
+    return mentionsPet && (asksAddLocation || directAddIntent);
   }
 }
 

@@ -1,4 +1,5 @@
 import { backendApiClient } from "../http/backendApiClient";
+import { TOOL_INPUT_SCHEMA_TEXT } from "../schemas";
 import { ToolContext, ToolDefinition } from "../types";
 
 export interface GetProviderRevenueArgs {
@@ -20,7 +21,7 @@ interface GetProviderRevenueResult {
 export const getProviderRevenueTool: ToolDefinition<GetProviderRevenueArgs, GetProviderRevenueResult> = {
   name: "get_provider_revenue",
   description: "Get provider revenue for a given month",
-  inputSchema: "{ provider_id: string, month?: string }",
+  inputSchema: TOOL_INPUT_SCHEMA_TEXT.get_provider_revenue,
   run: async (args, context?: ToolContext) => {
     const response = await backendApiClient.request<any>("/api/revenue/provider", {
       method: "GET",

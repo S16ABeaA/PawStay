@@ -9,11 +9,11 @@
 import {
   GoogleGenerativeAI,
   Content,
-  SchemaType,
   FunctionDeclaration,
   Part,
   Tool,
 } from "@google/generative-ai";
+import { getGeminiToolSchemaByName } from "./schemas";
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -62,74 +62,7 @@ const buildToolDeclarations = (
 /* ------------------------------------------------------------------ */
 
 export const getGeminiToolSchema = (toolName: string): Record<string, unknown> => {
-  switch (toolName) {
-    case "search_services":
-      return {
-        type: SchemaType.OBJECT,
-        properties: {
-          location: {
-            type: SchemaType.STRING,
-            description: "City, area, or location keyword (e.g. Manila, Quezon City)",
-          },
-          service_type: {
-            type: SchemaType.STRING,
-            description: "Service category: boarding, grooming, veterinary",
-          },
-        },
-      };
-    case "get_review_count":
-      return {
-        type: SchemaType.OBJECT,
-        properties: {
-          propertyId: {
-            type: SchemaType.STRING,
-            description: "Property ID to fetch review stats for",
-          },
-        },
-        required: ["propertyId"],
-      };
-    case "create_booking":
-      return {
-        type: SchemaType.OBJECT,
-        properties: {
-          user_id: { type: SchemaType.STRING, description: "User ID" },
-          service_id: { type: SchemaType.STRING, description: "Service/property ID" },
-          date: { type: SchemaType.STRING, description: "Booking date YYYY-MM-DD" },
-          time: { type: SchemaType.STRING, description: "Booking time HH:mm" },
-        },
-        required: ["user_id", "service_id", "date", "time"],
-      };
-    case "get_user_bookings":
-      return {
-        type: SchemaType.OBJECT,
-        properties: {
-          user_id: { type: SchemaType.STRING, description: "User ID" },
-        },
-        required: ["user_id"],
-      };
-    case "cancel_booking":
-      return {
-        type: SchemaType.OBJECT,
-        properties: {
-          booking_id: { type: SchemaType.STRING, description: "Booking ID to cancel" },
-        },
-        required: ["booking_id"],
-      };
-    case "get_provider_revenue":
-      return {
-        type: SchemaType.OBJECT,
-        properties: {
-          provider_id: { type: SchemaType.STRING, description: "Provider user ID" },
-          month: { type: SchemaType.STRING, description: "Month as YYYY-MM" },
-        },
-        required: ["provider_id"],
-      };
-    default:
-      return {
-        type: SchemaType.OBJECT,
-        properties: {},
-      };
-  }
+  return getGeminiToolSchemaByName(toolName);
 };
 
 /* ------------------------------------------------------------------ */
@@ -165,9 +98,6 @@ export const geminiAgentLoop = async (
     systemInstruction: systemPrompt,
     tools: buildToolDeclarations(toolDefs),
   });
-
-  // Start a chat session with existing conversation history
-  const chat = model.startChat({ history });
 
   const toolActivity: GeminiLoopResult["toolActivity"] = [];
 
