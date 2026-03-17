@@ -6,6 +6,12 @@ import { Send, Bot, User, ExternalLink, ImagePlus, Maximize2 } from "lucide-reac
 import ReactMarkdown from "react-markdown";
 
 type CtaIntent = "find_vet" | "find_groomer" | "save_pet" | "view_details";
+type ImageActionIntent = "analyze" | "scan_records" | "ask_question" | "cancel";
+
+type ImageQuickReply = {
+  id: ImageActionIntent;
+  label: string;
+};
 
 type PetRecommendation = {
   breed_detected: {
@@ -26,11 +32,19 @@ type ChatRow = {
   content: string;
   image?: string;
   recommendation?: PetRecommendation;
+  quickReplies?: ImageQuickReply[];
 };
 
 type VisionPrediction = {
   className: string;
   probability: number;
+};
+
+type PendingImageContext = {
+  file: File;
+  previewUrl: string;
+  fileName: string;
+  ocrText?: string;
 };
 
 const DOG_TERMS = [
@@ -87,6 +101,8 @@ export const AiChatPanel = ({ className }: AiChatPanelProps) => {
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
+  const [pendingImage, setPendingImage] = useState<PendingImageContext | null>(null);
+  const [imageQuestionMode, setImageQuestionMode] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imageModelRef = useRef<any>(null);
@@ -132,6 +148,260 @@ export const AiChatPanel = ({ className }: AiChatPanelProps) => {
     get_provider_revenue: "💰 Fetching revenue data...",
   };
 
+  const IMAGE_ACTION_OPTIONS: ImageQuickReply[] = [
+    { id: "analyze", label: "🔍 Analyze breed & health" },
+    { id: "scan_records", label: "📋 Scan health records" },
+    { id: "ask_question", label: "💬 Ask a question about it" },
+    { id: "cancel", label: "❌ Cancel" },
+  ];
+
+  const clearQuickReplies = (rowId: string) => {
+    setRows((prev) =>
+      prev.map((row) => (row.id === rowId ? { ...row, quickReplies: [] } : row)),
+    );
+  };
+
+  const runBreedAndHealthAnalysis = async (file: File) => {
+    setRows((prev) => [
+      ...prev,
+      makeRow({ role: "tool-activity", content: "🖼️ Analyzing image (breed + health)..." }),
+    ]);
+
+    const [ocrResult, imagePredictions] = await Promise.allSettled([
+      aiChatApi.readImageText(file),
+      classifyImage(file),
+    ]);
+
+    const extracted =
+      ocrResult.status === "fulfilled" ? String(ocrResult.value?.text || "").trim() : "";
+    const predictions = imagePredictions.status === "fulfilled" ? imagePredictions.value : [];
+    const { detectedSpecies, likelyBreeds, calibratedConfidence } = getAnimalDetections(predictions);
+
+    const looksLikePet =
+      (Array.isArray(predictions) && predictions.length > 0 && detectedSpecies) ||
+      (likelyBreeds && likelyBreeds.length > 0);
+
+    if (!looksLikePet) {
+      const msg =
+        "Hmm, I don't see a pet in this photo! Try uploading a clear picture of your dog or cat and I'll analyze their breed, health, and recommend the best PawStay services for them. 🐾\n\nIf you have a question instead, just type it below!";
+      setRows((prev) => [...prev, makeRow({ role: "assistant", content: msg })]);
+      return;
+    }
+
+    const primaryBreed = likelyBreeds[0] || "Unknown";
+    const otherLikelyBreeds = likelyBreeds.slice(1, 3);
+    const topMatch = calibratedConfidence;
+
+    setRows((prev) => [
+      ...prev,
+      makeRow({ role: "tool-activity", content: "🐾 Generating image-based recommendations..." }),
+    ]);
+
+    const healthResponse = await aiChatApi
+      .checkPetHealth(file, detectedSpecies || undefined)
+      .catch(() => undefined);
+
+    const geminiPrimaryBreed = String(healthResponse?.breed_estimate?.primary || "").trim();
+    const geminiBreedConfidence = Number(healthResponse?.breed_estimate?.confidence ?? 0);
+    const geminiAlternatives = Array.isArray(healthResponse?.breed_estimate?.alternatives)
+      ? healthResponse.breed_estimate.alternatives
+          .map((item) => String(item || "").trim())
+          .filter(Boolean)
+          .slice(0, 3)
+      : [];
+
+    const shouldUseGeminiBreed =
+      !!geminiPrimaryBreed &&
+      geminiPrimaryBreed.toLowerCase() !== "unknown" &&
+      geminiBreedConfidence >= Math.max(55, topMatch - 10);
+
+    const finalPrimaryBreed = shouldUseGeminiBreed ? geminiPrimaryBreed : primaryBreed;
+    const finalTopMatch = shouldUseGeminiBreed
+      ? Math.max(0, Math.min(99, Math.round(geminiBreedConfidence)))
+      : topMatch;
+    const finalAlternatives = shouldUseGeminiBreed
+      ? Array.from(new Set([...geminiAlternatives, ...otherLikelyBreeds])).slice(0, 3)
+      : otherLikelyBreeds;
+
+    const recommendationResponse = await aiChatApi.analyzePet({
+      sessionId,
+      detectedSpecies: detectedSpecies || "unknown",
+      primaryPrediction: finalPrimaryBreed,
+      primaryConfidence: finalTopMatch,
+      alternatives: finalAlternatives,
+      ocrText: extracted,
+      descriptionHint: `${finalPrimaryBreed} detected from visual traits.`,
+      healthCheck: healthResponse
+        ? {
+            status: healthResponse.status,
+            injured: healthResponse.injured,
+            confidence: healthResponse.confidence,
+            summary: healthResponse.summary,
+            visible_signs: healthResponse.visible_signs,
+            recommended_actions: healthResponse.recommended_actions,
+            age_estimate: healthResponse.age_estimate,
+            weight_estimate: healthResponse.weight_estimate,
+          }
+        : undefined,
+    });
+
+    const healthAssessment = healthResponse;
+    const intents: CtaIntent[] = ["find_vet", "find_groomer", "save_pet", "view_details"];
+
+    const structured: PetRecommendation = {
+      breed_detected: {
+        primary: String(recommendationResponse.breed?.primary || finalPrimaryBreed),
+        confidence:
+          typeof recommendationResponse.breed?.confidence === "number"
+            ? Math.max(0, Math.min(100, Math.round(recommendationResponse.breed.confidence)))
+            : finalTopMatch,
+        other_likely: Array.isArray(recommendationResponse.breed?.alternatives)
+          ? recommendationResponse.breed.alternatives
+              .map((item: unknown) => String(item || "").trim())
+              .filter(Boolean)
+              .slice(0, 3)
+          : finalAlternatives,
+      },
+      watch_for: Array.isArray(recommendationResponse.health_flags)
+        ? recommendationResponse.health_flags
+            .map((item: unknown) => String(item || "").trim())
+            .filter(Boolean)
+            .slice(0, 6)
+        : [],
+      care_recommendations: Array.isArray(recommendationResponse.care)
+        ? recommendationResponse.care
+            .map((item: any) => {
+              const category = String(item?.category || "").trim();
+              const summary = String(item?.summary || "").trim();
+              const detail = String(item?.detail || "").trim();
+              const normalizedSummary = summary.toLowerCase();
+              const normalizedDetail = detail.toLowerCase();
+              const detailWithoutRepeatedSummary = normalizedDetail.startsWith(normalizedSummary)
+                ? detail.slice(summary.length).replace(/^[\s:,.\-–—]+/, "").trim()
+                : detail;
+              const merged = [
+                category ? `${category}:` : "",
+                summary,
+                detailWithoutRepeatedSummary &&
+                detailWithoutRepeatedSummary.toLowerCase() !== normalizedSummary
+                  ? `— ${detailWithoutRepeatedSummary}`
+                  : "",
+              ]
+                .filter(Boolean)
+                .join(" ")
+                .trim();
+              return merged || summary;
+            })
+            .filter(Boolean)
+            .slice(0, 6)
+        : [],
+      low_confidence: Boolean(recommendationResponse.low_confidence) || finalTopMatch < 50,
+      health_assessment: healthAssessment,
+      next_actions: Array.isArray(recommendationResponse.next_actions)
+        ? recommendationResponse.next_actions
+            .map((action: any) => ({
+              label: String(action?.label || "").trim(),
+              intent: String(action?.intent || "").trim() as CtaIntent,
+            }))
+            .filter((action: { label: string; intent: CtaIntent }) => intents.includes(action.intent))
+        : [],
+    };
+
+    if (!structured.next_actions.some((action) => action.intent === "find_vet")) {
+      structured.next_actions.push({ label: "Find a vet nearby", intent: "find_vet" });
+    }
+    if (!structured.next_actions.some((action) => action.intent === "find_groomer")) {
+      structured.next_actions.push({ label: "Find a groomer nearby", intent: "find_groomer" });
+    }
+    if (!structured.next_actions.some((action) => action.intent === "save_pet")) {
+      structured.next_actions.push({ label: "Save to My Pets", intent: "save_pet" });
+    }
+
+    setRows((prev) => [
+      ...prev,
+      makeRow({
+        role: "assistant",
+        content: "Here is your pet analysis summary.",
+        recommendation: structured,
+      }),
+    ]);
+  };
+
+  const onImageActionSelect = async (rowId: string, action: ImageActionIntent) => {
+    clearQuickReplies(rowId);
+    if (!pendingImage) return;
+
+    if (action === "cancel") {
+      setPendingImage(null);
+      setImageQuestionMode(false);
+      setMessage("");
+      setRows((prev) => [
+        ...prev,
+        makeRow({ role: "assistant", content: "Image dismissed. You can upload another photo anytime." }),
+      ]);
+      return;
+    }
+
+    if (action === "ask_question") {
+      setImageQuestionMode(true);
+      setRows((prev) => [
+        ...prev,
+        makeRow({ role: "assistant", content: "Got it — ask your question about this photo and I’ll use it as context." }),
+      ]);
+      return;
+    }
+
+    try {
+      setLoading(true);
+      if (action === "scan_records") {
+        const ocr = await aiChatApi.readImageText(pendingImage.file);
+        const extractedText = String(ocr?.text || "").trim();
+
+        setPendingImage((prev) => (prev ? { ...prev, ocrText: extractedText } : prev));
+
+        if (!extractedText) {
+          setRows((prev) => [
+            ...prev,
+            makeRow({
+              role: "assistant",
+              content:
+                "I couldn't find readable health record text in this photo. Try a clearer, closer image of the document with better lighting.",
+            }),
+          ]);
+          return;
+        }
+
+        const summary = await aiChatApi.chat({
+          sessionId,
+          message:
+            `Summarize the following OCR text from a pet health record image. ` +
+            `Return concise bullet points for: pet identity, dates, vaccinations, medications, diagnoses/findings, and follow-up recommendations. ` +
+            `If a field is missing, say \"Not visible\". OCR text:\n${extractedText}`,
+        });
+
+        setRows((prev) => [
+          ...prev,
+          makeRow({ role: "assistant", content: summary.message || "I summarized the visible health record details." }),
+        ]);
+        return;
+      }
+
+      await runBreedAndHealthAnalysis(pendingImage.file);
+      setPendingImage(null);
+      setImageQuestionMode(false);
+    } catch (error: any) {
+      setRows((prev) => [
+        ...prev,
+        makeRow({
+          role: "assistant",
+          content: `Sorry, I couldn't process that image action: ${error?.message ?? "Unknown error."}`,
+        }),
+      ]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const onSend = async () => {
     if (!message.trim() || loading) return;
 
@@ -139,8 +409,46 @@ export const AiChatPanel = ({ className }: AiChatPanelProps) => {
     setRows((prev) => [...prev, makeRow({ role: "user", content: userMessage })]);
     setMessage("");
 
+    if (pendingImage && !imageQuestionMode) {
+      setRows((prev) => [
+        ...prev,
+        makeRow({
+          role: "assistant",
+          content: "Please choose what you'd like to do with the uploaded photo first.",
+        }),
+      ]);
+      return;
+    }
+
     try {
       setLoading(true);
+      if (pendingImage && imageQuestionMode) {
+        let extractedText = pendingImage.ocrText || "";
+        if (!extractedText) {
+          const ocr = await aiChatApi.readImageText(pendingImage.file).catch(() => undefined);
+          extractedText = String(ocr?.text || "").trim();
+          if (extractedText) {
+            setPendingImage((prev) => (prev ? { ...prev, ocrText: extractedText } : prev));
+          }
+        }
+
+        const predictions = await classifyImage(pendingImage.file).catch(() => [] as VisionPrediction[]);
+        const detections = getAnimalDetections(predictions);
+
+        const contextualMessage = [
+          "The user is asking about an uploaded image.",
+          `Question: ${userMessage}`,
+          `Detected species: ${detections.detectedSpecies || "unknown"}`,
+          `Likely breeds: ${(detections.likelyBreeds || []).join(", ") || "unknown"}`,
+          `OCR text: ${extractedText || "none"}`,
+          "Answer the user question directly and mention uncertainty when details are not visible.",
+        ].join("\n");
+
+        const response = await aiChatApi.chat({ message: contextualMessage, sessionId });
+        setRows((prev) => [...prev, makeRow({ role: "assistant", content: response.message })]);
+        return;
+      }
+
       const response = await aiChatApi.chat({ message: userMessage, sessionId });
 
       // Show tool activity bubbles if the agent called any tools
@@ -281,173 +589,18 @@ export const AiChatPanel = ({ className }: AiChatPanelProps) => {
     const previewUrl = URL.createObjectURL(file);
     previewUrlsRef.current.push(previewUrl);
 
+    setPendingImage({ file, previewUrl, fileName: file.name });
+    setImageQuestionMode(false);
+
     setRows((prev) => [
       ...prev,
       makeRow({ role: "user", content: file.name, image: previewUrl }),
-      makeRow({ role: "tool-activity", content: "🖼️ Analyzing image (text + breed detection)..." }),
+      makeRow({
+        role: "assistant",
+        content: "What would you like to do with this photo?",
+        quickReplies: IMAGE_ACTION_OPTIONS,
+      }),
     ]);
-
-    try {
-      setLoading(true);
-      const [ocrResult, imagePredictions] = await Promise.allSettled([
-        aiChatApi.readImageText(file),
-        classifyImage(file),
-      ]);
-
-      const extracted =
-        ocrResult.status === "fulfilled" ? String(ocrResult.value?.text || "").trim() : "";
-      const predictions = imagePredictions.status === "fulfilled" ? imagePredictions.value : [];
-      const { detectedSpecies, likelyBreeds, animalPredictions, calibratedConfidence } = getAnimalDetections(predictions);
-      // If classifier + detection found no animal signals, reply with a friendly fallback
-      const looksLikePet = (Array.isArray(predictions) && predictions.length > 0 && detectedSpecies) || (likelyBreeds && likelyBreeds.length > 0);
-      if (!looksLikePet) {
-        const msg = "Hmm, I don't see a pet in this photo! Try uploading a clear picture of your dog or cat for breed and health analysis. Or just type your question below. 🐾";
-        setRows((prev) => [...prev, makeRow({ role: "assistant", content: msg })]);
-        setLoading(false);
-        return;
-      }
-
-      const primaryBreed = likelyBreeds[0] || "Unknown";
-      const otherLikelyBreeds = likelyBreeds.slice(1, 3);
-      const topMatch = calibratedConfidence;
-
-      setRows((prev) => [
-        ...prev,
-        makeRow({ role: "tool-activity", content: "🐾 Generating image-based recommendations..." }),
-      ]);
-
-      const healthResponse = await aiChatApi
-        .checkPetHealth(file, detectedSpecies || undefined)
-        .catch(() => undefined);
-
-      const geminiPrimaryBreed = String(healthResponse?.breed_estimate?.primary || "").trim();
-      const geminiBreedConfidence = Number(healthResponse?.breed_estimate?.confidence ?? 0);
-      const geminiAlternatives = Array.isArray(healthResponse?.breed_estimate?.alternatives)
-        ? healthResponse.breed_estimate.alternatives.map((item) => String(item || "").trim()).filter(Boolean).slice(0, 3)
-        : [];
-
-      const shouldUseGeminiBreed =
-        !!geminiPrimaryBreed &&
-        geminiPrimaryBreed.toLowerCase() !== "unknown" &&
-        geminiBreedConfidence >= Math.max(55, topMatch - 10);
-
-      const finalPrimaryBreed = shouldUseGeminiBreed ? geminiPrimaryBreed : primaryBreed;
-      const finalTopMatch = shouldUseGeminiBreed
-        ? Math.max(0, Math.min(99, Math.round(geminiBreedConfidence)))
-        : topMatch;
-      const finalAlternatives = shouldUseGeminiBreed
-        ? Array.from(new Set([...geminiAlternatives, ...otherLikelyBreeds])).slice(0, 3)
-        : otherLikelyBreeds;
-
-      const recommendationResponse = await aiChatApi.analyzePet({
-        sessionId,
-        detectedSpecies: detectedSpecies || "unknown",
-        primaryPrediction: finalPrimaryBreed,
-        primaryConfidence: finalTopMatch,
-        alternatives: finalAlternatives,
-        ocrText: extracted,
-        descriptionHint: `${finalPrimaryBreed} detected from visual traits.`,
-        healthCheck: healthResponse
-          ? {
-              status: healthResponse.status,
-              injured: healthResponse.injured,
-              confidence: healthResponse.confidence,
-              summary: healthResponse.summary,
-              visible_signs: healthResponse.visible_signs,
-              recommended_actions: healthResponse.recommended_actions,
-              age_estimate: healthResponse.age_estimate,
-              weight_estimate: healthResponse.weight_estimate,
-            }
-          : undefined,
-      });
-
-      const healthAssessment = healthResponse;
-
-      const intents: CtaIntent[] = ["find_vet", "find_groomer", "save_pet", "view_details"];
-      const structured: PetRecommendation = {
-        breed_detected: {
-          primary: String(recommendationResponse.breed?.primary || finalPrimaryBreed),
-          confidence:
-            typeof recommendationResponse.breed?.confidence === "number"
-              ? Math.max(0, Math.min(100, Math.round(recommendationResponse.breed.confidence)))
-              : finalTopMatch,
-          other_likely: Array.isArray(recommendationResponse.breed?.alternatives)
-            ? recommendationResponse.breed.alternatives
-                .map((item: unknown) => String(item || "").trim())
-                .filter(Boolean)
-                .slice(0, 3)
-            : finalAlternatives,
-        },
-        watch_for: Array.isArray(recommendationResponse.health_flags)
-          ? recommendationResponse.health_flags.map((item: unknown) => String(item || "").trim()).filter(Boolean).slice(0, 6)
-          : [],
-        care_recommendations: Array.isArray(recommendationResponse.care)
-          ? recommendationResponse.care
-              .map((item: any) => {
-                const category = String(item?.category || "").trim();
-                const summary = String(item?.summary || "").trim();
-                const detail = String(item?.detail || "").trim();
-                const normalizedSummary = summary.toLowerCase();
-                const normalizedDetail = detail.toLowerCase();
-                const detailWithoutRepeatedSummary = normalizedDetail.startsWith(normalizedSummary)
-                  ? detail.slice(summary.length).replace(/^[\s:,.\-–—]+/, "").trim()
-                  : detail;
-                const merged = [
-                  category ? `${category}:` : "",
-                  summary,
-                  detailWithoutRepeatedSummary && detailWithoutRepeatedSummary.toLowerCase() !== normalizedSummary
-                    ? `— ${detailWithoutRepeatedSummary}`
-                    : "",
-                ]
-                  .filter(Boolean)
-                  .join(" ")
-                  .trim();
-                return merged || summary;
-              })
-              .filter(Boolean)
-              .slice(0, 6)
-          : [],
-        low_confidence: Boolean(recommendationResponse.low_confidence) || finalTopMatch < 50,
-        health_assessment: healthAssessment,
-        next_actions: Array.isArray(recommendationResponse.next_actions)
-          ? recommendationResponse.next_actions
-              .map((action: any) => ({
-                label: String(action?.label || "").trim(),
-                intent: String(action?.intent || "").trim() as CtaIntent,
-              }))
-              .filter((action: { label: string; intent: CtaIntent }) => intents.includes(action.intent))
-          : [],
-      };
-
-      if (!structured.next_actions.some((action) => action.intent === "find_vet")) {
-        structured.next_actions.push({ label: "Find a vet nearby", intent: "find_vet" });
-      }
-      if (!structured.next_actions.some((action) => action.intent === "find_groomer")) {
-        structured.next_actions.push({ label: "Find a groomer nearby", intent: "find_groomer" });
-      }
-      if (!structured.next_actions.some((action) => action.intent === "save_pet")) {
-        structured.next_actions.push({ label: "Save to My Pets", intent: "save_pet" });
-      }
-
-      setRows((prev) => [
-        ...prev,
-        makeRow({
-          role: "assistant",
-          content: "Here is your pet analysis summary.",
-          recommendation: structured,
-        }),
-      ]);
-    } catch (error: any) {
-      setRows((prev) => [
-        ...prev,
-        makeRow({
-          role: "assistant",
-          content: `Sorry, I couldn't read that image: ${error?.message ?? "Unknown error."}`,
-        }),
-      ]);
-    } finally {
-      setLoading(false);
-    }
   };
 
   const intentToPath: Record<CtaIntent, string> = {
@@ -699,6 +852,21 @@ export const AiChatPanel = ({ className }: AiChatPanelProps) => {
                       >
                         {row.content}
                       </ReactMarkdown>
+
+                      {Array.isArray(row.quickReplies) && row.quickReplies.length > 0 && (
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          {row.quickReplies.map((option) => (
+                            <button
+                              key={`${row.id}-${option.id}`}
+                              type="button"
+                              onClick={() => onImageActionSelect(row.id, option.id)}
+                              className="rounded-full border border-rose-200 bg-rose-50 px-2.5 py-1 text-[11px] font-medium text-rose-700 hover:bg-rose-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-300"
+                            >
+                              {option.label}
+                            </button>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}
