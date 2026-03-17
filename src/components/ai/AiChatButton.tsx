@@ -18,8 +18,8 @@ export const AiChatButton = () => {
     <div className="fixed bottom-5 right-5 z-50 flex flex-col items-end gap-3">
       {/* Expanded chat panel */}
       {open && (
-        <div className="w-[360px] sm:w-[400px] h-[520px] animate-in fade-in slide-in-from-bottom-4 duration-200">
-          <AiChatPanel className="h-full" />
+        <div className="animate-in fade-in slide-in-from-bottom-4 duration-200">
+          <AiChatPanel />
         </div>
       )}
 

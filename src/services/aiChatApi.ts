@@ -53,6 +53,8 @@ export interface PetAnalysisRequest {
     summary: string;
     visible_signs: string[];
     recommended_actions: string[];
+    age_estimate?: PetImageEstimate;
+    weight_estimate?: PetImageEstimate;
   };
 }
 
@@ -65,6 +67,14 @@ export interface PetAnalysisResponse {
   };
   care: PetAnalysisCareItem[];
   health_flags: string[];
+  health_check?: {
+    status: string;
+    confidence: number;
+    summary: string;
+    estimated_age?: { value: string | null; confidence: number };
+    estimated_weight?: { value: string | null; confidence: number };
+    visible_signs: string[];
+  };
   next_actions: PetAnalysisNextAction[];
   low_confidence?: boolean;
   error?: string;
@@ -72,13 +82,29 @@ export interface PetAnalysisResponse {
 
 export type PetHealthStatus = "healthy" | "minor_issue" | "injured" | "urgent" | "unclear";
 
+export interface PetImageEstimate {
+  value: number | null;
+  unit: string;
+  confidence: number;
+  range: string;
+  method: string;
+  note: string;
+}
+
 export interface PetHealthCheckResponse {
+  breed_estimate?: {
+    primary: string;
+    confidence: number;
+    alternatives: string[];
+  };
   status: PetHealthStatus;
   injured: boolean;
   confidence: number;
   summary: string;
   visible_signs: string[];
   recommended_actions: string[];
+  age_estimate: PetImageEstimate;
+  weight_estimate: PetImageEstimate;
   disclaimer: string;
 }
 

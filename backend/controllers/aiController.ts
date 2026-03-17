@@ -24,6 +24,22 @@ interface AnalyzePetRequestBody {
     summary?: string;
     visible_signs?: string[];
     recommended_actions?: string[];
+    age_estimate?: {
+      value?: number | null;
+      unit?: string;
+      confidence?: number;
+      range?: string;
+      method?: string;
+      note?: string;
+    };
+    weight_estimate?: {
+      value?: number | null;
+      unit?: string;
+      confidence?: number;
+      range?: string;
+      method?: string;
+      note?: string;
+    };
   };
 }
 
