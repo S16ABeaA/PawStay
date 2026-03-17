@@ -46,6 +46,14 @@ export interface PetAnalysisRequest {
   alternatives?: string[];
   ocrText?: string;
   descriptionHint?: string;
+  healthCheck?: {
+    status: PetHealthStatus;
+    injured: boolean;
+    confidence: number;
+    summary: string;
+    visible_signs: string[];
+    recommended_actions: string[];
+  };
 }
 
 export interface PetAnalysisResponse {

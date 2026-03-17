@@ -455,24 +455,28 @@ export default function PetAnalyzer() {
 
       const detectedSpecies = topBreed.toLowerCase().includes("cat") ? "cat" : "dog";
 
-      const [analysisResult, healthResult] = await Promise.allSettled([
-        aiChatApi.analyzePet({
-          sessionId: sessionIdRef.current,
-          detectedSpecies,
-          primaryPrediction: topBreed,
-          primaryConfidence: topConfidence,
-          alternatives,
-          descriptionHint: buildDescriptionFromClassifier(topBreed),
-        }),
-        aiChatApi.checkPetHealth(imageFile, detectedSpecies),
-      ]);
+      const healthAssessment = await aiChatApi
+        .checkPetHealth(imageFile, detectedSpecies)
+        .catch(() => undefined);
 
-      if (analysisResult.status !== "fulfilled") {
-        throw analysisResult.reason;
-      }
-
-      const response = analysisResult.value;
-      const healthAssessment = healthResult.status === "fulfilled" ? healthResult.value : undefined;
+      const response = await aiChatApi.analyzePet({
+        sessionId: sessionIdRef.current,
+        detectedSpecies,
+        primaryPrediction: topBreed,
+        primaryConfidence: topConfidence,
+        alternatives,
+        descriptionHint: buildDescriptionFromClassifier(topBreed),
+        healthCheck: healthAssessment
+          ? {
+              status: healthAssessment.status,
+              injured: healthAssessment.injured,
+              confidence: healthAssessment.confidence,
+              summary: healthAssessment.summary,
+              visible_signs: healthAssessment.visible_signs,
+              recommended_actions: healthAssessment.recommended_actions,
+            }
+          : undefined,
+      });
 
       if (response.error === "not_a_pet") {
         setError("That doesn't look like a pet photo. Please try another image.");

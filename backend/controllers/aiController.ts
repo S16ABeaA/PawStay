@@ -17,6 +17,14 @@ interface AnalyzePetRequestBody {
   alternatives?: string[];
   ocrText?: string;
   descriptionHint?: string;
+  healthCheck?: {
+    status?: string;
+    injured?: boolean;
+    confidence?: number;
+    summary?: string;
+    visible_signs?: string[];
+    recommended_actions?: string[];
+  };
 }
 
 export const aiController = {
@@ -125,6 +133,7 @@ export const aiController = {
         alternatives: Array.isArray(body.alternatives) ? body.alternatives : [],
         ocrText: body.ocrText,
         descriptionHint: body.descriptionHint,
+        healthCheck: body.healthCheck,
         userId,
         authToken,
       });

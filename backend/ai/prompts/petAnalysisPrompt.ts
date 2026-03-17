@@ -33,6 +33,8 @@ Rules:
 - Always return 3–5 care items
 - Tailor care tips specifically to the detected breed
 - Each care.detail must be specific and actionable (what to do, how often, and warning signs)
+- If health-check signals are provided, make care recommendations primarily based on those signals
+- For urgent/injured health-check signals, put emergency vet care first and set it to high priority
 - next_actions must always include "find_vet", "find_groomer", and "save_pet" intents
 - If confidence < 50, still return best guess but set low_confidence: true at root level
 - If image is not a pet, return { "error": "not_a_pet" }

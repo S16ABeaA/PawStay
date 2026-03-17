@@ -279,25 +279,31 @@ export const AiChatPanel = ({ className }: AiChatPanelProps) => {
         makeRow({ role: "tool-activity", content: "🐾 Generating image-based recommendations..." }),
       ]);
 
-      const [analysisResponse, healthResponse] = await Promise.allSettled([
-        aiChatApi.analyzePet({
-          sessionId,
-          detectedSpecies: detectedSpecies || "unknown",
-          primaryPrediction: primaryBreed,
-          primaryConfidence: topMatch,
-          alternatives: otherLikelyBreeds,
-          ocrText: extracted,
-          descriptionHint: `${primaryBreed} detected from visual traits.`,
-        }),
-        aiChatApi.checkPetHealth(file, detectedSpecies || undefined),
-      ]);
+      const healthResponse = await aiChatApi
+        .checkPetHealth(file, detectedSpecies || undefined)
+        .catch(() => undefined);
 
-      if (analysisResponse.status !== "fulfilled") {
-        throw analysisResponse.reason;
-      }
+      const recommendationResponse = await aiChatApi.analyzePet({
+        sessionId,
+        detectedSpecies: detectedSpecies || "unknown",
+        primaryPrediction: primaryBreed,
+        primaryConfidence: topMatch,
+        alternatives: otherLikelyBreeds,
+        ocrText: extracted,
+        descriptionHint: `${primaryBreed} detected from visual traits.`,
+        healthCheck: healthResponse
+          ? {
+              status: healthResponse.status,
+              injured: healthResponse.injured,
+              confidence: healthResponse.confidence,
+              summary: healthResponse.summary,
+              visible_signs: healthResponse.visible_signs,
+              recommended_actions: healthResponse.recommended_actions,
+            }
+          : undefined,
+      });
 
-      const recommendationResponse = analysisResponse.value;
-      const healthAssessment = healthResponse.status === "fulfilled" ? healthResponse.value : undefined;
+      const healthAssessment = healthResponse;
 
       const intents: CtaIntent[] = ["find_vet", "find_groomer", "save_pet", "view_details"];
       const structured: PetRecommendation = {
