@@ -144,6 +144,90 @@ export const propertyController = {
     }
   },
 
+  /**
+   * GET /api/properties/:id/cancellation-policy
+   * Public endpoint — returns the cancellation policy for a property.
+   * Supports lookup by property_id or property_name via query param.
+   */
+  getCancellationPolicy: async (req: Request, res: Response) => {
+    try {
+      let id = req.params.id as string;
+      const propertyName = req.query.property_name as string | undefined;
+
+      let property: any = null;
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+      // If property_name is provided, search by name first
+      if (propertyName) {
+        const { data, error } = await supabaseAdmin
+          .from("properties")
+          .select("id, name")
+          .ilike("name", `%${propertyName}%`)
+          .eq("is_deleted", false)
+          .single();
+
+        if (error && error.code !== "PGRST116") {
+          // PGRST116 = no rows
+          throw error;
+        }
+
+        if (data) {
+          id = data.id;
+          property = data;
+        }
+      }
+
+      // If no property found yet and id is a valid UUID, use that id
+      if (!property && id && uuidRegex.test(id)) {
+        const { data, error } = await supabaseAdmin
+          .from("properties")
+          .select("id, name")
+          .eq("id", id)
+          .eq("is_deleted", false)
+          .single();
+
+        if (error && error.code !== "PGRST116") {
+          throw error;
+        }
+
+        property = data;
+      }
+
+      if (!property || !id) {
+        const searchDescription = propertyName
+          ? `Property with name containing "${propertyName}"`
+          : id && uuidRegex.test(id)
+            ? "Property"
+            : propertyName || id;
+
+        return res.status(404).json({
+          message: `${searchDescription} not found`,
+        });
+      }
+
+      // Fetch cancellation policy from property_setup table
+      const { data: setupData, error: setupError } = await supabaseAdmin
+        .from("property_setup")
+        .select("cancellation_policy")
+        .eq("property_id", id)
+        .single();
+
+      if (setupError && setupError.code !== "PGRST116") {
+        throw setupError;
+      }
+
+      return res.json({
+        property_id: property.id,
+        property_name: property.name,
+        cancellation_policy: setupData?.cancellation_policy || {},
+        message: "Cancellation policy retrieved successfully",
+      });
+    } catch (err: any) {
+      console.error("getCancellationPolicy error:", err);
+      res.status(500).json({ message: err.message || "Failed to fetch cancellation policy" });
+    }
+  },
+
   getReviews: async (req: Request, res: Response) => {
     try {
       const id = req.params.id as string;
