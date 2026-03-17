@@ -14,6 +14,7 @@ router.get('/mine/stats', authMiddleware, propertyController.dashboardStats);
 
 router.get("/:id", propertyController.getById);
 router.get("/:id/payment", propertyController.getPaymentOptions);
+router.get("/:id/cancellation-policy", propertyController.getCancellationPolicy);
 router.get("/:id/reviews", propertyController.getReviews);
 
 // Service management routes
