@@ -122,6 +122,17 @@ export const propertyController = {
         return res.status(400).json({ message: "Invalid Property ID format" });
       }
 
+      const { data: propertyRow, error: propertyErr } = await supabaseAdmin
+        .from("properties")
+        .select("id")
+        .eq("id", id)
+        .eq("status", "approved")
+        .eq("is_deleted", false)
+        .maybeSingle();
+
+      if (propertyErr) throw propertyErr;
+      if (!propertyRow) return res.status(404).json({ message: "Property not found" });
+
       const { data, error } = await supabaseAdmin
         .from("property_pricing")
         .select("payment_options")
@@ -151,6 +162,17 @@ export const propertyController = {
       if (!id || !uuidRegex.test(id)) {
         return res.status(400).json({ message: "Invalid Property ID format" });
       }
+
+      const { data: propertyRow, error: propertyErr } = await supabaseAdmin
+        .from("properties")
+        .select("id")
+        .eq("id", id)
+        .eq("status", "approved")
+        .eq("is_deleted", false)
+        .maybeSingle();
+
+      if (propertyErr) throw propertyErr;
+      if (!propertyRow) return res.status(404).json({ message: "Property not found" });
 
       const { data, error } = await supabaseAdmin
         .from("reviews")
@@ -193,6 +215,7 @@ export const propertyController = {
           )
         `)
         .eq("owner_id", userId)
+        .in("status", ["approved", "suspended"])
         .eq("is_deleted", false);
 
       if (error) throw error;
@@ -294,6 +317,7 @@ export const propertyController = {
         .from('properties')
         .select('id, capacity')
         .eq('owner_id', userId)
+        .eq('status', 'approved')
         .eq('is_deleted', false);
 
       if (filterPropertyId) {
@@ -394,9 +418,15 @@ export const propertyController = {
         query = query.eq('is_active', true);
       } else {
         // check ownership
-        const { data: propRows } = await supabaseAdmin.from('properties').select('owner_id').eq('id', propertyId).single();
+        const { data: propRows } = await supabaseAdmin
+          .from('properties')
+          .select('owner_id, status, is_deleted')
+          .eq('id', propertyId)
+          .single();
         const ownerId = propRows?.owner_id;
-        if (!ownerId || String(ownerId) !== String(userId)) {
+        const isOwner = ownerId && String(ownerId) === String(userId);
+        const isApproved = propRows?.status === 'approved' && propRows?.is_deleted === false;
+        if (!isOwner || !isApproved) {
           query = query.eq('is_active', true);
         }
       }
@@ -418,9 +448,14 @@ export const propertyController = {
       if (!propertyId) return res.status(400).json({ message: 'property id required' });
 
       // verify owner
-      const { data: propRow, error: propErr } = await supabaseAdmin.from('properties').select('owner_id').eq('id', propertyId).single();
+      const { data: propRow, error: propErr } = await supabaseAdmin
+        .from('properties')
+        .select('owner_id, status, is_deleted')
+        .eq('id', propertyId)
+        .single();
       if (propErr) throw propErr;
       if (!propRow || String(propRow.owner_id) !== String(userId)) return res.status(403).json({ message: 'Forbidden' });
+      if (propRow.is_deleted || propRow.status !== 'approved') return res.status(403).json({ message: 'Property is not active.' });
 
       const { name, description, price, category, capacity, is_active } = req.body;
 
@@ -493,9 +528,14 @@ export const propertyController = {
       if (!svcRow) return res.status(404).json({ message: 'service not found' });
 
       const propertyId = svcRow.property_id;
-      const { data: propRow, error: propErr } = await supabaseAdmin.from('properties').select('owner_id').eq('id', propertyId).single();
+      const { data: propRow, error: propErr } = await supabaseAdmin
+        .from('properties')
+        .select('owner_id, status, is_deleted')
+        .eq('id', propertyId)
+        .single();
       if (propErr) throw propErr;
       if (!propRow || String(propRow.owner_id) !== String(userId)) return res.status(403).json({ message: 'Forbidden' });
+      if (propRow.is_deleted || propRow.status !== 'approved') return res.status(403).json({ message: 'Property is not active.' });
 
       const updates = { ...req.body };
       const { data, error } = await supabaseAdmin.from('property_services').update(updates).eq('id', serviceId).select().single();
@@ -521,9 +561,14 @@ export const propertyController = {
       if (!svcRow) return res.status(404).json({ message: 'service not found' });
 
       const propertyId = svcRow.property_id;
-      const { data: propRow, error: propErr } = await supabaseAdmin.from('properties').select('owner_id').eq('id', propertyId).single();
+      const { data: propRow, error: propErr } = await supabaseAdmin
+        .from('properties')
+        .select('owner_id, status, is_deleted')
+        .eq('id', propertyId)
+        .single();
       if (propErr) throw propErr;
       if (!propRow || String(propRow.owner_id) !== String(userId)) return res.status(403).json({ message: 'Forbidden' });
+      if (propRow.is_deleted || propRow.status !== 'approved') return res.status(403).json({ message: 'Property is not active.' });
 
       // soft delete
       const { data, error } = await supabaseAdmin.from('property_services').update({ is_deleted: true, is_active: false }).eq('id', serviceId).select().single();

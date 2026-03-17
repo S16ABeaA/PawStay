@@ -409,17 +409,24 @@ export const adminPropertyController = {
         return res.status(404).json({ error: "Property not found or update failed." });
       }
 
-      // Create notification when property is approved or rejected.
-      if (status === "approved" || status === "rejected") {
+      // Create notification when property is approved, rejected, or suspended.
+      if (status === "approved" || status === "rejected" || status === "suspended") {
         try {
           const isApproved = status === "approved";
+          const isRejected = status === "rejected";
           await notificationModel.create({
             user_id: data.owner_id,
-            type: isApproved ? "property_approved" : "property_rejected",
-            title: isApproved ? "Property Approved! 🎉" : "Property Application Rejected",
+            type: isApproved ? "property_approved" : isRejected ? "property_rejected" : "property_suspended",
+            title: isApproved
+              ? "Property Approved!"
+              : isRejected
+                ? "Property Application Rejected"
+                : "Property Suspended",
             message: isApproved
               ? `Your property "${data.name}" has been approved and is now live on PawStay.`
-              : `Your property "${data.name}" was rejected.${rejection_reason ? ` Reason: ${rejection_reason}` : " Please review the feedback and resubmit."}`,
+              : isRejected
+                ? `Your property "${data.name}" was rejected.${rejection_reason ? ` Reason: ${rejection_reason}` : " Please review the feedback and resubmit."}`
+                : `Your property "${data.name}" has been suspended and is temporarily hidden from customers.`,
             link: "/admin/services",
             reference_id: data.id,
             reference_type: "property",

@@ -581,6 +581,8 @@ export async function getPropertyById(id: string) {
       )
     `)
     .eq("id", id)
+    .eq("status", "approved")
+    .eq("is_deleted", false)
     .single();
 
   if (error) {

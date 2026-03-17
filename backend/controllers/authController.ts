@@ -309,6 +309,8 @@ export const authController = {
           address: userProfile.address || "",
           avatar_url: userProfile.avatar_url || "",
           email: userProfile.email || user.email, // Get email from DB or token
+          email_confirmed_at: user.email_confirmed_at || null,
+          is_verified: Boolean(user.email_confirmed_at),
         }
       });
     }catch(err: any){

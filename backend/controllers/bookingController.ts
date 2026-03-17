@@ -375,6 +375,7 @@ export const getTodayCheckInsForOwner = async (req: any, res: any) => {
       .from('properties')
       .select('id, name')
       .eq('owner_id', userId)
+      .eq('status', 'approved')
       .eq('is_deleted', false);
 
     if (filterPropertyId) propsQuery = propsQuery.eq('id', filterPropertyId);
@@ -430,6 +431,7 @@ export const getRecentBookingsForOwner = async (req: any, res: any) => {
       .from('properties')
       .select('id')
       .eq('owner_id', userId)
+      .eq('status', 'approved')
       .eq('is_deleted', false);
 
     if (filterPropertyId) propsQuery = propsQuery.eq('id', filterPropertyId);
@@ -483,6 +485,7 @@ export const listBookingsForOwner = async (req: any, res: any) => {
       .from('properties')
       .select('id')
       .eq('owner_id', userId)
+      .eq('status', 'approved')
       .eq('is_deleted', false);
 
     if (filterPropertyId) propsQuery = propsQuery.eq('id', filterPropertyId);
@@ -576,6 +579,7 @@ export const getBookingForOwner = async (req: any, res: any) => {
       .from('properties')
       .select('id')
       .eq('owner_id', userId)
+      .eq('status', 'approved')
       .eq('is_deleted', false);
     if (propsErr) throw propsErr;
     const propertyIds = (props ?? []).map((p: any) => p.id);
@@ -623,13 +627,16 @@ export const updateBookingStatusForOwner = async (req: any, res: any) => {
 
     const { data: prop, error: propErr } = await supabaseAdmin
       .from('properties')
-      .select('id, owner_id')
+      .select('id, owner_id, status, is_deleted')
       .eq('id', booking.property_id)
       .single();
     if (propErr) throw propErr;
 
     if (String(prop.owner_id) !== String(userId)) {
       return res.status(403).json({ error: 'Forbidden' });
+    }
+    if (prop.is_deleted || prop.status !== 'approved') {
+      return res.status(403).json({ error: 'Property is not active.' });
     }
 
     // Only allow certain transitions
@@ -821,6 +828,8 @@ export const createBooking = async (req: Request, res: Response) => {
         .from("properties")
         .select("id")
         .eq("id", property_id)
+        .eq("status", "approved")
+        .eq("is_deleted", false)
         .single();
 
       if (propCheckErr || !propertyExists) {

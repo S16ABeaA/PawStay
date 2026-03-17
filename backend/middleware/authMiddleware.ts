@@ -68,6 +68,7 @@ export const authMiddleware = async (req: Request, res: Response, next: NextFunc
       (req as any).user = {
         ...userProfile,
         email: refreshedUser.email,
+        email_confirmed_at: refreshedUser.email_confirmed_at,
       };
 
       return next();
@@ -84,6 +85,7 @@ export const authMiddleware = async (req: Request, res: Response, next: NextFunc
     (req as any).user = {
       ...userProfile,
       email: user.email,
+      email_confirmed_at: user.email_confirmed_at,
     };
 
     next(); // continue to the protected route

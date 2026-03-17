@@ -30,8 +30,8 @@ export const PropertyStatusNotification = () => {
         const data = await authHelper.get(`${API_BASE_URL}/api/notifications`);
         
         // Filter for property-related notifications only
-        const propertyNotifs = (data.notifications || []).filter(
-          (n: PropertyNotification) => n.type === "property_approved" || n.type === "property_rejected"
+        const propertyNotifs = (data.notifications || []).filter((n: PropertyNotification) =>
+          ["property_approved", "property_rejected", "property_suspended"].includes(n.type)
         );
         
         setNotifications(propertyNotifs.slice(0, 3)); // Show latest 3
@@ -79,20 +79,29 @@ export const PropertyStatusNotification = () => {
     <div className="mb-6 space-y-3">
       {visibleNotifications.map((notification) => {
         const isApproved = notification.type === "property_approved";
+        const isRejected = notification.type === "property_rejected";
         const Icon = isApproved ? CheckCircle2 : XCircle;
-        const bgColor = isApproved 
-          ? "border-emerald-200 bg-emerald-50" 
-          : "border-red-200 bg-red-50";
-        const iconColor = isApproved 
-          ? "text-emerald-600" 
-          : "text-red-600";
-        const titleColor = isApproved 
-          ? "text-emerald-900" 
-          : "text-red-900";
-        const textColor = isApproved 
-          ? "text-emerald-800" 
-          : "text-red-800";
-        const badgeVariant = isApproved ? "default" : "destructive";
+        const bgColor = isApproved
+          ? "border-emerald-200 bg-emerald-50"
+          : isRejected
+            ? "border-red-200 bg-red-50"
+            : "border-amber-200 bg-amber-50";
+        const iconColor = isApproved
+          ? "text-emerald-600"
+          : isRejected
+            ? "text-red-600"
+            : "text-amber-600";
+        const titleColor = isApproved
+          ? "text-emerald-900"
+          : isRejected
+            ? "text-red-900"
+            : "text-amber-900";
+        const textColor = isApproved
+          ? "text-emerald-800"
+          : isRejected
+            ? "text-red-800"
+            : "text-amber-800";
+        const badgeVariant = isApproved ? "default" : isRejected ? "destructive" : "secondary";
 
         return (
           <Card key={notification.id} className={`border ${bgColor} overflow-hidden`}>
@@ -120,7 +129,7 @@ export const PropertyStatusNotification = () => {
                   
                   <div className="flex items-center gap-2 mt-3">
                     <Badge variant={badgeVariant} className="text-xs">
-                      {isApproved ? "Approved" : "Rejected"}
+                      {isApproved ? "Approved" : isRejected ? "Rejected" : "Suspended"}
                     </Badge>
                     <span className="text-xs text-slate-500">
                       {new Date(notification.created_at).toLocaleDateString()}
@@ -136,11 +145,19 @@ export const PropertyStatusNotification = () => {
                           </Button>
                         </Link>
                       </>
-                    ) : (
+                    ) : isRejected ? (
                       <>
                         <Link to={notification.link || "/admin/services"}>
                           <Button size="sm" variant="outline" className="border-red-300 text-red-700 hover:bg-red-100">
                             View Feedback
+                          </Button>
+                        </Link>
+                      </>
+                    ) : (
+                      <>
+                        <Link to={notification.link || "/admin/services"}>
+                          <Button size="sm" variant="outline" className="border-amber-300 text-amber-800 hover:bg-amber-100">
+                            Review Status
                           </Button>
                         </Link>
                       </>
