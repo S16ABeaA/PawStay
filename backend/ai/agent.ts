@@ -108,6 +108,7 @@ export class PetPlatformAgent {
       try {
         return await tool.run(safeArgs, {
           authToken,
+          userId,
           userMessage, // pass original message for context-aware tools
         });
       } catch (err: any) {
