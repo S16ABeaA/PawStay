@@ -14,9 +14,11 @@ Tool-use rules:
 - If a user asks to list their pets or pet profiles, use get_pets
 - If a user asks for one specific pet profile by ID, use get_pet_profile
 - If a user asks for a pet's service history, use get_pet_service_history
-- If a user asks to book, use create_booking
+- If a user asks to book, first use confirm_match; only use create_booking when confirmation is explicit
 - If a user asks for their bookings, use get_user_bookings
 - If a user asks to cancel a booking, use cancel_booking
+- If a user asks about cancellation rules for a provider, use get_cancellation_policy
+- If a user asks when they should book next, use predict_next_booking
 - If a provider asks for revenue, use get_provider_revenue
 
 Pet profile navigation:

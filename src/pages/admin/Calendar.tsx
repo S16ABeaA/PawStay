@@ -592,32 +592,68 @@ const AdminCalendar = () => {
     setCurrentView(arg.view.type);
   };
 
-  // Event drag & resize
-  const handleEventDrop = (info: any) => {
-    setEvents((prev) =>
-      prev.map((e) =>
-        e.id === info.event.id
-          ? {
-              ...e,
-              start: info.event.startStr,
-              end: info.event.endStr ?? e.end,
-              allDay: info.event.allDay,
-            }
-          : e
-      )
-    );
-    toast({ title: "Event Moved", description: `${info.event.title} has been rescheduled.` });
+  const buildModifyPayloadFromCalendarEvent = (event: any) => {
+    const isBoarding = Boolean(event.allDay || event.endStr?.length === 10);
+
+    if (isBoarding) {
+      return {
+        checkin: String(event.startStr).slice(0, 10),
+        checkout: event.endStr ? String(event.endStr).slice(0, 10) : null,
+        time_slot: null,
+      };
+    }
+
+    const startStr = String(event.startStr || "");
+    const checkin = startStr.slice(0, 10);
+    const timeSlot = startStr.includes("T") ? startStr.slice(11, 16) : null;
+
+    return {
+      checkin,
+      checkout: null,
+      time_slot: timeSlot,
+    };
   };
 
-  const handleEventResize = (info: any) => {
-    setEvents((prev) =>
-      prev.map((e) =>
-        e.id === info.event.id
-          ? { ...e, end: info.event.endStr }
-          : e
-      )
-    );
-    toast({ title: "Duration Updated", description: `${info.event.title} duration changed.` });
+  // Event drag & resize
+  const handleEventDrop = async (info: any) => {
+    const payload = buildModifyPayloadFromCalendarEvent(info.event);
+    try {
+      await bookingApi.modifyReservation(info.event.id, payload);
+      setEvents((prev) =>
+        prev.map((e) =>
+          e.id === info.event.id
+            ? {
+                ...e,
+                start: info.event.startStr,
+                end: info.event.endStr ?? e.end,
+                allDay: info.event.allDay,
+              }
+            : e
+        )
+      );
+      toast({ title: "Event Moved", description: `${info.event.title} has been rescheduled.` });
+    } catch (err: any) {
+      info.revert();
+      toast({ title: "Reschedule Failed", description: err?.message || "Could not reschedule booking.", variant: "destructive" });
+    }
+  };
+
+  const handleEventResize = async (info: any) => {
+    const payload = buildModifyPayloadFromCalendarEvent(info.event);
+    try {
+      await bookingApi.modifyReservation(info.event.id, payload);
+      setEvents((prev) =>
+        prev.map((e) =>
+          e.id === info.event.id
+            ? { ...e, end: info.event.endStr }
+            : e
+        )
+      );
+      toast({ title: "Duration Updated", description: `${info.event.title} duration changed.` });
+    } catch (err: any) {
+      info.revert();
+      toast({ title: "Update Failed", description: err?.message || "Could not update booking duration.", variant: "destructive" });
+    }
   };
 
   // -----------------------------------------------------------------------

@@ -84,6 +84,18 @@ export interface CreateWalkinPayload {
   status?: string;
 }
 
+export interface ModifyReservationPayload {
+  checkin?: string;
+  checkout?: string | null;
+  time_slot?: string | null;
+  service_id?: string | null;
+  service_name?: string | null;
+  service_type?: string | null;
+  notes?: string | null;
+  room_name?: string | null;
+  special_requirements?: string | null;
+}
+
 export interface AdminCalendarProperty {
   id: string;
   name: string;
@@ -205,6 +217,14 @@ export const bookingApi = {
   /** Admin update booking status */
   updateBookingStatus: (bookingId: string, status: string) =>
     authHelper.patch(`${API_BASE_URL}/api/bookings/admin/${bookingId}/status`, { status }),
+
+  /** Admin modify reservation details (reschedule, service options) */
+  modifyReservation: (bookingId: string, data: ModifyReservationPayload) =>
+    authHelper.patch(`${API_BASE_URL}/api/bookings/admin/${bookingId}/modify`, data),
+
+  /** Get auto-rebook alternatives after cancellation */
+  getAutoRebookAlternatives: (bookingId: string) =>
+    authHelper.get(`${API_BASE_URL}/api/bookings/${bookingId}/auto-rebook`),
 
   /** Admin soft-delete a booking */
   deleteBooking: (bookingId: string) =>

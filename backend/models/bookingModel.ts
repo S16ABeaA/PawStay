@@ -311,6 +311,24 @@ export const bookingModel = {
     status: string,
     options?: { autoMarkPaidOnConfirm?: boolean; autoMarkCashPaidOnComplete?: boolean }
   ): Promise<BookingRow> {
+    if (status === "cancelled") {
+      // Cancellation should automatically mark already-paid bookings as refunded.
+      const { data: cancelledRefunded, error: cancelledRefundedError } = await supabaseAdmin
+        .from("bookings")
+        .update({
+          status,
+          payment_status: "refunded",
+        })
+        .eq("id", bookingId)
+        .eq("is_deleted", false)
+        .eq("payment_status", "paid")
+        .select()
+        .single();
+
+      if (!cancelledRefundedError && cancelledRefunded) return cancelledRefunded;
+      if (cancelledRefundedError && (cancelledRefundedError as any)?.code !== "PGRST116") throw cancelledRefundedError;
+    }
+
     if (status === "confirmed" && options?.autoMarkPaidOnConfirm) {
       const { data: promoted, error: promotedError } = await supabaseAdmin
         .from("bookings")

@@ -5,6 +5,7 @@ import { serviceHistoryModel } from "../models/serviceHistoryModel";
 import { supabaseAdmin } from "../config/supabaseAdmin";
 import { notificationModel } from "../models/notificationModel";
 import { getSuperAdminRecipients } from "../services/notificationRecipients";
+import { getProperties } from "../services/property.service";
 import {
   batchSignStorageRefs,
   getSignedStorageUrl,
@@ -62,6 +63,217 @@ const signBookingMedia = (booking: any, signedMap: Record<string, string>) => {
     vaccine_record_url: toDocFieldValue(vaccineDocs),
     med_cert_url: toDocFieldValue(medDocs),
   };
+};
+
+const toIsoDate = (raw?: string | null): string | null => {
+  if (!raw) return null;
+  const str = String(raw).trim();
+  if (!str) return null;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(str)) return str;
+  const dt = new Date(str);
+  if (Number.isNaN(dt.getTime())) return null;
+  return dt.toISOString().slice(0, 10);
+};
+
+const toSlotTime = (raw?: string | null): string | null => {
+  if (!raw) return null;
+  const str = String(raw).trim();
+  if (!str) return null;
+  if (/^\d{2}:\d{2}(:\d{2})?$/.test(str)) return str.slice(0, 5);
+  const match = str.match(/T(\d{2}:\d{2})/);
+  if (match?.[1]) return match[1];
+  return null;
+};
+
+const parseCityFromAddress = (address?: string | null): string | null => {
+  if (!address) return null;
+  const parts = String(address)
+    .split("|")
+    .map((p) => p.trim())
+    .filter(Boolean);
+
+  if (parts.length >= 3) return parts[2].toLowerCase();
+  if (parts.length > 0) return parts[parts.length - 1].toLowerCase();
+  return null;
+};
+
+const normalizeServiceType = (value?: string | null): string | null => {
+  if (!value) return null;
+  const v = String(value).trim().toLowerCase();
+  if (!v) return null;
+  if (["hotel", "boarding", "pet hotel"].includes(v)) return "boarding";
+  if (["grooming", "groomer"].includes(v)) return "grooming";
+  if (["veterinary", "vet", "clinic"].includes(v)) return "veterinary";
+  if (["daycare", "day care"].includes(v)) return "daycare";
+  if (["transport", "transportation"].includes(v)) return "transport";
+  return v;
+};
+
+const serviceTypeToCategory = (value?: string | null): string | null => {
+  const normalized = normalizeServiceType(value);
+  if (!normalized) return null;
+  if (normalized === "boarding") return "Boarding";
+  if (normalized === "grooming") return "Grooming";
+  if (normalized === "veterinary") return "Veterinary";
+  if (normalized === "daycare") return "Daycare";
+  if (normalized === "transport") return "Transport";
+  return null;
+};
+
+const resolveBookingCapacity = async (
+  propertyId: string,
+  isBoarding: boolean,
+): Promise<number> => {
+  if (isBoarding) {
+    const { data: services } = await supabaseAdmin
+      .from("property_services")
+      .select("capacity")
+      .eq("property_id", propertyId)
+      .eq("is_active", true)
+      .eq("is_deleted", false)
+      .eq("category", "Boarding");
+
+    if (services && services.length > 0) {
+      return services.reduce((sum: number, s: any) => sum + (s.capacity ?? 1), 0);
+    }
+  } else {
+    const { data: services } = await supabaseAdmin
+      .from("property_services")
+      .select("capacity")
+      .eq("property_id", propertyId)
+      .eq("is_active", true)
+      .eq("is_deleted", false)
+      .in("category", ["Grooming", "Veterinary"]);
+
+    if (services && services.length > 0) {
+      return services.reduce((sum: number, s: any) => sum + (s.capacity ?? 1), 0);
+    }
+  }
+
+  const { data: propData } = await supabaseAdmin
+    .from("properties")
+    .select("capacity")
+    .eq("id", propertyId)
+    .single();
+
+  return propData?.capacity ?? 5;
+};
+
+const ensureReservationAvailabilityForUpdate = async (
+  bookingId: string,
+  propertyId: string,
+  checkin: string,
+  checkout: string | null,
+  timeSlot: string | null,
+) => {
+  const isBoarding = !!checkout;
+  const capacity = await resolveBookingCapacity(propertyId, isBoarding);
+
+  if (isBoarding) {
+    const start = new Date(checkin);
+    const end = new Date(checkout as string);
+    let cur = new Date(start);
+
+    while (cur < end) {
+      const nightStart = cur.toISOString().slice(0, 10);
+      const next = new Date(cur);
+      next.setDate(next.getDate() + 1);
+      const nightEnd = next.toISOString().slice(0, 10);
+
+      const { data, error } = await supabaseAdmin
+        .from("bookings")
+        .select("id", { count: "exact" })
+        .eq("property_id", propertyId)
+        .eq("is_deleted", false)
+        .in("status", ["pending", "confirmed", "checked_in"])
+        .not("checkout", "is", null)
+        .lt("checkin", nightEnd)
+        .gt("checkout", nightStart)
+        .neq("id", bookingId);
+
+      if (error) throw error;
+      const count = Number(data?.length ?? 0);
+      if (count >= capacity) {
+        const err = new Error(`SLOT_UNAVAILABLE:Date ${nightStart} is fully booked`);
+        throw err;
+      }
+
+      cur = next;
+    }
+
+    return;
+  }
+
+  if (!timeSlot) return;
+
+  const { data, error } = await supabaseAdmin
+    .from("bookings")
+    .select("id")
+    .eq("property_id", propertyId)
+    .eq("checkin", checkin)
+    .eq("time_slot", timeSlot)
+    .is("checkout", null)
+    .eq("is_deleted", false)
+    .in("status", ["pending", "confirmed", "checked_in"])
+    .neq("id", bookingId);
+
+  if (error) throw error;
+  const count = Number(data?.length ?? 0);
+  if (count >= capacity) {
+    throw new Error(`SLOT_UNAVAILABLE:The ${timeSlot} time slot on ${checkin} is no longer available`);
+  }
+};
+
+const generateAutoRebookAlternatives = async (
+  booking: {
+    id: string;
+    property_id: string;
+    checkin: string;
+    checkout: string | null;
+    time_slot: string | null;
+    service_type: string | null;
+    service_name: string | null;
+    properties?: { city?: string | null; address?: string | null; name?: string | null } | null;
+  },
+  limit = 5,
+) => {
+  const location =
+    booking.properties?.city ||
+    parseCityFromAddress(booking.properties?.address || null) ||
+    undefined;
+
+  const serviceCategory = serviceTypeToCategory(booking.service_type);
+
+  const rows = await getProperties({
+    location,
+    checkin: booking.checkin,
+    checkout: booking.checkout || undefined,
+    timeSlot: booking.time_slot || undefined,
+    serviceCategory: serviceCategory || undefined,
+  });
+
+  return (rows || [])
+    .filter((p: any) => String(p.id) !== String(booking.property_id))
+    .slice(0, limit)
+    .map((p: any) => ({
+      property_id: p.id,
+      name: p.name,
+      city: p.city || null,
+      rating: typeof p.rating === "number" ? p.rating : (Number(p.rating) || null),
+      review_count:
+        typeof p.review_count === "number"
+          ? p.review_count
+          : (Number(p.review_count ?? p.reviewCount) || null),
+      cheapest_service_price:
+        typeof p.cheapest_service_price === "number"
+          ? p.cheapest_service_price
+          : (Number(p.cheapest_service_price) || null),
+      service_type: normalizeServiceType(booking.service_type),
+      service_name: booking.service_name || null,
+      suggested_checkin: booking.checkin,
+      suggested_checkout: booking.checkout,
+      suggested_time_slot: booking.time_slot,
+    }));
 };
 
 /**
@@ -655,6 +867,10 @@ export const updateBookingStatusForOwner = async (req: any, res: any) => {
       updateData.paid_at = new Date().toISOString();
     }
 
+    if (newStatus === 'cancelled' && booking.payment_status === 'paid') {
+      updateData.payment_status = 'refunded';
+    }
+
     const { data: updated, error: updErr } = await supabaseAdmin
       .from('bookings')
       .update(updateData)
@@ -663,6 +879,23 @@ export const updateBookingStatusForOwner = async (req: any, res: any) => {
       .single();
 
     if (updErr) throw updErr;
+
+    let autoRebookAlternatives: Array<Record<string, any>> = [];
+    if (newStatus === "cancelled") {
+      try {
+        const { data: cancelledBooking } = await supabaseAdmin
+          .from("bookings")
+          .select("id, property_id, checkin, checkout, time_slot, service_type, service_name, properties:property_id(city, address, name)")
+          .eq("id", bookingId)
+          .single();
+
+        if (cancelledBooking) {
+          autoRebookAlternatives = await generateAutoRebookAlternatives(cancelledBooking as any, 5);
+        }
+      } catch (altErr) {
+        console.error("Failed to generate auto-rebook alternatives on owner cancellation:", altErr);
+      }
+    }
 
     try {
       const svcLabel = booking.service_name || booking.service_type || 'your service';
@@ -718,7 +951,13 @@ export const updateBookingStatusForOwner = async (req: any, res: any) => {
       console.error('Failed to create owner status-change notification:', notifErr);
     }
 
-    return res.json({ booking: updated });
+    return res.json({
+      booking: updated,
+      autoRebook: {
+        detectedCancellation: newStatus === "cancelled",
+        alternatives: autoRebookAlternatives,
+      },
+    });
   } catch (err: any) {
     console.error('updateBookingStatusForOwner error:', err);
     return res.status(500).json({ error: 'Failed to update booking status.' });
@@ -1491,6 +1730,105 @@ export const checkAvailability = async (req: Request, res: Response) => {
 };
 
 /**
+ * GET /api/bookings/cancellation-policy/:propertyId
+ * Public endpoint for provider cancellation rules used by booking decisions.
+ */
+export const getCancellationPolicy = async (req: Request, res: Response) => {
+  try {
+    const propertyId = req.params.propertyId as string;
+    if (!propertyId) return res.status(400).json({ error: "Missing propertyId." });
+
+    const { data: setup, error } = await supabaseAdmin
+      .from("property_setup")
+      .select("cancellation_policy")
+      .eq("property_id", propertyId)
+      .maybeSingle();
+
+    if (error) throw error;
+
+    return res.json({
+      property_id: propertyId,
+      cancellation_policy: setup?.cancellation_policy || {},
+    });
+  } catch (err: any) {
+    console.error("getCancellationPolicy error:", err);
+    return res.status(500).json({ error: "Failed to retrieve cancellation policy.", details: err?.message || err });
+  }
+};
+
+/**
+ * PATCH /api/bookings/:id/cancel
+ * Customer-initiated cancellation with automatic refund state transition.
+ */
+export const cancelBooking = async (req: Request, res: Response) => {
+  try {
+    const userId = (req as any).user?.id;
+    if (!userId) return res.status(401).json({ error: "Unauthorized" });
+
+    const bookingId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+    if (!bookingId) return res.status(400).json({ error: "Missing booking id" });
+
+    const { data: booking, error: bookingErr } = await supabaseAdmin
+      .from("bookings")
+      .select("id, user_id, property_id, status, service_name, service_type, checkin, checkout, time_slot, payment_status, properties:property_id(city, address, name)")
+      .eq("id", bookingId)
+      .eq("is_deleted", false)
+      .single();
+
+    if (bookingErr) throw bookingErr;
+    if (!booking) return res.status(404).json({ error: "Booking not found." });
+    if (String(booking.user_id) !== String(userId)) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
+
+    if (["cancelled", "completed", "no_show"].includes(String(booking.status))) {
+      return res.status(409).json({ error: "Booking can no longer be cancelled." });
+    }
+
+    const updated = await bookingModel.updateStatus(bookingId, "cancelled");
+
+    let autoRebookAlternatives: Array<Record<string, any>> = [];
+    try {
+      autoRebookAlternatives = await generateAutoRebookAlternatives(booking as any, 5);
+    } catch (altErr) {
+      console.error("Failed to generate auto-rebook alternatives on user cancellation:", altErr);
+    }
+
+    try {
+      const svcLabel = booking.service_name || booking.service_type || "your service";
+      const dateStr = new Date(booking.checkin).toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      });
+
+      await notificationModel.create({
+        user_id: userId,
+        type: "booking_cancelled",
+        title: "Booking Cancelled",
+        message: `Your booking for ${svcLabel} on ${dateStr} has been cancelled.${updated.payment_status === "refunded" ? " Your payment is marked for refund." : ""}`,
+        link: `/my-bookings?bookingId=${bookingId}`,
+        reference_id: bookingId,
+        reference_type: "booking",
+      });
+    } catch (notifErr) {
+      console.error("Failed to create cancellation notification:", notifErr);
+    }
+
+    return res.json({
+      booking: updated,
+      autoRebook: {
+        detectedCancellation: true,
+        alternatives: autoRebookAlternatives,
+      },
+    });
+  } catch (err: any) {
+    console.error("cancelBooking error:", err);
+    return res.status(500).json({ error: "Failed to cancel booking.", details: err?.message || err });
+  }
+};
+
+/**
  * PATCH /api/bookings/admin/:id/status
  * Update a booking's status (confirm, check-in, complete, cancel).
  * Only the property owner or super_admin can do this.
@@ -1532,6 +1870,23 @@ export const adminUpdateBookingStatus = async (req: Request, res: Response) => {
       autoMarkCashPaidOnComplete: true,
     });
 
+    let autoRebookAlternatives: Array<Record<string, any>> = [];
+    if (status === "cancelled") {
+      try {
+        const { data: cancelledBooking } = await supabaseAdmin
+          .from("bookings")
+          .select("id, property_id, checkin, checkout, time_slot, service_type, service_name, properties:property_id(city, address, name)")
+          .eq("id", bookingId)
+          .single();
+
+        if (cancelledBooking) {
+          autoRebookAlternatives = await generateAutoRebookAlternatives(cancelledBooking as any, 5);
+        }
+      } catch (altErr) {
+        console.error("Failed to generate auto-rebook alternatives on cancellation:", altErr);
+      }
+    }
+
     // ── Notify the customer about the status change ──
     try {
       // Fetch the full booking to get user_id and service info
@@ -1568,10 +1923,216 @@ export const adminUpdateBookingStatus = async (req: Request, res: Response) => {
       console.error('Failed to create admin status-change notification:', notifErr);
     }
 
-    return res.json({ booking: updated });
+    return res.json({
+      booking: updated,
+      autoRebook: {
+        detectedCancellation: status === "cancelled",
+        alternatives: autoRebookAlternatives,
+      },
+    });
   } catch (err: any) {
     console.error("adminUpdateBookingStatus error:", err);
     return res.status(500).json({ error: "Failed to update booking status.", details: err?.message || err });
+  }
+};
+
+/**
+ * PATCH /api/bookings/admin/:id/modify
+ * Modify reservation details (reschedule, room/service options) for owner/admin.
+ */
+export const adminModifyReservation = async (req: Request, res: Response) => {
+  try {
+    const userId = (req as any).user?.id;
+    const userRole = (req as any).user?.role;
+    if (!userId) return res.status(401).json({ error: "Unauthorized" });
+
+    if (!["admin", "proprietor", "super_admin"].includes(userRole)) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
+
+    const bookingId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+    if (!bookingId) return res.status(400).json({ error: "Missing booking id" });
+
+    const {
+      checkin,
+      checkout,
+      time_slot,
+      service_id,
+      service_name,
+      service_type,
+      notes,
+      room_name,
+      special_requirements,
+    } = req.body ?? {};
+
+    const { data: booking, error: bookingErr } = await supabaseAdmin
+      .from("bookings")
+      .select("id, property_id, status, checkin, checkout, time_slot, service_id, service_name, service_type, notes, room_name, special_requirements, properties:property_id(owner_id)")
+      .eq("id", bookingId)
+      .eq("is_deleted", false)
+      .single();
+
+    if (bookingErr) throw bookingErr;
+    if (!booking) return res.status(404).json({ error: "Booking not found." });
+
+    if (userRole !== "super_admin" && (booking as any).properties?.owner_id !== userId) {
+      return res.status(403).json({ error: "You do not own this booking's property." });
+    }
+
+    if (["cancelled", "completed", "no_show"].includes(String(booking.status))) {
+      return res.status(409).json({ error: "Only pending/confirmed bookings can be modified." });
+    }
+
+    const nextCheckin = toIsoDate(checkin) ?? booking.checkin;
+    const nextCheckout = checkout !== undefined ? toIsoDate(checkout) : booking.checkout;
+    const nextTimeSlot = time_slot !== undefined ? toSlotTime(time_slot) : booking.time_slot;
+
+    if (!nextCheckin) {
+      return res.status(400).json({ error: "Invalid checkin date." });
+    }
+
+    if (nextCheckout) {
+      const startMs = new Date(nextCheckin).getTime();
+      const endMs = new Date(nextCheckout).getTime();
+      if (Number.isNaN(startMs) || Number.isNaN(endMs)) {
+        return res.status(400).json({ error: "Invalid checkin/checkout dates." });
+      }
+      if (endMs < startMs) {
+        return res.status(400).json({ error: "Checkout (end) cannot be before checkin (start)." });
+      }
+    }
+
+    let nextServiceId = service_id !== undefined ? service_id : booking.service_id;
+    let nextServiceName = service_name !== undefined ? service_name : booking.service_name;
+    let nextServiceType = service_type !== undefined ? normalizeServiceType(service_type) : normalizeServiceType(booking.service_type);
+
+    if (nextServiceId) {
+      const { data: serviceRow, error: svcErr } = await supabaseAdmin
+        .from("property_services")
+        .select("id, name, category, property_id")
+        .eq("id", nextServiceId)
+        .eq("is_active", true)
+        .eq("is_deleted", false)
+        .single();
+
+      if (svcErr || !serviceRow) {
+        return res.status(400).json({ error: "Invalid service_id." });
+      }
+      if (String(serviceRow.property_id) !== String(booking.property_id)) {
+        return res.status(400).json({ error: "Selected service does not belong to this property." });
+      }
+
+      nextServiceName = serviceRow.name;
+      nextServiceType = normalizeServiceType(serviceRow.category) || nextServiceType;
+    }
+
+    // Keep booking shape consistent: appointments have no checkout; boarding has no fixed time slot.
+    const isBoarding = !!nextCheckout;
+    const effectiveCheckout = isBoarding ? nextCheckout : null;
+    const effectiveTimeSlot = isBoarding ? null : nextTimeSlot;
+
+    await ensureReservationAvailabilityForUpdate(
+      bookingId,
+      booking.property_id,
+      nextCheckin,
+      effectiveCheckout,
+      effectiveTimeSlot,
+    );
+
+    const updateData: Record<string, any> = {
+      checkin: nextCheckin,
+      checkout: effectiveCheckout,
+      time_slot: effectiveTimeSlot,
+      service_id: nextServiceId || null,
+      service_name: nextServiceName || null,
+      service_type: nextServiceType || booking.service_type,
+      updated_at: new Date().toISOString(),
+    };
+
+    if (notes !== undefined) updateData.notes = notes || null;
+    if (room_name !== undefined) updateData.room_name = room_name || null;
+    if (special_requirements !== undefined) updateData.special_requirements = special_requirements || null;
+
+    const { data: updated, error: updateErr } = await supabaseAdmin
+      .from("bookings")
+      .update(updateData)
+      .eq("id", bookingId)
+      .eq("is_deleted", false)
+      .select("*")
+      .single();
+
+    if (updateErr) throw updateErr;
+
+    return res.json({
+      booking: updated,
+      message: "Reservation updated successfully.",
+    });
+  } catch (err: any) {
+    const msg = err?.message || err?.details || "";
+    if (msg.includes("SLOT_UNAVAILABLE")) {
+      const detail = msg.split("SLOT_UNAVAILABLE:")[1]?.trim() || "Selected schedule is no longer available.";
+      return res.status(409).json({ error: detail, code: "SLOT_UNAVAILABLE" });
+    }
+
+    console.error("adminModifyReservation error:", err);
+    return res.status(500).json({ error: "Failed to modify reservation.", details: err?.message || err });
+  }
+};
+
+/**
+ * GET /api/bookings/:id/auto-rebook
+ * Returns equivalent alternatives for a cancelled booking.
+ */
+export const autoRebookCancellation = async (req: Request, res: Response) => {
+  try {
+    const userId = (req as any).user?.id;
+    const userRole = (req as any).user?.role;
+    if (!userId) return res.status(401).json({ error: "Unauthorized" });
+
+    const bookingId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+    if (!bookingId) return res.status(400).json({ error: "Missing booking id" });
+
+    const { data: booking, error: bookingErr } = await supabaseAdmin
+      .from("bookings")
+      .select("id, user_id, property_id, checkin, checkout, time_slot, service_type, service_name, status, properties:property_id(owner_id, city, address, name)")
+      .eq("id", bookingId)
+      .eq("is_deleted", false)
+      .single();
+
+    if (bookingErr) throw bookingErr;
+    if (!booking) return res.status(404).json({ error: "Booking not found." });
+
+    const ownerId = (booking as any).properties?.owner_id;
+    const canAccess =
+      String(booking.user_id) === String(userId) ||
+      String(ownerId) === String(userId) ||
+      userRole === "super_admin";
+
+    if (!canAccess) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
+
+    const detectedCancellation = String(booking.status) === "cancelled";
+    const alternatives = detectedCancellation
+      ? await generateAutoRebookAlternatives(booking as any, 5)
+      : [];
+
+    return res.json({
+      detectedCancellation,
+      alternatives,
+      sourceBooking: {
+        id: booking.id,
+        status: booking.status,
+        service_type: booking.service_type,
+        service_name: booking.service_name,
+        checkin: booking.checkin,
+        checkout: booking.checkout,
+        time_slot: booking.time_slot,
+      },
+    });
+  } catch (err: any) {
+    console.error("autoRebookCancellation error:", err);
+    return res.status(500).json({ error: "Failed to generate rebooking alternatives.", details: err?.message || err });
   }
 };
 

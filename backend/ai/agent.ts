@@ -105,6 +105,16 @@ export class PetPlatformAgent {
         return { error: `Invalid arguments for ${name}: ${validation.errors.join(", ")}` };
       }
 
+      if (toolName === "create_booking") {
+        const explicitlyConfirmed = this.hasExplicitBookingConfirmation(userMessage);
+        if (!explicitlyConfirmed || safeArgs.confirmed !== true) {
+          return {
+            error:
+              "Booking creation is blocked until the user explicitly confirms. Ask for confirmation and run confirm_match first.",
+          };
+        }
+      }
+
       try {
         return await tool.run(safeArgs, {
           authToken,
@@ -207,6 +217,13 @@ export class PetPlatformAgent {
       /\bregister\s+(a\s+)?pet\b/.test(text);
 
     return mentionsPet && (asksAddLocation || directAddIntent);
+  }
+
+  private hasExplicitBookingConfirmation(message: string): boolean {
+    const text = String(message || "").toLowerCase();
+    if (!text) return false;
+
+    return /(\byes\b|\bconfirm\b|\bconfirmed\b|\bgo ahead\b|\bproceed\b|\bdo it\b|\bbook it\b|\bfinalize\b)/i.test(text);
   }
 }
 

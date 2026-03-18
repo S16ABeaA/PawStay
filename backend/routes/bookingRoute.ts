@@ -6,12 +6,16 @@ import {
   listBookings,
   getBooking,
   checkAvailability,
+  getCancellationPolicy,
+  cancelBooking,
   checkPaymentStatus,
   adminCalendar,
   adminCreateWalkin,
   adminUpdateBookingStatus,
+  adminModifyReservation,
   adminUpdatePaymentStatus,
   adminDeleteBooking,
+  autoRebookCancellation,
   getTodayCheckInsForOwner,
   getRecentBookingsForOwner,
   listBookingsForOwner,
@@ -31,6 +35,7 @@ const router = Router();
 
 // Availability check — public (no auth required) so the booking page can check before submitting
 router.get("/availability/:propertyId", checkAvailability);
+router.get("/cancellation-policy/:propertyId", getCancellationPolicy);
 
 // All other booking routes require authentication
 router.use(authMiddleware);
@@ -43,6 +48,9 @@ router.post("/admin/walkin", adminCreateWalkin);
 
 // Admin update booking status (confirm, check-in, complete, cancel)
 router.patch("/admin/:id/status", adminUpdateBookingStatus);
+
+// Admin modify reservation details (reschedule, service options)
+router.patch("/admin/:id/modify", adminModifyReservation);
 
 // Admin update payment status (paid, refunded, etc.)
 router.patch("/admin/:id/payment", adminUpdatePaymentStatus);
@@ -76,6 +84,8 @@ router.get('/receivables', requireSuperAdmin, getReceivables);
 
 router.get("/", listBookings);
 router.get("/:id", getBooking);
+router.patch("/:id/cancel", cancelBooking);
+router.get("/:id/auto-rebook", autoRebookCancellation);
 router.get("/:id/payment-status", checkPaymentStatus);
 router.post("/", createBooking);
 

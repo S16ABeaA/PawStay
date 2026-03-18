@@ -6,8 +6,11 @@ export type ToolName =
   | "get_pet_profile"
   | "get_pet_service_history"
   | "create_booking"
+  | "confirm_match"
   | "get_user_bookings"
   | "cancel_booking"
+  | "get_cancellation_policy"
+  | "predict_next_booking"
   | "get_provider_revenue";
 
 export interface ToolContext {

@@ -113,10 +113,13 @@ export const AiChatPanel = ({ className }: AiChatPanelProps) => {
     get_pets: "🐾 Fetching your pet profiles...",
     get_pet_profile: "🐶 Fetching pet profile...",
     get_pet_service_history: "📖 Fetching pet service history...",
+    confirm_match: "✅ Confirming your intent...",
     read_image_text: "🖼️ Reading image text...",
     create_booking: "📝 Creating booking...",
     get_user_bookings: "📋 Fetching your bookings...",
     cancel_booking: "❌ Cancelling booking...",
+    get_cancellation_policy: "📜 Fetching cancellation policy...",
+    predict_next_booking: "📅 Predicting your next booking...",
     get_provider_revenue: "💰 Fetching revenue data...",
   };
 
