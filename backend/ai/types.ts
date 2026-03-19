@@ -5,15 +5,20 @@ export type ToolName =
   | "get_pets"
   | "get_pet_profile"
   | "get_pet_service_history"
+  | "predict_next_booking"
   | "create_booking"
   | "get_user_bookings"
   | "cancel_booking"
+  | "check_availability"
+  | "get_cancellation_policy"
+  | "get_booking_summary"
   | "get_provider_revenue";
 
 export interface ToolContext {
   authToken?: string;
   requestId?: string;
   userMessage?: string;
+  userId?: string;
 }
 
 export interface ToolDefinition<TArgs = Record<string, unknown>, TResult = unknown> {

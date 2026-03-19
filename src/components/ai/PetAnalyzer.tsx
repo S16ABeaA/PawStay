@@ -1,7 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { aiChatApi } from "@/services/aiChatApi";
-import type { PetHealthCheckResponse } from "@/services/aiChatApi";
 
 const PET_TERMS = [
   "dog",
@@ -21,7 +20,22 @@ const PET_TERMS = [
   "persian",
   "ragdoll",
   "maine coon",
+  "pig",
+  "piglet",
+  "mini pig",
+  "potbellied",
+  "pot-bellied",
+  "hog",
+  "bunny",
+  "rabbit",
 ];
+
+const DOG_TERMS = ["dog", "canine", "hound", "terrier", "retriever", "bulldog", "poodle", "shepherd", "husky", "beagle", "rottweiler", "dachshund", "chihuahua", "boxer", "doberman", "mastiff", "shih", "spitz", "malamute", "samoyed", "akita", "labrador", "golden"];
+const CAT_TERMS = ["cat", "feline", "persian", "siamese", "maine coon", "ragdoll", "sphynx", "bengal", "british shorthair"];
+const PIG_TERMS = ["pig", "piglet", "mini pig", "potbellied", "pot-bellied", "hog"];
+const SMALL_PET_TERMS = ["rabbit", "hamster", "guinea pig", "bird", "parrot", "axolotl"];
+
+type SpeciesKind = "dog" | "cat" | "pig" | "animal";
 
 type Priority = "high" | "medium" | "low";
 
@@ -49,7 +63,14 @@ type AnalyzerResult = {
   breed: BreedInfo;
   care: CareItem[];
   health_flags: string[];
-  health_assessment?: PetHealthCheckResponse;
+  health_check?: {
+    status: string;
+    confidence: number;
+    summary: string;
+    estimated_age?: { range: string | null; confidence: number };
+    estimated_weight?: { range: string | null; confidence: number };
+    visible_signs: string[];
+  };
   next_actions: NextAction[];
   low_confidence?: boolean;
   error?: string;
@@ -166,46 +187,59 @@ function HealthFlags({ flags, visible }: { flags: string[]; visible: boolean }) 
   );
 }
 
-function HealthStatusCard({ health, visible }: { health: PetHealthCheckResponse | undefined; visible: boolean }) {
-  if (!health) return null;
-
-  const statusLabel: Record<PetHealthCheckResponse["status"], string> = {
-    healthy: "Healthy-looking",
-    minor_issue: "Minor issue detected",
-    injured: "Possible injury detected",
-    urgent: "Urgent concern",
-    unclear: "Needs clearer check",
-  };
-
+function HealthCheckCard({ healthCheck, visible }: { healthCheck: AnalyzerResult["health_check"] | undefined; visible: boolean }) {
+  if (!healthCheck) return null;
   return (
-    <div
-      style={{
-        opacity: visible ? 1 : 0,
-        transform: visible ? "translateY(0)" : "translateY(10px)",
-        transition: "all 0.4s cubic-bezier(0.22,1,0.36,1) 0.05s",
-        background: "#F9FAFF",
-        border: "1px solid #DAD5F6",
-        borderRadius: 12,
-        padding: "12px 16px",
-        marginBottom: 10,
-      }}
-    >
-      <p style={{ margin: "0 0 7px", fontSize: 11, fontWeight: 700, color: "#6D5FC7", letterSpacing: "0.08em", textTransform: "uppercase" }}>
-        Health check
-      </p>
-      <p style={{ margin: "0 0 7px", fontSize: 12.5, color: "#433B6B", lineHeight: 1.55 }}>
-        <strong>{statusLabel[health.status]}</strong> ({health.confidence}% confidence) — {health.summary}
-      </p>
-      {health.visible_signs?.length > 0 && (
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 6 }}>
-          {health.visible_signs.map((sign) => (
-            <span key={sign} style={{ fontSize: 12, background: "#EFEAFF", color: "#5E4FB4", padding: "3px 10px", borderRadius: 20, fontWeight: 500 }}>
-              {sign}
-            </span>
+    <div style={{
+      opacity: visible ? 1 : 0,
+      transform: visible ? "translateY(0)" : "translateY(10px)",
+      transition: "all 0.4s cubic-bezier(0.22,1,0.36,1) 0.05s",
+      background: "#fff", borderRadius: 16,
+      border: "1px solid #F0EEF9", padding: "16px 20px", marginBottom: 10,
+      fontFamily: "'DM Sans',system-ui,sans-serif",
+    }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+        <p style={{ margin: 0, fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", color: "#A89FCC", textTransform: "uppercase", fontFamily: "'DM Sans',system-ui,sans-serif" }}>
+          Health check
+        </p>
+        <span style={{ fontSize: 12, fontWeight: 700, padding: "4px 12px", borderRadius: 20, background: "#F6FFED", color: "#3B6D11", border: "1px solid #97C459", fontFamily: "'DM Sans',system-ui,sans-serif" }}>
+          {healthCheck.status} · {healthCheck.confidence}%
+        </span>
+      </div>
+      <p style={{ margin: "0 0 12px", fontSize: 13, color: "#6B6080", lineHeight: 1.55, fontWeight: 500 }}>{healthCheck.summary}</p>
+
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
+        {healthCheck.estimated_age && (
+          <div style={{ background: "#F5F3FF", borderRadius: 10, padding: "8px 14px" }}>
+            <p style={{ margin: "0 0 2px", fontSize: 10, fontWeight: 700, color: "#A89FCC", letterSpacing: "0.06em", textTransform: "uppercase", fontFamily: "'DM Sans',system-ui,sans-serif" }}>Est. age</p>
+            <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: "#4F46E5", fontFamily: "'DM Sans',system-ui,sans-serif" }}>
+              {healthCheck.estimated_age.range || "unknown"}
+              <span style={{ fontSize: 11, fontWeight: 500, color: "#A89FCC", marginLeft: 8 }}>{healthCheck.estimated_age.confidence}% sure</span>
+            </p>
+          </div>
+        )}
+        {healthCheck.estimated_weight && (
+          <div style={{ background: "#F5F3FF", borderRadius: 10, padding: "8px 14px" }}>
+            <p style={{ margin: "0 0 2px", fontSize: 10, fontWeight: 700, color: "#A89FCC", letterSpacing: "0.06em", textTransform: "uppercase", fontFamily: "'DM Sans',system-ui,sans-serif" }}>Est. weight</p>
+            <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: "#4F46E5", fontFamily: "'DM Sans',system-ui,sans-serif" }}>
+              {healthCheck.estimated_weight.range || "unknown"}
+              <span style={{ fontSize: 11, fontWeight: 500, color: "#A89FCC", marginLeft: 8 }}>{healthCheck.estimated_weight.confidence}% sure</span>
+            </p>
+          </div>
+        )}
+      </div>
+
+      {healthCheck.visible_signs?.length > 0 && (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10 }}>
+          {healthCheck.visible_signs.map((s, i) => (
+            <span key={`${s}-${i}`} style={{ fontSize: 12, background: "#F6FFED", color: "#3B6D11", padding: "6px 12px", borderRadius: 20, border: "1px solid #97C459", fontWeight: 600 }}>{s}</span>
           ))}
         </div>
       )}
-      <p style={{ margin: 0, fontSize: 11.5, color: "#7F73A3", lineHeight: 1.45 }}>{health.disclaimer}</p>
+
+      <p style={{ margin: 0, fontSize: 12, color: "#A89FCC", lineHeight: 1.5, borderTop: "1px solid #F5F3FF", paddingTop: 10 }}>
+        This is not a diagnosis. Consult a veterinarian if you have any concerns.
+      </p>
     </div>
   );
 }
@@ -335,6 +369,23 @@ const hasPetSignal = (predictions: Array<{ className: string; probability: numbe
   });
 };
 
+const hasAnyTerm = (text: string, terms: string[]) => {
+  const value = text.toLowerCase();
+  return terms.some((term) => {
+    const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const regex = new RegExp(`\\b${escaped}\\b`, "i");
+    return regex.test(value);
+  });
+};
+
+const detectSpecies = (label: string): SpeciesKind | null => {
+  if (hasAnyTerm(label, DOG_TERMS)) return "dog";
+  if (hasAnyTerm(label, CAT_TERMS)) return "cat";
+  if (hasAnyTerm(label, PIG_TERMS)) return "pig";
+  if (hasAnyTerm(label, SMALL_PET_TERMS)) return "animal";
+  return null;
+};
+
 export default function PetAnalyzer() {
   const [image, setImage] = useState<string | null>(null);
   const [imageFile, setImageFile] = useState<File | null>(null);
@@ -438,34 +489,89 @@ export default function PetAnalyzer() {
     try {
       const classifierPredictions = await classifyImage(imageFile);
 
-      const topPred = classifierPredictions[0];
-      const topBreed = topPred?.className || "Unknown";
-      const topConfidence = topPred ? Math.round(Number(topPred.probability || 0) * 100) : 0;
-      const alternatives = classifierPredictions
-        .slice(1, 4)
-        .map((item) => item.className)
-        .filter(Boolean);
+      const taggedPredictions = classifierPredictions
+        .map((prediction) => ({
+          ...prediction,
+          species: detectSpecies(prediction.className),
+        }))
+        .filter((prediction) => Boolean(prediction.species));
 
-      const looksLikePet = hasPetSignal(classifierPredictions);
+      const looksLikePet = hasPetSignal(classifierPredictions) || taggedPredictions.length > 0;
       if (!looksLikePet) {
-        setError("That doesn't look like a pet photo. Please try another image.");
+        setError(
+          "Hmm, I don't see a pet in this photo! Try uploading a clear picture of your dog or cat and I'll analyze their breed, health, and recommend the best PawStay services for them. 🐾\n\nIf you have a question instead, just type it below!",
+        );
         setLoading(false);
         return;
       }
 
-      const detectedSpecies = topBreed.toLowerCase().includes("cat") ? "cat" : "dog";
+      const scoreBySpecies: Record<SpeciesKind, number> = {
+        dog: 0,
+        cat: 0,
+        pig: 0,
+        animal: 0,
+      };
+
+      taggedPredictions.forEach((prediction) => {
+        const species = prediction.species as SpeciesKind;
+        scoreBySpecies[species] += Math.max(0, Number(prediction.probability || 0));
+      });
+
+      const topSpeciesEntry = (Object.entries(scoreBySpecies) as Array<[SpeciesKind, number]>)
+        .sort((a, b) => b[1] - a[1])[0];
+
+      const detectedSpecies = topSpeciesEntry && topSpeciesEntry[1] > 0
+        ? topSpeciesEntry[0]
+        : "animal";
+
+      const speciesPredictions = taggedPredictions
+        .filter((prediction) => prediction.species === detectedSpecies)
+        .sort((a, b) => b.probability - a.probability);
+
+      const topPred = speciesPredictions[0] || classifierPredictions[0];
+      const topBreed = topPred?.className || "Unknown";
+      const secondProbability = speciesPredictions[1]?.probability ?? 0;
+      const topProbability = Number(topPred?.probability || 0);
+      const confidenceMargin = Math.max(0, topProbability - secondProbability);
+      const topConfidence = Math.max(
+        0,
+        Math.min(99, Math.round((topProbability * 100 * 0.75) + (confidenceMargin * 100 * 1.25))),
+      );
+      const alternatives = speciesPredictions
+        .slice(1, 4)
+        .map((item) => item.className)
+        .filter(Boolean);
 
       const healthAssessment = await aiChatApi
         .checkPetHealth(imageFile, detectedSpecies)
         .catch(() => undefined);
 
+      const geminiPrimaryBreed = String(healthAssessment?.breed_estimate?.primary || "").trim();
+      const geminiBreedConfidence = Number(healthAssessment?.breed_estimate?.confidence ?? 0);
+      const geminiAlternatives = Array.isArray(healthAssessment?.breed_estimate?.alternatives)
+        ? healthAssessment?.breed_estimate?.alternatives.map((item) => String(item || "").trim()).filter(Boolean).slice(0, 3)
+        : [];
+
+      const shouldUseGeminiBreed =
+        !!geminiPrimaryBreed &&
+        geminiPrimaryBreed.toLowerCase() !== "unknown" &&
+        geminiBreedConfidence >= Math.max(55, topConfidence - 10);
+
+      const finalPrimaryBreed = shouldUseGeminiBreed ? geminiPrimaryBreed : topBreed;
+      const finalPrimaryConfidence = shouldUseGeminiBreed
+        ? Math.max(0, Math.min(99, Math.round(geminiBreedConfidence)))
+        : topConfidence;
+      const finalAlternatives = shouldUseGeminiBreed
+        ? Array.from(new Set([...geminiAlternatives, ...alternatives])).slice(0, 3)
+        : alternatives;
+
       const response = await aiChatApi.analyzePet({
         sessionId: sessionIdRef.current,
         detectedSpecies,
-        primaryPrediction: topBreed,
-        primaryConfidence: topConfidence,
-        alternatives,
-        descriptionHint: buildDescriptionFromClassifier(topBreed),
+        primaryPrediction: finalPrimaryBreed,
+        primaryConfidence: finalPrimaryConfidence,
+        alternatives: finalAlternatives,
+        descriptionHint: buildDescriptionFromClassifier(finalPrimaryBreed),
         healthCheck: healthAssessment
           ? {
               status: healthAssessment.status,
@@ -474,31 +580,80 @@ export default function PetAnalyzer() {
               summary: healthAssessment.summary,
               visible_signs: healthAssessment.visible_signs,
               recommended_actions: healthAssessment.recommended_actions,
+              age_estimate: healthAssessment.age_estimate,
+              weight_estimate: healthAssessment.weight_estimate,
             }
           : undefined,
       });
 
       if (response.error === "not_a_pet") {
-        setError("That doesn't look like a pet photo. Please try another image.");
+        setError(
+          "Hmm, I don't see a pet in this photo! Try uploading a clear picture of your dog or cat and I'll analyze their breed, health, and recommend the best PawStay services for them. 🐾\n\nIf you have a question instead, just type it below!",
+        );
         setLoading(false);
         return;
       }
 
       const normalized: AnalyzerResult = {
         breed: {
-          primary: response.breed?.primary || topBreed,
+          primary: response.breed?.primary || finalPrimaryBreed,
           confidence:
             typeof response.breed?.confidence === "number"
               ? Math.max(0, Math.min(100, Math.round(response.breed.confidence)))
-              : topConfidence,
+              : finalPrimaryConfidence,
           alternatives: Array.isArray(response.breed?.alternatives)
             ? response.breed.alternatives.slice(0, 3)
-            : alternatives,
-          description: response.breed?.description || buildDescriptionFromClassifier(topBreed),
+            : finalAlternatives,
+          description: response.breed?.description || buildDescriptionFromClassifier(finalPrimaryBreed),
         },
         care: Array.isArray(response.care) ? response.care.slice(0, 5) : [],
         health_flags: Array.isArray(response.health_flags) ? response.health_flags : [],
-        health_assessment: healthAssessment,
+        health_check: response.health_check
+          ? {
+              status: String(response.health_check.status || "unclear"),
+              confidence:
+                typeof response.health_check.confidence === "number"
+                  ? Math.max(0, Math.min(100, Math.round(response.health_check.confidence)))
+                  : 0,
+              summary: String(response.health_check.summary || "Health check is available with limited detail."),
+              estimated_age: response.health_check.estimated_age
+                ? {
+                    range: String(response.health_check.estimated_age.value || healthAssessment?.age_estimate?.range || "unknown"),
+                    confidence:
+                      typeof response.health_check.estimated_age.confidence === "number"
+                        ? Math.max(0, Math.min(100, Math.round(response.health_check.estimated_age.confidence)))
+                        : 0,
+                  }
+                : undefined,
+              estimated_weight: response.health_check.estimated_weight
+                ? {
+                    range: String(response.health_check.estimated_weight.value || healthAssessment?.weight_estimate?.range || "unknown"),
+                    confidence:
+                      typeof response.health_check.estimated_weight.confidence === "number"
+                        ? Math.max(0, Math.min(100, Math.round(response.health_check.estimated_weight.confidence)))
+                        : 0,
+                  }
+                : undefined,
+              visible_signs: Array.isArray(response.health_check.visible_signs)
+                ? response.health_check.visible_signs.map((item) => String(item || "").trim()).filter(Boolean).slice(0, 8)
+                : [],
+            }
+          : healthAssessment
+            ? {
+                status: healthAssessment.status,
+                confidence: Math.max(0, Math.min(100, Math.round(healthAssessment.confidence))),
+                summary: healthAssessment.summary,
+                estimated_age: {
+                  range: healthAssessment.age_estimate?.range || "unknown",
+                  confidence: Math.max(0, Math.min(100, Math.round(healthAssessment.age_estimate?.confidence ?? 0))),
+                },
+                estimated_weight: {
+                  range: healthAssessment.weight_estimate?.range || "unknown",
+                  confidence: Math.max(0, Math.min(100, Math.round(healthAssessment.weight_estimate?.confidence ?? 0))),
+                },
+                visible_signs: Array.isArray(healthAssessment.visible_signs) ? healthAssessment.visible_signs : [],
+              }
+            : undefined,
         next_actions: Array.isArray(response.next_actions) ? response.next_actions : [],
         low_confidence: Boolean(response.low_confidence),
       };
@@ -607,8 +762,8 @@ export default function PetAnalyzer() {
         {result && (
           <div>
             <LowConfidenceNotice visible={result.low_confidence && phase >= 1} />
-            <HealthStatusCard health={result.health_assessment} visible={phase >= 1} />
             <BreedCard breed={result.breed} visible={phase >= 1} />
+            <HealthCheckCard healthCheck={result.health_check} visible={phase >= 2} />
             <HealthFlags flags={result.health_flags} visible={phase >= 2} />
             {phase >= 2 && (
               <p style={{ margin: "0 0 8px", fontSize: 11, fontWeight: 700, color: isDarkMode ? "#C5B8E6" : "#A89FCC", letterSpacing: "0.08em", textTransform: "uppercase" }}>Care recommendations</p>

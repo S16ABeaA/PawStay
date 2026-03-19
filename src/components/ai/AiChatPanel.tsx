@@ -2,10 +2,16 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { aiChatApi } from "@/services/aiChatApi";
 import type { PetHealthCheckResponse } from "@/services/aiChatApi";
-import { Send, Bot, User, ExternalLink, ImagePlus } from "lucide-react";
+import { Send, Bot, User, ExternalLink, ImagePlus, Maximize2 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 
 type CtaIntent = "find_vet" | "find_groomer" | "save_pet" | "view_details";
+type ImageActionIntent = "analyze" | "scan_records" | "ask_question" | "cancel";
+
+type ImageQuickReply = {
+  id: ImageActionIntent;
+  label: string;
+};
 
 type PetRecommendation = {
   breed_detected: {
@@ -26,11 +32,19 @@ type ChatRow = {
   content: string;
   image?: string;
   recommendation?: PetRecommendation;
+  quickReplies?: ImageQuickReply[];
 };
 
 type VisionPrediction = {
   className: string;
   probability: number;
+};
+
+type PendingImageContext = {
+  file: File;
+  previewUrl: string;
+  fileName: string;
+  ocrText?: string;
 };
 
 const DOG_TERMS = [
@@ -71,7 +85,10 @@ const CAT_TERMS = [
   "bengal",
 ];
 
-const OTHER_ANIMAL_TERMS = ["rabbit", "hamster", "guinea pig", "bird", "parrot", "axolotl"];
+const PIG_TERMS = ["pig", "piglet", "mini pig", "potbellied", "pot-bellied", "hog"];
+const SMALL_PET_TERMS = ["rabbit", "hamster", "guinea pig", "bird", "parrot", "axolotl"];
+const OTHER_ANIMAL_TERMS = [...PIG_TERMS, ...SMALL_PET_TERMS];
+type SpeciesKind = "dog" | "cat" | "pig" | "animal";
 
 interface AiChatPanelProps {
   /** Extra Tailwind classes on the root wrapper */
@@ -83,6 +100,9 @@ export const AiChatPanel = ({ className }: AiChatPanelProps) => {
   const [rows, setRows] = useState<ChatRow[]>([]);
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [pendingImage, setPendingImage] = useState<PendingImageContext | null>(null);
+  const [imageQuestionMode, setImageQuestionMode] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imageModelRef = useRef<any>(null);
@@ -97,9 +117,17 @@ export const AiChatPanel = ({ className }: AiChatPanelProps) => {
   };
 
   // Auto-scroll to latest message
+  // Auto-scroll only when the latest row is a user message.
+  // This prevents the view from jumping to the end while the AI is streaming
+  // responses; the user stays at their current scroll position while content
+  // is appended below.
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [rows, loading]);
+    if (!rows || rows.length === 0) return;
+    const last = rows[rows.length - 1];
+    if (last && last.role === "user") {
+      bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [rows]);
 
   useEffect(() => {
     return () => {
@@ -120,6 +148,260 @@ export const AiChatPanel = ({ className }: AiChatPanelProps) => {
     get_provider_revenue: "💰 Fetching revenue data...",
   };
 
+  const IMAGE_ACTION_OPTIONS: ImageQuickReply[] = [
+    { id: "analyze", label: "🔍 Analyze breed & health" },
+    { id: "scan_records", label: "📋 Scan health records" },
+    { id: "ask_question", label: "💬 Ask a question about it" },
+    { id: "cancel", label: "❌ Cancel" },
+  ];
+
+  const clearQuickReplies = (rowId: string) => {
+    setRows((prev) =>
+      prev.map((row) => (row.id === rowId ? { ...row, quickReplies: [] } : row)),
+    );
+  };
+
+  const runBreedAndHealthAnalysis = async (file: File) => {
+    setRows((prev) => [
+      ...prev,
+      makeRow({ role: "tool-activity", content: "🖼️ Analyzing image (breed + health)..." }),
+    ]);
+
+    const [ocrResult, imagePredictions] = await Promise.allSettled([
+      aiChatApi.readImageText(file),
+      classifyImage(file),
+    ]);
+
+    const extracted =
+      ocrResult.status === "fulfilled" ? String(ocrResult.value?.text || "").trim() : "";
+    const predictions = imagePredictions.status === "fulfilled" ? imagePredictions.value : [];
+    const { detectedSpecies, likelyBreeds, calibratedConfidence } = getAnimalDetections(predictions);
+
+    const looksLikePet =
+      (Array.isArray(predictions) && predictions.length > 0 && detectedSpecies) ||
+      (likelyBreeds && likelyBreeds.length > 0);
+
+    if (!looksLikePet) {
+      const msg =
+        "Hmm, I don't see a pet in this photo! Try uploading a clear picture of your dog or cat and I'll analyze their breed, health, and recommend the best PawStay services for them. 🐾\n\nIf you have a question instead, just type it below!";
+      setRows((prev) => [...prev, makeRow({ role: "assistant", content: msg })]);
+      return;
+    }
+
+    const primaryBreed = likelyBreeds[0] || "Unknown";
+    const otherLikelyBreeds = likelyBreeds.slice(1, 3);
+    const topMatch = calibratedConfidence;
+
+    setRows((prev) => [
+      ...prev,
+      makeRow({ role: "tool-activity", content: "🐾 Generating image-based recommendations..." }),
+    ]);
+
+    const healthResponse = await aiChatApi
+      .checkPetHealth(file, detectedSpecies || undefined)
+      .catch(() => undefined);
+
+    const geminiPrimaryBreed = String(healthResponse?.breed_estimate?.primary || "").trim();
+    const geminiBreedConfidence = Number(healthResponse?.breed_estimate?.confidence ?? 0);
+    const geminiAlternatives = Array.isArray(healthResponse?.breed_estimate?.alternatives)
+      ? healthResponse.breed_estimate.alternatives
+          .map((item) => String(item || "").trim())
+          .filter(Boolean)
+          .slice(0, 3)
+      : [];
+
+    const shouldUseGeminiBreed =
+      !!geminiPrimaryBreed &&
+      geminiPrimaryBreed.toLowerCase() !== "unknown" &&
+      geminiBreedConfidence >= Math.max(55, topMatch - 10);
+
+    const finalPrimaryBreed = shouldUseGeminiBreed ? geminiPrimaryBreed : primaryBreed;
+    const finalTopMatch = shouldUseGeminiBreed
+      ? Math.max(0, Math.min(99, Math.round(geminiBreedConfidence)))
+      : topMatch;
+    const finalAlternatives = shouldUseGeminiBreed
+      ? Array.from(new Set([...geminiAlternatives, ...otherLikelyBreeds])).slice(0, 3)
+      : otherLikelyBreeds;
+
+    const recommendationResponse = await aiChatApi.analyzePet({
+      sessionId,
+      detectedSpecies: detectedSpecies || "unknown",
+      primaryPrediction: finalPrimaryBreed,
+      primaryConfidence: finalTopMatch,
+      alternatives: finalAlternatives,
+      ocrText: extracted,
+      descriptionHint: `${finalPrimaryBreed} detected from visual traits.`,
+      healthCheck: healthResponse
+        ? {
+            status: healthResponse.status,
+            injured: healthResponse.injured,
+            confidence: healthResponse.confidence,
+            summary: healthResponse.summary,
+            visible_signs: healthResponse.visible_signs,
+            recommended_actions: healthResponse.recommended_actions,
+            age_estimate: healthResponse.age_estimate,
+            weight_estimate: healthResponse.weight_estimate,
+          }
+        : undefined,
+    });
+
+    const healthAssessment = healthResponse;
+    const intents: CtaIntent[] = ["find_vet", "find_groomer", "save_pet", "view_details"];
+
+    const structured: PetRecommendation = {
+      breed_detected: {
+        primary: String(recommendationResponse.breed?.primary || finalPrimaryBreed),
+        confidence:
+          typeof recommendationResponse.breed?.confidence === "number"
+            ? Math.max(0, Math.min(100, Math.round(recommendationResponse.breed.confidence)))
+            : finalTopMatch,
+        other_likely: Array.isArray(recommendationResponse.breed?.alternatives)
+          ? recommendationResponse.breed.alternatives
+              .map((item: unknown) => String(item || "").trim())
+              .filter(Boolean)
+              .slice(0, 3)
+          : finalAlternatives,
+      },
+      watch_for: Array.isArray(recommendationResponse.health_flags)
+        ? recommendationResponse.health_flags
+            .map((item: unknown) => String(item || "").trim())
+            .filter(Boolean)
+            .slice(0, 6)
+        : [],
+      care_recommendations: Array.isArray(recommendationResponse.care)
+        ? recommendationResponse.care
+            .map((item: any) => {
+              const category = String(item?.category || "").trim();
+              const summary = String(item?.summary || "").trim();
+              const detail = String(item?.detail || "").trim();
+              const normalizedSummary = summary.toLowerCase();
+              const normalizedDetail = detail.toLowerCase();
+              const detailWithoutRepeatedSummary = normalizedDetail.startsWith(normalizedSummary)
+                ? detail.slice(summary.length).replace(/^[\s:,.\-–—]+/, "").trim()
+                : detail;
+              const merged = [
+                category ? `${category}:` : "",
+                summary,
+                detailWithoutRepeatedSummary &&
+                detailWithoutRepeatedSummary.toLowerCase() !== normalizedSummary
+                  ? `— ${detailWithoutRepeatedSummary}`
+                  : "",
+              ]
+                .filter(Boolean)
+                .join(" ")
+                .trim();
+              return merged || summary;
+            })
+            .filter(Boolean)
+            .slice(0, 6)
+        : [],
+      low_confidence: Boolean(recommendationResponse.low_confidence) || finalTopMatch < 50,
+      health_assessment: healthAssessment,
+      next_actions: Array.isArray(recommendationResponse.next_actions)
+        ? recommendationResponse.next_actions
+            .map((action: any) => ({
+              label: String(action?.label || "").trim(),
+              intent: String(action?.intent || "").trim() as CtaIntent,
+            }))
+            .filter((action: { label: string; intent: CtaIntent }) => intents.includes(action.intent))
+        : [],
+    };
+
+    if (!structured.next_actions.some((action) => action.intent === "find_vet")) {
+      structured.next_actions.push({ label: "Find a vet nearby", intent: "find_vet" });
+    }
+    if (!structured.next_actions.some((action) => action.intent === "find_groomer")) {
+      structured.next_actions.push({ label: "Find a groomer nearby", intent: "find_groomer" });
+    }
+    if (!structured.next_actions.some((action) => action.intent === "save_pet")) {
+      structured.next_actions.push({ label: "Save to My Pets", intent: "save_pet" });
+    }
+
+    setRows((prev) => [
+      ...prev,
+      makeRow({
+        role: "assistant",
+        content: "Here is your pet analysis summary.",
+        recommendation: structured,
+      }),
+    ]);
+  };
+
+  const onImageActionSelect = async (rowId: string, action: ImageActionIntent) => {
+    clearQuickReplies(rowId);
+    if (!pendingImage) return;
+
+    if (action === "cancel") {
+      setPendingImage(null);
+      setImageQuestionMode(false);
+      setMessage("");
+      setRows((prev) => [
+        ...prev,
+        makeRow({ role: "assistant", content: "Image dismissed. You can upload another photo anytime." }),
+      ]);
+      return;
+    }
+
+    if (action === "ask_question") {
+      setImageQuestionMode(true);
+      setRows((prev) => [
+        ...prev,
+        makeRow({ role: "assistant", content: "Got it — ask your question about this photo and I’ll use it as context." }),
+      ]);
+      return;
+    }
+
+    try {
+      setLoading(true);
+      if (action === "scan_records") {
+        const ocr = await aiChatApi.readImageText(pendingImage.file);
+        const extractedText = String(ocr?.text || "").trim();
+
+        setPendingImage((prev) => (prev ? { ...prev, ocrText: extractedText } : prev));
+
+        if (!extractedText) {
+          setRows((prev) => [
+            ...prev,
+            makeRow({
+              role: "assistant",
+              content:
+                "I couldn't find readable health record text in this photo. Try a clearer, closer image of the document with better lighting.",
+            }),
+          ]);
+          return;
+        }
+
+        const summary = await aiChatApi.chat({
+          sessionId,
+          message:
+            `Summarize the following OCR text from a pet health record image. ` +
+            `Return concise bullet points for: pet identity, dates, vaccinations, medications, diagnoses/findings, and follow-up recommendations. ` +
+            `If a field is missing, say \"Not visible\". OCR text:\n${extractedText}`,
+        });
+
+        setRows((prev) => [
+          ...prev,
+          makeRow({ role: "assistant", content: summary.message || "I summarized the visible health record details." }),
+        ]);
+        return;
+      }
+
+      await runBreedAndHealthAnalysis(pendingImage.file);
+      setPendingImage(null);
+      setImageQuestionMode(false);
+    } catch (error: any) {
+      setRows((prev) => [
+        ...prev,
+        makeRow({
+          role: "assistant",
+          content: `Sorry, I couldn't process that image action: ${error?.message ?? "Unknown error."}`,
+        }),
+      ]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const onSend = async () => {
     if (!message.trim() || loading) return;
 
@@ -127,8 +409,46 @@ export const AiChatPanel = ({ className }: AiChatPanelProps) => {
     setRows((prev) => [...prev, makeRow({ role: "user", content: userMessage })]);
     setMessage("");
 
+    if (pendingImage && !imageQuestionMode) {
+      setRows((prev) => [
+        ...prev,
+        makeRow({
+          role: "assistant",
+          content: "Please choose what you'd like to do with the uploaded photo first.",
+        }),
+      ]);
+      return;
+    }
+
     try {
       setLoading(true);
+      if (pendingImage && imageQuestionMode) {
+        let extractedText = pendingImage.ocrText || "";
+        if (!extractedText) {
+          const ocr = await aiChatApi.readImageText(pendingImage.file).catch(() => undefined);
+          extractedText = String(ocr?.text || "").trim();
+          if (extractedText) {
+            setPendingImage((prev) => (prev ? { ...prev, ocrText: extractedText } : prev));
+          }
+        }
+
+        const predictions = await classifyImage(pendingImage.file).catch(() => [] as VisionPrediction[]);
+        const detections = getAnimalDetections(predictions);
+
+        const contextualMessage = [
+          "The user is asking about an uploaded image.",
+          `Question: ${userMessage}`,
+          `Detected species: ${detections.detectedSpecies || "unknown"}`,
+          `Likely breeds: ${(detections.likelyBreeds || []).join(", ") || "unknown"}`,
+          `OCR text: ${extractedText || "none"}`,
+          "Answer the user question directly and mention uncertainty when details are not visible.",
+        ].join("\n");
+
+        const response = await aiChatApi.chat({ message: contextualMessage, sessionId });
+        setRows((prev) => [...prev, makeRow({ role: "assistant", content: response.message })]);
+        return;
+      }
+
       const response = await aiChatApi.chat({ message: userMessage, sessionId });
 
       // Show tool activity bubbles if the agent called any tools
@@ -208,39 +528,56 @@ export const AiChatPanel = ({ className }: AiChatPanelProps) => {
   };
 
   const getAnimalDetections = (predictions: VisionPrediction[]) => {
-    const animalPredictions = predictions
-      .filter(
-        (prediction) =>
-          hasAnyTerm(prediction.className, DOG_TERMS) ||
-          hasAnyTerm(prediction.className, CAT_TERMS) ||
-          hasAnyTerm(prediction.className, OTHER_ANIMAL_TERMS),
-      )
+    const speciesByLabel = (label: string): SpeciesKind | null => {
+      if (hasAnyTerm(label, DOG_TERMS)) return "dog";
+      if (hasAnyTerm(label, CAT_TERMS)) return "cat";
+      if (hasAnyTerm(label, PIG_TERMS)) return "pig";
+      if (hasAnyTerm(label, SMALL_PET_TERMS)) return "animal";
+      return null;
+    };
+
+    const tagged = predictions
+      .map((prediction) => ({
+        ...prediction,
+        species: speciesByLabel(prediction.className),
+      }))
+      .filter((prediction) => Boolean(prediction.species));
+
+    const scoreBySpecies: Record<SpeciesKind, number> = {
+      dog: 0,
+      cat: 0,
+      pig: 0,
+      animal: 0,
+    };
+
+    tagged.forEach((prediction) => {
+      const species = prediction.species as SpeciesKind;
+      scoreBySpecies[species] += Math.max(0, Number(prediction.probability || 0));
+    });
+
+    const topSpeciesEntry = (Object.entries(scoreBySpecies) as Array<[SpeciesKind, number]>)
+      .sort((a, b) => b[1] - a[1])[0];
+
+    const detectedSpecies = topSpeciesEntry && topSpeciesEntry[1] > 0 ? topSpeciesEntry[0] : null;
+
+    const speciesPredictions = tagged
+      .filter((prediction) => prediction.species === detectedSpecies)
       .sort((a, b) => b.probability - a.probability)
       .slice(0, 3);
 
-    const dogPredictions = animalPredictions.filter((prediction) =>
-      hasAnyTerm(prediction.className, DOG_TERMS),
+    const top = speciesPredictions[0]?.probability ?? 0;
+    const second = speciesPredictions[1]?.probability ?? 0;
+    const margin = Math.max(0, top - second);
+    const calibratedConfidence = Math.max(
+      0,
+      Math.min(99, Math.round((top * 100 * 0.75) + (margin * 100 * 1.25))),
     );
-
-    const catPredictions = animalPredictions.filter((prediction) =>
-      hasAnyTerm(prediction.className, CAT_TERMS),
-    );
-
-    const detectedSpecies =
-      dogPredictions.length > 0
-        ? "dog"
-        : catPredictions.length > 0
-          ? "cat"
-          : animalPredictions.length > 0
-            ? "animal"
-            : null;
 
     return {
       detectedSpecies,
-      likelyBreeds: (dogPredictions.length > 0 ? dogPredictions : animalPredictions)
-        .map((prediction) => prediction.className)
-        .slice(0, 3),
-      animalPredictions,
+      likelyBreeds: speciesPredictions.map((prediction) => prediction.className),
+      animalPredictions: speciesPredictions,
+      calibratedConfidence,
     };
   };
 
@@ -252,137 +589,18 @@ export const AiChatPanel = ({ className }: AiChatPanelProps) => {
     const previewUrl = URL.createObjectURL(file);
     previewUrlsRef.current.push(previewUrl);
 
+    setPendingImage({ file, previewUrl, fileName: file.name });
+    setImageQuestionMode(false);
+
     setRows((prev) => [
       ...prev,
       makeRow({ role: "user", content: file.name, image: previewUrl }),
-      makeRow({ role: "tool-activity", content: "🖼️ Analyzing image (text + breed detection)..." }),
+      makeRow({
+        role: "assistant",
+        content: "What would you like to do with this photo?",
+        quickReplies: IMAGE_ACTION_OPTIONS,
+      }),
     ]);
-
-    try {
-      setLoading(true);
-      const [ocrResult, imagePredictions] = await Promise.allSettled([
-        aiChatApi.readImageText(file),
-        classifyImage(file),
-      ]);
-
-      const extracted =
-        ocrResult.status === "fulfilled" ? String(ocrResult.value?.text || "").trim() : "";
-      const predictions = imagePredictions.status === "fulfilled" ? imagePredictions.value : [];
-      const { detectedSpecies, likelyBreeds, animalPredictions } = getAnimalDetections(predictions);
-
-      const primaryBreed = likelyBreeds[0] || "Unknown";
-      const otherLikelyBreeds = likelyBreeds.slice(1, 3);
-      const topMatch = animalPredictions[0] ? Math.round(animalPredictions[0].probability * 100) : 0;
-
-      setRows((prev) => [
-        ...prev,
-        makeRow({ role: "tool-activity", content: "🐾 Generating image-based recommendations..." }),
-      ]);
-
-      const healthResponse = await aiChatApi
-        .checkPetHealth(file, detectedSpecies || undefined)
-        .catch(() => undefined);
-
-      const recommendationResponse = await aiChatApi.analyzePet({
-        sessionId,
-        detectedSpecies: detectedSpecies || "unknown",
-        primaryPrediction: primaryBreed,
-        primaryConfidence: topMatch,
-        alternatives: otherLikelyBreeds,
-        ocrText: extracted,
-        descriptionHint: `${primaryBreed} detected from visual traits.`,
-        healthCheck: healthResponse
-          ? {
-              status: healthResponse.status,
-              injured: healthResponse.injured,
-              confidence: healthResponse.confidence,
-              summary: healthResponse.summary,
-              visible_signs: healthResponse.visible_signs,
-              recommended_actions: healthResponse.recommended_actions,
-            }
-          : undefined,
-      });
-
-      const healthAssessment = healthResponse;
-
-      const intents: CtaIntent[] = ["find_vet", "find_groomer", "save_pet", "view_details"];
-      const structured: PetRecommendation = {
-        breed_detected: {
-          primary: String(recommendationResponse.breed?.primary || primaryBreed),
-          confidence:
-            typeof recommendationResponse.breed?.confidence === "number"
-              ? Math.max(0, Math.min(100, Math.round(recommendationResponse.breed.confidence)))
-              : topMatch,
-          other_likely: Array.isArray(recommendationResponse.breed?.alternatives)
-            ? recommendationResponse.breed.alternatives
-                .map((item: unknown) => String(item || "").trim())
-                .filter(Boolean)
-                .slice(0, 3)
-            : otherLikelyBreeds,
-        },
-        watch_for: Array.isArray(recommendationResponse.health_flags)
-          ? recommendationResponse.health_flags.map((item: unknown) => String(item || "").trim()).filter(Boolean).slice(0, 6)
-          : [],
-        care_recommendations: Array.isArray(recommendationResponse.care)
-          ? recommendationResponse.care
-              .map((item: any) => {
-                const category = String(item?.category || "").trim();
-                const summary = String(item?.summary || "").trim();
-                const detail = String(item?.detail || "").trim();
-                const merged = [
-                  category ? `${category}:` : "",
-                  summary,
-                  detail && detail !== summary ? `— ${detail}` : "",
-                ]
-                  .filter(Boolean)
-                  .join(" ")
-                  .trim();
-                return merged || summary;
-              })
-              .filter(Boolean)
-              .slice(0, 6)
-          : [],
-        low_confidence: Boolean(recommendationResponse.low_confidence) || topMatch < 50,
-        health_assessment: healthAssessment,
-        next_actions: Array.isArray(recommendationResponse.next_actions)
-          ? recommendationResponse.next_actions
-              .map((action: any) => ({
-                label: String(action?.label || "").trim(),
-                intent: String(action?.intent || "").trim() as CtaIntent,
-              }))
-              .filter((action: { label: string; intent: CtaIntent }) => intents.includes(action.intent))
-          : [],
-      };
-
-      if (!structured.next_actions.some((action) => action.intent === "find_vet")) {
-        structured.next_actions.push({ label: "Find a vet nearby", intent: "find_vet" });
-      }
-      if (!structured.next_actions.some((action) => action.intent === "find_groomer")) {
-        structured.next_actions.push({ label: "Find a groomer nearby", intent: "find_groomer" });
-      }
-      if (!structured.next_actions.some((action) => action.intent === "save_pet")) {
-        structured.next_actions.push({ label: "Save to My Pets", intent: "save_pet" });
-      }
-
-      setRows((prev) => [
-        ...prev,
-        makeRow({
-          role: "assistant",
-          content: "Here is your pet analysis summary.",
-          recommendation: structured,
-        }),
-      ]);
-    } catch (error: any) {
-      setRows((prev) => [
-        ...prev,
-        makeRow({
-          role: "assistant",
-          content: `Sorry, I couldn't read that image: ${error?.message ?? "Unknown error."}`,
-        }),
-      ]);
-    } finally {
-      setLoading(false);
-    }
   };
 
   const intentToPath: Record<CtaIntent, string> = {
@@ -437,6 +655,11 @@ export const AiChatPanel = ({ className }: AiChatPanelProps) => {
                 Health check: {healthLabel[recommendation.health_assessment.status]} ({recommendation.health_assessment.confidence}%)
               </p>
               <p className="mb-1">{recommendation.health_assessment.summary}</p>
+              <p className="mb-1 text-violet-800">
+                Estimated age range: {recommendation.health_assessment.age_estimate?.range || "unknown"} ({recommendation.health_assessment.age_estimate?.confidence ?? 0}%)
+                {" · "}
+                Estimated weight range: {recommendation.health_assessment.weight_estimate?.range || "unknown"} ({recommendation.health_assessment.weight_estimate?.confidence ?? 0}%)
+              </p>
               {recommendation.health_assessment.visible_signs?.length > 0 && (
                 <p className="mb-0.5 text-violet-800">
                   Visible signs: {recommendation.health_assessment.visible_signs.join(", ")}
@@ -490,21 +713,62 @@ export const AiChatPanel = ({ className }: AiChatPanelProps) => {
     }
   };
 
+  const smallSize = { w: 340, h: 480 };
+
+  const panelStyle: React.CSSProperties = {
+    width: isExpanded ? "min(540px, 90vw)" : `${smallSize.w}px`,
+    height: isExpanded ? "min(600px, 80vh)" : `${smallSize.h}px`,
+    maxWidth: isExpanded ? "min(540px, 90vw)" : `${smallSize.w}px`,
+    maxHeight: isExpanded ? "min(600px, 80vh)" : `${smallSize.h}px`,
+    display: "flex",
+    flexDirection: "column",
+    borderRadius: 16,
+    border: "1px solid var(--border, #eee)",
+    background: "#fff",
+    boxShadow: "0 10px 30px rgba(16,24,40,0.12)",
+    zIndex: 60,
+    overflow: "hidden",
+    transition:
+      "width 0.3s cubic-bezier(0.4,0,0.2,1), height 0.3s cubic-bezier(0.4,0,0.2,1), max-width 0.3s cubic-bezier(0.4,0,0.2,1), max-height 0.3s cubic-bezier(0.4,0,0.2,1)",
+    willChange: "width, height, max-width, max-height",
+  };
+
+  
+
   return (
-    <div className={`flex flex-col rounded-2xl border bg-white shadow-lg ${className ?? ""}`}>
+    <div style={panelStyle} className={`${className ?? ""}`}> 
       {/* Header */}
-      <div className="flex items-center gap-2 border-b px-4 py-3">
-        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-rose-100 text-rose-600">
-          <Bot size={18} />
+      <div className="flex items-center justify-between gap-2 border-b px-4 py-3">
+        <div className="flex items-center gap-2">
+          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-rose-100 text-rose-600">
+            <Bot size={18} />
+          </div>
+          <div>
+            <p className="text-sm font-semibold leading-none">PawStay AI</p>
+            <p className="text-[11px] text-muted-foreground">Ask about services, bookings & more</p>
+          </div>
         </div>
-        <div>
-          <p className="text-sm font-semibold leading-none">PawStay AI</p>
-          <p className="text-[11px] text-muted-foreground">Ask about services, bookings & more</p>
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={() => setIsExpanded((prev) => !prev)}
+            className="flex h-8 w-8 items-center justify-center rounded-full border border-rose-200 text-rose-700 transition hover:bg-rose-50"
+            aria-label={isExpanded ? "Collapse chat" : "Expand chat"}
+            title={isExpanded ? "Collapse chat" : "Expand chat"}
+          >
+            <span style={{ fontSize: 14, lineHeight: 1 }}>{isExpanded ? "↙" : "↗"}</span>
+          </button>
         </div>
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3 text-sm min-h-[260px] max-h-[420px]">
+      <div
+        className="overflow-y-auto px-4 py-3 space-y-3 text-sm"
+        style={{
+          flex: 1,
+          minHeight: 0,
+        }}
+      >
         {rows.length === 0 && (
           <p className="text-muted-foreground text-center mt-12">
             👋 Hi! Try &quot;Find dog grooming near me&quot;
@@ -588,6 +852,21 @@ export const AiChatPanel = ({ className }: AiChatPanelProps) => {
                       >
                         {row.content}
                       </ReactMarkdown>
+
+                      {Array.isArray(row.quickReplies) && row.quickReplies.length > 0 && (
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          {row.quickReplies.map((option) => (
+                            <button
+                              key={`${row.id}-${option.id}`}
+                              type="button"
+                              onClick={() => onImageActionSelect(row.id, option.id)}
+                              className="rounded-full border border-rose-200 bg-rose-50 px-2.5 py-1 text-[11px] font-medium text-rose-700 hover:bg-rose-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-300"
+                            >
+                              {option.label}
+                            </button>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}
@@ -630,7 +909,7 @@ export const AiChatPanel = ({ className }: AiChatPanelProps) => {
           value={message}
           onChange={(e) => setMessage(e.target.value)}
           onKeyDown={onKeyDown}
-          placeholder="Ask about services, or upload an image to extract text..."
+          placeholder="Ask a question or drop a photo of your pet..."
           disabled={loading}
           className="flex-1 rounded-full border px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-rose-300 disabled:opacity-50"
         />

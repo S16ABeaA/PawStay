@@ -32,6 +32,22 @@ export interface AnalyzePetInput {
     summary?: string;
     visible_signs?: string[];
     recommended_actions?: string[];
+    age_estimate?: {
+      value?: number | null;
+      unit?: string;
+      confidence?: number;
+      range?: string;
+      method?: string;
+      note?: string;
+    };
+    weight_estimate?: {
+      value?: number | null;
+      unit?: string;
+      confidence?: number;
+      range?: string;
+      method?: string;
+      note?: string;
+    };
   };
   userId?: string;
   authToken?: string;
@@ -46,6 +62,20 @@ export interface AnalyzePetResult {
   };
   care: CareItem[];
   health_flags: string[];
+  health_check?: {
+    status: string;
+    confidence: number;
+    summary: string;
+    estimated_age: {
+      value: string | null;
+      confidence: number;
+    };
+    estimated_weight: {
+      value: string | null;
+      confidence: number;
+    };
+    visible_signs: string[];
+  };
   next_actions: NextAction[];
   low_confidence?: boolean;
   error?: string;
@@ -86,7 +116,129 @@ const extractJsonObject = (text: string): Record<string, unknown> | null => {
   }
 };
 
+const hasOwn = (obj: Record<string, unknown>, key: string): boolean =>
+  Object.prototype.hasOwnProperty.call(obj, key);
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+const validateParsedAnalysisShape = (
+  parsed: Record<string, unknown>,
+): { ok: true } | { ok: false; errors: string[] } => {
+  const errorValue = String(parsed.error ?? "").trim();
+  if (errorValue === "not_a_pet") {
+    return { ok: true };
+  }
+
+  const errors: string[] = [];
+
+  ["breed", "care", "health_flags", "health_check", "next_actions", "low_confidence"].forEach((key) => {
+    if (!hasOwn(parsed, key)) {
+      errors.push(`missing root key: ${key}`);
+    }
+  });
+
+  const breed = parsed.breed;
+  if (!isRecord(breed)) {
+    errors.push("breed must be an object");
+  } else {
+    ["primary", "confidence", "alternatives", "description"].forEach((key) => {
+      if (!hasOwn(breed, key)) errors.push(`missing breed.${key}`);
+    });
+  }
+
+  if (!Array.isArray(parsed.care)) {
+    errors.push("care must be an array");
+  }
+
+  if (!Array.isArray(parsed.health_flags)) {
+    errors.push("health_flags must be an array");
+  }
+
+  const healthCheck = parsed.health_check;
+  if (!isRecord(healthCheck)) {
+    errors.push("health_check must be an object");
+  } else {
+    ["status", "confidence", "summary", "estimated_age", "estimated_weight", "visible_signs"].forEach((key) => {
+      if (!hasOwn(healthCheck, key)) errors.push(`missing health_check.${key}`);
+    });
+
+    const estimatedAge = healthCheck.estimated_age;
+    if (!isRecord(estimatedAge)) {
+      errors.push("health_check.estimated_age must be an object");
+    } else {
+      ["value", "confidence"].forEach((key) => {
+        if (!hasOwn(estimatedAge, key)) errors.push(`missing health_check.estimated_age.${key}`);
+      });
+    }
+
+    const estimatedWeight = healthCheck.estimated_weight;
+    if (!isRecord(estimatedWeight)) {
+      errors.push("health_check.estimated_weight must be an object");
+    } else {
+      ["value", "confidence"].forEach((key) => {
+        if (!hasOwn(estimatedWeight, key)) errors.push(`missing health_check.estimated_weight.${key}`);
+      });
+    }
+
+    if (hasOwn(healthCheck, "visible_signs") && !Array.isArray(healthCheck.visible_signs)) {
+      errors.push("health_check.visible_signs must be an array");
+    }
+  }
+
+  if (!Array.isArray(parsed.next_actions)) {
+    errors.push("next_actions must be an array");
+  }
+
+  if (typeof parsed.low_confidence !== "boolean") {
+    errors.push("low_confidence must be a boolean");
+  }
+
+  return errors.length > 0 ? { ok: false, errors } : { ok: true };
+};
+
 const toNonEmptyString = (value: unknown): string => String(value ?? "").trim();
+
+const normalizePetLabel = (value: string): string => {
+  const raw = toNonEmptyString(value);
+  if (!raw) return "your pet";
+  const firstChunk = raw.split(",")[0]?.trim() || raw;
+  const cleaned = firstChunk.replace(/\s+/g, " ").trim();
+  if (!cleaned || cleaned.toLowerCase() === "unknown") return "your pet";
+  return cleaned;
+};
+
+const dedupeLines = (items: string[]): string[] => {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const item of items) {
+    const value = toNonEmptyString(item);
+    if (!value) continue;
+    const key = value.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(value);
+  }
+  return out;
+};
+
+const isPositiveObservation = (value: string): boolean => {
+  const v = toNonEmptyString(value).toLowerCase();
+  if (!v) return true;
+  const positiveTerms = [
+    "clear eyes",
+    "alert",
+    "clean coat",
+    "normal stance",
+    "healthy",
+    "active",
+    "no visible",
+    "normal",
+    "bright eyes",
+    "good posture",
+  ];
+  return positiveTerms.some((term) => v.includes(term));
+};
 
 const buildDescriptionFromClassifier = (primary: string): string => {
   if (!primary) return "Breed traits are estimated from image features.";
@@ -98,7 +250,8 @@ const buildFallbackCareDetail = (
   summary: string,
   primaryBreed: string,
 ): string => {
-  return `${summary} For ${primaryBreed || "this pet"}, follow a consistent routine and monitor response weekly. If symptoms worsen or behavior changes suddenly, consult a vet promptly.`;
+  const petLabel = normalizePetLabel(primaryBreed);
+  return `${summary} For ${petLabel}, follow a consistent routine and monitor response weekly. If symptoms worsen or behavior changes suddenly, consult a vet promptly.`;
 };
 
 const hasHealthCheckContext = (input: AnalyzePetInput): boolean => {
@@ -119,12 +272,13 @@ const buildHealthPrimaryCare = (
   fallbackCare: CareItem[],
 ): CareItem[] => {
   const status = getHealthStatus(input);
+  const petLabel = normalizePetLabel(fallbackPrimary);
   const summary = toNonEmptyString(input.healthCheck?.summary);
   const signs = Array.isArray(input.healthCheck?.visible_signs)
-    ? input.healthCheck?.visible_signs?.map((item) => toNonEmptyString(item)).filter(Boolean).slice(0, 5)
+    ? dedupeLines(input.healthCheck?.visible_signs?.map((item) => toNonEmptyString(item)).filter(Boolean) ?? []).slice(0, 5)
     : [];
   const actions = Array.isArray(input.healthCheck?.recommended_actions)
-    ? input.healthCheck?.recommended_actions?.map((item) => toNonEmptyString(item)).filter(Boolean).slice(0, 6)
+    ? dedupeLines(input.healthCheck?.recommended_actions?.map((item) => toNonEmptyString(item)).filter(Boolean) ?? []).slice(0, 6)
     : [];
 
   const fromAction = (action: string, index: number): CareItem => ({
@@ -132,7 +286,7 @@ const buildHealthPrimaryCare = (
     icon: index === 0 ? "vet" : "grooming",
     priority: status === "urgent" || status === "injured" ? "high" : status === "minor_issue" ? "medium" : "low",
     summary: action,
-    detail: `${action} Monitor ${fallbackPrimary || "your pet"} closely and contact a veterinarian if symptoms persist or worsen.`,
+    detail: `Monitor ${petLabel} closely for 24–48 hours and follow this step consistently. Contact a veterinarian if symptoms persist or worsen.`,
   });
 
   const signSnippet = signs.length > 0 ? `Visible signs: ${signs.join(", ")}.` : "";
@@ -252,6 +406,16 @@ const buildPromptFromSignals = (input: AnalyzePetInput): string => {
     ? input.healthCheck?.recommended_actions?.map((item) => toNonEmptyString(item)).filter(Boolean).slice(0, 6)
     : [];
   const injured = Boolean(input.healthCheck?.injured);
+  const ageValueRaw = Number(input.healthCheck?.age_estimate?.value);
+  const weightValueRaw = Number(input.healthCheck?.weight_estimate?.value);
+  const ageValue = Number.isFinite(ageValueRaw) && ageValueRaw > 0 ? Math.round(ageValueRaw * 10) / 10 : null;
+  const weightValue = Number.isFinite(weightValueRaw) && weightValueRaw > 0 ? Math.round(weightValueRaw * 10) / 10 : null;
+  const ageUnit = toNonEmptyString(input.healthCheck?.age_estimate?.unit) || "years";
+  const weightUnit = toNonEmptyString(input.healthCheck?.weight_estimate?.unit) || "kg";
+  const ageRange = toNonEmptyString(input.healthCheck?.age_estimate?.range) || "unknown";
+  const weightRange = toNonEmptyString(input.healthCheck?.weight_estimate?.range) || "unknown";
+  const ageConfidence = normalizeConfidence(input.healthCheck?.age_estimate?.confidence, ageValue ? 45 : 0);
+  const weightConfidence = normalizeConfidence(input.healthCheck?.weight_estimate?.confidence, weightValue ? 45 : 0);
 
   return [
     PET_ANALYSIS_SYSTEM_PROMPT,
@@ -271,6 +435,8 @@ const buildPromptFromSignals = (input: AnalyzePetInput): string => {
     `health_summary=${healthSummary || "none"}`,
     `visible_signs=${visibleSigns.join(", ") || "none"}`,
     `health_recommended_actions=${healthActions.join(" | ") || "none"}`,
+    `age_estimate=${ageValue === null ? "unknown" : `${ageValue} ${ageUnit}`} (confidence=${ageConfidence}, range=${ageRange})`,
+    `weight_estimate=${weightValue === null ? "unknown" : `${weightValue} ${weightUnit}`} (confidence=${weightConfidence}, range=${weightRange})`,
     "",
     "Care recommendations MUST prioritize health-check findings when present.",
     "Return strict JSON only.",
@@ -378,11 +544,73 @@ const normalizeResult = (
     ? parsed.health_flags.map((item) => toNonEmptyString(item)).filter(Boolean).slice(0, 8)
     : [];
 
-  const healthSignalFlags = Array.isArray(input.healthCheck?.visible_signs)
-    ? input.healthCheck?.visible_signs?.map((item) => toNonEmptyString(item)).filter(Boolean).slice(0, 8)
+  const fallbackRiskFlags = Array.isArray(input.healthCheck?.recommended_actions)
+    ? input.healthCheck.recommended_actions
+        .map((item) => toNonEmptyString(item))
+        .filter(Boolean)
+        .slice(0, 6)
     : [];
 
-  const healthFlags = Array.from(new Set([...healthSignalFlags, ...modelHealthFlags])).slice(0, 8);
+  const healthFlags = dedupeLines(
+    (modelHealthFlags.length > 0 ? modelHealthFlags : fallbackRiskFlags).filter(
+      (item) => !isPositiveObservation(item),
+    ),
+  ).slice(0, 8);
+
+  const parsedHealthCheck = (parsed.health_check ?? {}) as Record<string, unknown>;
+  const inputAgeValueRaw = Number(input.healthCheck?.age_estimate?.value);
+  const inputWeightValueRaw = Number(input.healthCheck?.weight_estimate?.value);
+  const inputAgeRange = toNonEmptyString(input.healthCheck?.age_estimate?.range) ||
+    (Number.isFinite(inputAgeValueRaw) && inputAgeValueRaw > 0
+      ? `${Math.round(inputAgeValueRaw * 10) / 10} ${toNonEmptyString(input.healthCheck?.age_estimate?.unit) || "years"}`
+      : "");
+  const inputWeightRange = toNonEmptyString(input.healthCheck?.weight_estimate?.range) ||
+    (Number.isFinite(inputWeightValueRaw) && inputWeightValueRaw > 0
+      ? `${Math.round(inputWeightValueRaw * 10) / 10} ${toNonEmptyString(input.healthCheck?.weight_estimate?.unit) || "kg"}`
+      : "");
+
+  const healthCheck = {
+    status: toNonEmptyString(parsedHealthCheck.status) || toNonEmptyString(input.healthCheck?.status) || "unclear",
+    confidence: normalizeConfidence(
+      parsedHealthCheck.confidence,
+      normalizeConfidence(input.healthCheck?.confidence, 0),
+    ),
+    summary:
+      toNonEmptyString(parsedHealthCheck.summary) ||
+      toNonEmptyString(input.healthCheck?.summary) ||
+      "Health check is available with limited detail.",
+    estimated_age: {
+      value: (() => {
+        const raw = ((parsedHealthCheck.estimated_age ?? {}) as Record<string, unknown>).value;
+        const parsedValue = toNonEmptyString(raw);
+        return parsedValue || inputAgeRange || null;
+      })(),
+      confidence: normalizeConfidence(
+        ((parsedHealthCheck.estimated_age ?? {}) as Record<string, unknown>).confidence,
+        normalizeConfidence(input.healthCheck?.age_estimate?.confidence, 0),
+      ),
+    },
+    estimated_weight: {
+      value: (() => {
+        const raw = ((parsedHealthCheck.estimated_weight ?? {}) as Record<string, unknown>).value;
+        const parsedValue = toNonEmptyString(raw);
+        return parsedValue || inputWeightRange || null;
+      })(),
+      confidence: normalizeConfidence(
+        ((parsedHealthCheck.estimated_weight ?? {}) as Record<string, unknown>).confidence,
+        normalizeConfidence(input.healthCheck?.weight_estimate?.confidence, 0),
+      ),
+    },
+    visible_signs: Array.isArray(parsedHealthCheck.visible_signs)
+      ? parsedHealthCheck.visible_signs.map((item) => toNonEmptyString(item)).filter(Boolean).slice(0, 8)
+      : Array.isArray(input.healthCheck?.visible_signs)
+        ? dedupeLines(
+            input.healthCheck.visible_signs
+              .map((item) => toNonEmptyString(item))
+              .filter(Boolean),
+          ).slice(0, 8)
+        : [],
+  };
 
   const nextActions = Array.isArray(parsed.next_actions)
     ? parsed.next_actions
@@ -428,6 +656,7 @@ const normalizeResult = (
     },
     care,
     health_flags: healthFlags,
+    health_check: healthCheck,
     next_actions: nextActions,
     low_confidence: lowConfidence,
     ...(error ? { error } : {}),
@@ -443,18 +672,37 @@ export const petAnalysisService = {
       : [];
 
     const userMessage = buildPromptFromSignals(input);
-    const result = await petPlatformAgent.run({
-      sessionId: input.sessionId || `pet-analyzer-${Date.now()}`,
-      userMessage,
-      userId: input.userId,
-      authToken: input.authToken,
-    });
+    const baseSessionId = input.sessionId || `pet-analyzer-${Date.now()}`;
 
-    const parsed = extractJsonObject(result.reply);
-    if (!parsed) {
-      throw new Error("AI response could not be parsed as JSON");
+    let lastFailure = "AI response could not be parsed as JSON";
+
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const followUpInstruction = attempt === 0
+        ? ""
+        : "\n\nYour previous response was invalid. Return ONE valid JSON object only. No markdown, no prose, no comments. Include all required keys and use null for unknown values.";
+
+      const result = await petPlatformAgent.run({
+        sessionId: `${baseSessionId}-attempt-${attempt + 1}`,
+        userMessage: `${userMessage}${followUpInstruction}`,
+        userId: input.userId,
+        authToken: input.authToken,
+      });
+
+      const parsed = extractJsonObject(result.reply);
+      if (!parsed) {
+        lastFailure = "AI response could not be parsed as JSON";
+        continue;
+      }
+
+      const validation = validateParsedAnalysisShape(parsed);
+      if (!validation.ok) {
+        lastFailure = `AI JSON schema validation failed: ${validation.errors.join("; ")}`;
+        continue;
+      }
+
+      return normalizeResult(parsed, primaryPrediction, primaryConfidence, alternatives, input);
     }
 
-    return normalizeResult(parsed, primaryPrediction, primaryConfidence, alternatives, input);
+    throw new Error(lastFailure);
   },
 };
