@@ -7,7 +7,7 @@ import { Switch } from "@/components/ui/switch";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
-import { Globe, Bell, Shield, Mail, Upload, X } from "lucide-react";
+import { Globe, Bell, Shield, Mail, Upload, X, Palette, Mail } from "lucide-react";
 import { bookingApi } from "@/services/bookingApi";
 
 const SuperAdminSettings = () => {
@@ -60,11 +60,19 @@ const SuperAdminSettings = () => {
     loadPaymentChannels();
   }, []);
 
+  // controlled settings
+  const [platformName, setPlatformName] = useState<string>("PawStay");
+  const [supportEmail, setSupportEmail] = useState<string>("support@pawstay.com");
+  const [platformFee, setPlatformFee] = useState<number>(10);
+  const [minBookingAmount, setMinBookingAmount] = useState<number>(25);
+
   const handleSave = () => {
     toast({
       title: "Settings saved",
-      description: "Platform settings have been updated successfully.",
+      description: `Platform settings updated — ${platformName} (${platformFee}% commission).`,
     });
+    // TODO: persist to backend
+    console.log("Save platform settings", { platformName, supportEmail, platformFee, minBookingAmount });
   };
 
   const handleImageUpload = (e: ChangeEvent<HTMLInputElement>, target: "gcash" | "paymaya" | "bankTransfer") => {
@@ -175,6 +183,32 @@ const SuperAdminSettings = () => {
         </TabsList>
 
         <TabsContent value="general">
+          {/* Website Info Table */}
+          <Card className="bg-[#292929] border-white/[0.07] sa-card mb-4">
+            <CardHeader>
+              <CardTitle className="text-white">Website Info</CardTitle>
+              <CardDescription className="text-[#808080]">Quick view of the platform name and commission</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="overflow-auto">
+                <table className="w-full text-sm text-left table-auto">
+                  <thead>
+                    <tr className="text-[#808080]">
+                      <th className="px-4 py-2">Name</th>
+                      <th className="px-4 py-2">Commission (%)</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr className="bg-[#292929] border-t border-white/[0.06]">
+                      <td className="px-4 py-3 text-white">{platformName}</td>
+                      <td className="px-4 py-3 text-white">{platformFee}%</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
+
           <Card className="bg-[#292929] border-white/[0.07] sa-card">
             <CardHeader>
               <CardTitle className="text-white">Platform Settings</CardTitle>
@@ -187,14 +221,16 @@ const SuperAdminSettings = () => {
                 <div className="space-y-2">
                   <Label className="text-white/80">Platform Name</Label>
                   <Input
-                    defaultValue="PawStay"
+                    value={platformName}
+                    onChange={(e) => setPlatformName(e.target.value)}
                     className="bg-[#292929] border-white/[0.09] text-white"
                   />
                 </div>
                 <div className="space-y-2">
                   <Label className="text-white/80">Support Email</Label>
                   <Input
-                    defaultValue="support@pawstay.com"
+                    value={supportEmail}
+                    onChange={(e) => setSupportEmail(e.target.value)}
                     className="bg-[#292929] border-white/[0.09] text-white"
                   />
                 </div>
@@ -202,7 +238,8 @@ const SuperAdminSettings = () => {
                   <Label className="text-white/80">Platform Fee (%)</Label>
                   <Input
                     type="number"
-                    defaultValue="10"
+                    value={String(platformFee)}
+                    onChange={(e) => setPlatformFee(Number(e.target.value || 0))}
                     className="bg-[#292929] border-white/[0.09] text-white"
                   />
                 </div>
@@ -210,7 +247,8 @@ const SuperAdminSettings = () => {
                   <Label className="text-white/80">Minimum Booking Amount</Label>
                   <Input
                     type="number"
-                    defaultValue="25"
+                    value={String(minBookingAmount)}
+                    onChange={(e) => setMinBookingAmount(Number(e.target.value || 0))}
                     className="bg-[#292929] border-white/[0.09] text-white"
                   />
                 </div>
