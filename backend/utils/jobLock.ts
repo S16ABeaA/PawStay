@@ -30,12 +30,19 @@ export async function tryAcquireJobLock(
   const staleThreshold = new Date(Date.now() - staleSecs * 1000).toISOString();
 
   // Remove any stale lock so a crashed instance doesn't block indefinitely.
-  await supabaseAdmin
+  const { error: cleanupError } = await supabaseAdmin
     .from('job_locks')
     .delete()
     .eq('job_name', jobName)
     .lt('locked_at', staleThreshold);
 
+  if (cleanupError) {
+    console.error(
+      `[job-lock] Failed to clean up stale lock for "${jobName}":`,
+      cleanupError.message ?? cleanupError,
+    );
+    throw cleanupError;
+  }
   // Try to insert our lock.
   // The `job_name` PRIMARY KEY constraint is the atomic gate: even if two
   // instances race through the stale-delete above and both attempt to INSERT,
