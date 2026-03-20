@@ -206,12 +206,38 @@ const Header = () => {
               </Tooltip>
             );
           })}
-          <Link to="/about" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
-            About
+          <Link
+            to="/about"
+            className={cn(
+              "relative text-sm font-medium transition-colors hover:text-orange-400",
+              location.pathname === "/about" ? "text-orange-600" : "text-muted-foreground"
+            )}
+            aria-current={location.pathname === "/about" ? "page" : undefined}
+          >
+            <span className={cn(location.pathname === "/about" && "font-semibold")}>About</span>
+            <span
+              className={cn(
+                "absolute left-0 -bottom-1 h-0.5 w-full rounded-full transition-opacity",
+                location.pathname === "/about" ? "bg-orange-500 opacity-100" : "bg-orange-500 opacity-0"
+              )}
+            />
           </Link>
-          <Link to="/faq" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1">
+          <Link
+            to="/faq"
+            className={cn(
+              "relative text-sm font-medium transition-colors flex items-center gap-1 hover:text-orange-400",
+              location.pathname === "/faq" ? "text-orange-600" : "text-muted-foreground"
+            )}
+            aria-current={location.pathname === "/faq" ? "page" : undefined}
+          >
             <HelpCircle className="h-4 w-4" />
-            Help
+            <span className={cn(location.pathname === "/faq" && "font-semibold")}>Help</span>
+            <span
+              className={cn(
+                "absolute left-0 -bottom-1 h-0.5 w-full rounded-full transition-opacity",
+                location.pathname === "/faq" ? "bg-orange-500 opacity-100" : "bg-orange-500 opacity-0"
+              )}
+            />
           </Link>
         </nav>
         <div className="hidden md:flex items-center gap-4">
@@ -292,7 +318,7 @@ const Header = () => {
             })}
             <Link to="/about" className="py-2 text-sm font-medium text-foreground" onClick={() => setIsMenuOpen(false)}>About</Link>
             <Link to="/faq" className="py-2 text-sm font-medium text-foreground flex items-center gap-1" onClick={() => setIsMenuOpen(false)}>
-              <HelpCircle className="h-4 w-4" /> Help Center
+              <HelpCircle className="h-4 w-4" /> <span className="underline underline-offset-4 decoration-orange-500">Help</span>
             </Link>
             <hr className="border-border my-2" />
             {isLoggedIn && (
