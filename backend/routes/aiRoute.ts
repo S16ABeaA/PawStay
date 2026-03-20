@@ -18,9 +18,10 @@ const aiLimiter = rateLimit({
 	message: { error: "Too many AI requests. Please try again later." },
 });
 
-router.post("/chat", aiLimiter, authMiddleware, aiController.chat);
-router.post("/ocr", aiLimiter, authMiddleware, upload.single("image"), aiController.ocr);
-router.post("/pet-analysis", aiLimiter, authMiddleware, aiController.analyzePet);
-router.post("/pet-health-check", aiLimiter, authMiddleware, upload.single("image"), aiController.healthCheck);
+router.use(aiLimiter, authMiddleware);
 
+router.post("/chat", aiController.chat);
+router.post("/ocr", upload.single("image"), aiController.ocr);
+router.post("/pet-analysis", aiController.analyzePet);
+router.post("/pet-health-check", upload.single("image"), aiController.healthCheck);
 export default router;
