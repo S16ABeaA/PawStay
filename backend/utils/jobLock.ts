@@ -74,11 +74,18 @@ export async function tryAcquireJobLock(
  * release it, preventing accidental release of a lock held by another instance.
  */
 export async function releaseJobLock(jobName: string, token: string): Promise<void> {
-  await supabaseAdmin
+  const { error } = await supabaseAdmin
     .from('job_locks')
     .delete()
     .eq('job_name', jobName)
     .eq('token', token);
+
+  if (error) {
+    console.warn(
+      `[job-lock] Error releasing lock for "${jobName}" with token "${token}":`,
+      error.message,
+    );
+  }
 }
 
 /**
