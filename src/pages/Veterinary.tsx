@@ -6,7 +6,7 @@ import { fetchProperties } from "@/services/propertyApi";
 import { fetchAmenities } from "@/services/amenitiesApi";
 import { Star, ArrowRight, SlidersHorizontal, ArrowUpDown, Grid3X3, List } from "lucide-react";
 import { PetLoaderGate } from "@/components/ui/PetLoader";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -27,6 +27,7 @@ const timeSlots = [
 
 const Veterinary = () => {
   const resultsRef = useRef<HTMLDivElement>(null);
+  const routerLocation = useLocation();
   const [clinics, setClinics] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [priceRange, setPriceRange] = useState([0, 3000]);
@@ -101,9 +102,10 @@ const Veterinary = () => {
     }, 120);
   };
 
-  const loadClinics = async () => {
+  const loadClinics = async (amenitiesOverride?: string[]) => {
     setLoading(true);
     try {
+      const effectiveAmenities = amenitiesOverride ?? selectedAmenities;
       // Pass explicit filters to the API
       const data = await fetchProperties({
         propertyType: "veterinary",
@@ -111,7 +113,7 @@ const Veterinary = () => {
         location: location.trim() || undefined,
         minPrice: priceRange[0] > 0 ? priceRange[0] : undefined,
         maxPrice: priceRange[1],
-        amenities: selectedAmenities.length > 0 ? selectedAmenities : undefined,
+        amenities: effectiveAmenities.length > 0 ? effectiveAmenities : undefined,
         rating: minRating ?? undefined,
         petType: petTypes.length > 0 ? petTypes.map(p => p.toLowerCase()) : undefined,
         dogSize: petTypes.includes("Dog") && dogSizes.length > 0 ? dogSizes : undefined,
@@ -128,10 +130,19 @@ const Veterinary = () => {
     }
   };
 
-  // Run on initial mount
+  // Run on initial mount, apply `amenities` query param if present
   useEffect(() => {
+    const params = new URLSearchParams(routerLocation.search);
+    const amenitiesParam = params.get("amenities");
+    if (amenitiesParam) {
+      const list = Array.from(new Set(amenitiesParam.split(",").map(a => a.trim()).filter(Boolean)));
+      setSelectedAmenities(list);
+      loadClinics(list);
+      return;
+    }
+
     loadClinics();
-  }, []);
+  }, [routerLocation.search]);
 
   // Load amenities dynamically
   useEffect(() => {
@@ -139,6 +150,21 @@ const Veterinary = () => {
       .then((data) => setAmenitiesList(data || []))
       .catch((err) => console.error("Failed to load amenities:", err));
   }, []);
+
+  useEffect(() => {
+    if (routerLocation.hash !== "#clinics") return;
+
+    const timer = window.setTimeout(() => {
+      const el = resultsRef.current ?? document.getElementById("clinics");
+      if (!el) return;
+      const header = document.querySelector("header");
+      const offset = (header?.clientHeight ?? 0) + 8;
+      const y = el.getBoundingClientRect().top + window.scrollY - offset;
+      window.scrollTo({ top: y, behavior: "smooth" });
+    }, 120);
+
+    return () => window.clearTimeout(timer);
+  }, [routerLocation.hash]);
 
   return (
     <div className="min-h-screen bg-background">
@@ -421,7 +447,7 @@ const Veterinary = () => {
             </aside>
 
             {/* Results */}
-            <div className="flex-1" ref={resultsRef}>
+            <div id="clinics" className="flex-1" ref={resultsRef}>
               <div className="flex items-center justify-between mb-6">
                 <div />
                 <div className="flex items-center gap-2 ml-auto">

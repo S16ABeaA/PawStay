@@ -5,7 +5,7 @@ import HotelCard from "@/components/HotelCard";
 import { Button } from "@/components/ui/button";
 import { Star, ArrowRight, SlidersHorizontal, ArrowUpDown, Grid3X3, List } from "lucide-react";
 import { PetLoaderGate } from "@/components/ui/PetLoader";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -23,6 +23,7 @@ import { fetchAmenities } from "@/services/amenitiesApi";
 
 const Hotels = () => {
   const resultsRef = useRef<HTMLDivElement>(null);
+  const routerLocation = useLocation();
   const [hotels, setHotels] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [priceRange, setPriceRange] = useState([0, 3000]);
@@ -100,9 +101,10 @@ const Hotels = () => {
     }, 120);
   };
 
-  const loadHotels = async () => {
+  const loadHotels = async (amenitiesOverride?: string[]) => {
     setLoading(true);
     try {
+      const effectiveAmenities = amenitiesOverride ?? selectedAmenities;
       // Pass explicit filters to the API
       const data = await fetchProperties({
         propertyType: "hotel",
@@ -110,7 +112,7 @@ const Hotels = () => {
         location: location.trim() || undefined,
         minPrice: priceRange[0] > 0 ? priceRange[0] : undefined,
         maxPrice: priceRange[1],
-        amenities: selectedAmenities.length > 0 ? selectedAmenities : undefined,
+        amenities: effectiveAmenities.length > 0 ? effectiveAmenities : undefined,
         rating: minRating ?? undefined,
         petType: petTypes.length > 0 ? petTypes.map(p => p.toLowerCase()) : undefined,
         dogSize: petTypes.includes("Dog") && dogSizes.length > 0 ? dogSizes : undefined,
@@ -129,8 +131,19 @@ const Hotels = () => {
 
   // Run on initial mount
   useEffect(() => {
+    // If navigated with amenities in query, apply them
+    const params = new URLSearchParams(routerLocation.search);
+    const amenitiesParam = params.get("amenities");
+    if (amenitiesParam) {
+      const list = Array.from(new Set(amenitiesParam.split(",").map(a => a.trim()).filter(Boolean)));
+      setSelectedAmenities(list);
+      // ensure properties load with the applied amenities
+      loadHotels(list);
+      return;
+    }
+
     loadHotels();
-  }, []);
+  }, [routerLocation.search]);
 
   // Load amenities dynamically
   useEffect(() => {
@@ -138,6 +151,21 @@ const Hotels = () => {
       .then((data) => setAmenitiesList(data || []))
       .catch((err) => console.error("Failed to load amenities:", err));
   }, []);
+
+  useEffect(() => {
+    if (routerLocation.hash !== "#hotels") return;
+
+    const timer = window.setTimeout(() => {
+      const el = resultsRef.current ?? document.getElementById("hotels");
+      if (!el) return;
+      const header = document.querySelector("header");
+      const offset = (header?.clientHeight ?? 0) + 8;
+      const y = el.getBoundingClientRect().top + window.scrollY - offset;
+      window.scrollTo({ top: y, behavior: "smooth" });
+    }, 120);
+
+    return () => window.clearTimeout(timer);
+  }, [routerLocation.hash]);
 
   return (
     <div className="min-h-screen bg-background">
@@ -416,7 +444,7 @@ const Hotels = () => {
               </div>
             </aside>
 
-            <div className="flex-1" ref={resultsRef}>
+            <div id="hotels" className="flex-1" ref={resultsRef}>
               <div className="flex items-center justify-between mb-6">
                 <div />
                 <div className="flex items-center gap-2 ml-auto">
