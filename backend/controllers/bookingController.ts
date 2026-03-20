@@ -734,6 +734,7 @@ export const createBooking = async (req: Request, res: Response) => {
     const {
       property_id,
       pet_id,          // null if new pet
+      create_new_pet,
       service_id,
       checkin,
       checkout,
@@ -1026,8 +1027,18 @@ export const createBooking = async (req: Request, res: Response) => {
     const finalVaccineRecordUrl = toDocFieldValue(uploadedVaccineDocs);
     const finalMedCertUrl = toDocFieldValue(uploadedMedDocs);
 
-    // If no pet_id provided but pet details given, create a new pet
-    if (!resolvedPetId && pet_name) {
+    if (resolvedPetId) {
+      const existingPet = await petModel.getById(String(resolvedPetId), userId);
+      if (!existingPet) {
+        return res.status(400).json({
+          error: "Selected pet does not exist or does not belong to you.",
+        });
+      }
+      resolvedPetId = existingPet.id;
+    } else if (create_new_pet === true) {
+      if (!pet_name) {
+        return res.status(400).json({ error: "pet_name is required when creating a new pet." });
+      }
       try {
         const newPet = await petModel.create(userId, {
           name: pet_name,
@@ -1041,7 +1052,12 @@ export const createBooking = async (req: Request, res: Response) => {
         resolvedPetId = newPet.id;
       } catch (petErr) {
         console.error("Failed to create pet during booking:", petErr);
+        return res.status(500).json({ error: "Failed to create new pet for booking." });
       }
+    } else {
+      return res.status(400).json({
+        error: "Please select an existing pet or explicitly choose to add a new pet.",
+      });
     }
 
     // ── Atomic check-and-insert (concurrency-safe via PG advisory locks) ──

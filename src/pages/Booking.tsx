@@ -457,6 +457,10 @@ const Booking = () => {
       toast({ title: "Select a Pet", description: "Please select an existing pet or choose to add a new one.", variant: "destructive" });
       return false;
     }
+    if (petSelectionMode === "existing" && !selectedPetId) {
+      toast({ title: "Select a Pet", description: "Please choose one of your registered pets.", variant: "destructive" });
+      return false;
+    }
     return true;
   };
 
@@ -557,9 +561,21 @@ const Booking = () => {
       // Amount is always auto-filled from calculated total
       const amountPaidPayload = total.toFixed(2);
 
+      const isNewPet = petSelectionMode === "new";
+      if (!isNewPet && !selectedPetId) {
+        toast({
+          title: "Select a Pet",
+          description: "Please select an existing pet or choose Add New Pet.",
+          variant: "destructive",
+        });
+        setStep(2);
+        return;
+      }
+
       await bookingApi.create({
         property_id: shop?.propertyId || "",
-        pet_id: selectedPetId,
+        pet_id: isNewPet ? null : selectedPetId,
+        create_new_pet: isNewPet,
         checkin: checkinDate,
         checkout: checkoutDate,
         time_slot: selectedTime || null,
@@ -584,8 +600,8 @@ const Booking = () => {
         reference_number: paymentMethod === "cash" ? undefined : referenceNumber,
         amount_paid: amountPaidPayload,
         payment_screenshot_url: paymentScreenshot || undefined,
-        new_pet_species: petType === "dog" ? "Dog" : petType === "cat" ? "Cat" : "Other",
-        new_pet_birthday: selectedPetId ? undefined : new Date().toISOString().split("T")[0],
+        new_pet_species: isNewPet ? (petType === "dog" ? "Dog" : petType === "cat" ? "Cat" : "Other") : undefined,
+        new_pet_birthday: isNewPet ? new Date().toISOString().split("T")[0] : undefined,
         dog_size: dogSize,
       });
 
