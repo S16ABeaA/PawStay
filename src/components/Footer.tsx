@@ -40,7 +40,7 @@ const Footer = () => {
             </a>
 
             <p className="text-background/70 text-sm mb-6 max-w-xs">
-              The trusted platform for pet care. Find the perfect home away from home for your furry friends.
+              The smart way to book pet care, one tap away.
             </p>
 
             {/* Social Icons */}

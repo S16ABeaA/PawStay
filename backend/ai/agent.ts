@@ -31,6 +31,17 @@ import {
 
 export class PetPlatformAgent {
   private toolMap: Map<ToolName, ToolDefinition<any, any>>;
+  private replyCache = new Map<string, { expiresAt: number; output: AgentRunOutput }>();
+
+  private static readonly MAX_HISTORY_MESSAGES = Math.max(
+    8,
+    Number(process.env.AGENT_MAX_HISTORY_MESSAGES || 24),
+  );
+
+  private static readonly CACHE_TTL_MS = Math.max(
+    0,
+    Number(process.env.AGENT_REPLY_CACHE_TTL_MS || 45_000),
+  );
 
   constructor(tools: ToolDefinition<any, any>[] = defaultTools) {
     this.toolMap = new Map(tools.map((tool) => [tool.name, tool]));
@@ -46,13 +57,24 @@ export class PetPlatformAgent {
    */
   async run(input: AgentRunInput): Promise<AgentRunOutput> {
     const { sessionId, userMessage, userId, authToken } = input;
+    const normalizedMessage = String(userMessage || "").trim();
+
+    if (!normalizedMessage) {
+      return { reply: "Please enter a message.", usedTools: [] };
+    }
+
+    const cacheKey = this.makeCacheKey(sessionId, normalizedMessage);
+    const cached = this.readCache(cacheKey);
+    if (cached) {
+      return cached;
+    }
 
     // --------------------------------------------------
     // 1. Persist the user message in session memory
     // --------------------------------------------------
-    sessionMemory.append(sessionId, { role: "user", content: userMessage });
+    sessionMemory.append(sessionId, { role: "user", content: normalizedMessage });
 
-    if (this.isAddPetNavigationIntent(userMessage)) {
+    if (this.isAddPetNavigationIntent(normalizedMessage)) {
       const reply =
         "You can add your pet profile in **My Pets**. Tap here to continue: [Go to My Pets](/my-pets).";
 
@@ -61,11 +83,13 @@ export class PetPlatformAgent {
         content: reply,
       });
 
-      return {
+      const output = {
         reply,
         usedTools: [],
         toolActivity: [],
       };
+      this.writeCache(cacheKey, output);
+      return output;
     }
 
     // --------------------------------------------------
@@ -109,7 +133,7 @@ export class PetPlatformAgent {
         return await tool.run(safeArgs, {
           authToken,
           userId,
-          userMessage, // pass original message for context-aware tools
+          userMessage: normalizedMessage, // pass original message for context-aware tools
         });
       } catch (err: any) {
         return { error: err?.message ?? "Tool execution failed" };
@@ -147,7 +171,7 @@ export class PetPlatformAgent {
         args: a.args,
       }));
 
-      return {
+      const output = {
         reply,
         usedTools,
         toolActivity: result.toolActivity.map((a) => ({
@@ -155,6 +179,8 @@ export class PetPlatformAgent {
           status: "completed" as const,
         })),
       };
+      this.writeCache(cacheKey, output);
+      return output;
     } catch (err: any) {
       const short = err?.message ?? String(err ?? "Agent error");
       console.warn(`[agent] Gemini loop failed: ${short}`);
@@ -165,7 +191,9 @@ export class PetPlatformAgent {
         role: "assistant",
         content: fallbackReply,
       });
-      return { reply: fallbackReply, usedTools: [] };
+      const output = { reply: fallbackReply, usedTools: [] };
+      this.writeCache(cacheKey, output);
+      return output;
     }
   }
 
@@ -177,11 +205,13 @@ export class PetPlatformAgent {
    * (those are managed internally by the Gemini chat session).
    */
   private buildGeminiHistory(sessionId: string): Content[] {
-    const messages = sessionMemory.get(sessionId);
+    const messages = sessionMemory
+      .get(sessionId)
+      .filter((m) => m.role !== "system" && m.role !== "tool");
+    const recentMessages = messages.slice(-PetPlatformAgent.MAX_HISTORY_MESSAGES);
     const contents: Content[] = [];
 
-    for (const msg of messages) {
-      if (msg.role === "system" || msg.role === "tool") continue;
+    for (const msg of recentMessages) {
 
       if (msg.role === "user") {
         contents.push({ role: "user", parts: [{ text: msg.content }] });
@@ -208,6 +238,29 @@ export class PetPlatformAgent {
       /\bregister\s+(a\s+)?pet\b/.test(text);
 
     return mentionsPet && (asksAddLocation || directAddIntent);
+  }
+
+  private makeCacheKey(sessionId: string, message: string): string {
+    return `${sessionId}::${message.toLowerCase()}`;
+  }
+
+  private readCache(key: string): AgentRunOutput | null {
+    if (PetPlatformAgent.CACHE_TTL_MS <= 0) return null;
+    const entry = this.replyCache.get(key);
+    if (!entry) return null;
+    if (Date.now() > entry.expiresAt) {
+      this.replyCache.delete(key);
+      return null;
+    }
+    return entry.output;
+  }
+
+  private writeCache(key: string, output: AgentRunOutput): void {
+    if (PetPlatformAgent.CACHE_TTL_MS <= 0) return;
+    this.replyCache.set(key, {
+      expiresAt: Date.now() + PetPlatformAgent.CACHE_TTL_MS,
+      output,
+    });
   }
 }
 

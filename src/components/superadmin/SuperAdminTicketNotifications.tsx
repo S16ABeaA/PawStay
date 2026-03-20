@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Mail, MessageSquare, Loader2, X } from "lucide-react";
 import { authHelper } from "@/helpers/authHelper";
 import { Link } from "react-router-dom";
+import BookingIdText from "@/components/BookingIdText";
 
 interface TicketNotification {
   id: string;
@@ -95,7 +96,7 @@ export const SuperAdminTicketNotifications = () => {
                     <div>
                       <h3 className={`font-semibold text-white`}>{notification.title}</h3>
                       <p className={`text-sm text-white/70 mt-1 line-clamp-2`}>
-                        {notification.message}
+                        <BookingIdText text={notification.message} />
                       </p>
                     </div>
                     <button

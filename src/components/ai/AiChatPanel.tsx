@@ -1,9 +1,17 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { aiChatApi } from "@/services/aiChatApi";
 import type { PetHealthCheckResponse } from "@/services/aiChatApi";
+import { petApi } from "@/services/petApi";
 import { Send, Bot, User, ExternalLink, ImagePlus, Maximize2 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
+import {
+  estimateWeightKgFromRange,
+  estimateYearsFromRange,
+  resolveLocationForSearch,
+  savePetAutofillPayload,
+} from "@/lib/aiAutofill";
 
 type CtaIntent = "find_vet" | "find_groomer" | "save_pet" | "view_details";
 type ImageActionIntent = "analyze" | "scan_records" | "ask_question" | "cancel";
@@ -14,6 +22,7 @@ type ImageQuickReply = {
 };
 
 type PetRecommendation = {
+  source_image_data_url?: string;
   breed_detected: {
     primary: string;
     confidence: number;
@@ -42,8 +51,9 @@ type VisionPrediction = {
 
 type PendingImageContext = {
   file: File;
-  previewUrl: string;
+  previewUrl?: string;
   fileName: string;
+  isImage: boolean;
   ocrText?: string;
 };
 
@@ -89,6 +99,90 @@ const PIG_TERMS = ["pig", "piglet", "mini pig", "potbellied", "pot-bellied", "ho
 const SMALL_PET_TERMS = ["rabbit", "hamster", "guinea pig", "bird", "parrot", "axolotl"];
 const OTHER_ANIMAL_TERMS = [...PIG_TERMS, ...SMALL_PET_TERMS];
 type SpeciesKind = "dog" | "cat" | "pig" | "animal";
+const BOOKING_ID_REGEX = /(Booking\s*ID[:\s]*)([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/gi;
+
+const normalizePipeTableMarkdown = (input: string): string => {
+  const text = String(input || "");
+  const lines = text.split("\n");
+  const output: string[] = [];
+
+  let i = 0;
+  while (i < lines.length) {
+    const line = lines[i];
+    const next = lines[i + 1] || "";
+
+    const isHeader = /^\s*\|.+\|\s*$/.test(line);
+    const isSeparator = /^\s*\|?\s*[:-]-{2,}.*\|\s*$/.test(next);
+
+    if (!isHeader || !isSeparator) {
+      output.push(line);
+      i += 1;
+      continue;
+    }
+
+    const headers = line
+      .split("|")
+      .map((c) => c.trim())
+      .filter(Boolean);
+
+    i += 2;
+    while (i < lines.length && /^\s*\|.+\|\s*$/.test(lines[i])) {
+      const cols = lines[i]
+        .split("|")
+        .map((c) => c.trim())
+        .filter(Boolean);
+
+      const pairs = headers.map((h, idx) => `${h}: ${cols[idx] || "-"}`);
+      output.push(`- ${pairs.join(" | ")}`);
+      i += 1;
+    }
+  }
+
+  return output.join("\n");
+};
+
+const linkifyBookingIdsInMarkdown = (text: string): string => {
+  return String(text || "").replace(
+    BOOKING_ID_REGEX,
+    (_match, id: string) => `[Booking ID: ${id}](/my-bookings?bookingId=${id})`,
+  );
+};
+
+const renderBookingLinkedText = (text: string): ReactNode => {
+  const raw = String(text || "");
+  const parts: ReactNode[] = [];
+  let lastIndex = 0;
+  let idx = 0;
+  const regex = new RegExp(BOOKING_ID_REGEX.source, "gi");
+  let match: RegExpExecArray | null;
+
+  while ((match = regex.exec(raw)) !== null) {
+    if (match.index > lastIndex) {
+      parts.push(raw.slice(lastIndex, match.index));
+    }
+
+    const bookingId = String(match[1] || "");
+    parts.push(
+      <a
+        key={`booking-link-${bookingId}-${idx}`}
+        href={`/my-bookings?bookingId=${encodeURIComponent(bookingId)}`}
+        className="font-semibold underline underline-offset-2 text-rose-700 hover:text-rose-800"
+      >
+        Booking ID: {bookingId}
+      </a>,
+    );
+
+    idx += 1;
+    lastIndex = match.index + match[0].length;
+  }
+
+  if (lastIndex < raw.length) {
+    parts.push(raw.slice(lastIndex));
+  }
+
+  if (parts.length === 0) return raw;
+  return <>{parts}</>;
+};
 
 interface AiChatPanelProps {
   /** Extra Tailwind classes on the root wrapper */
@@ -100,9 +194,11 @@ export const AiChatPanel = ({ className }: AiChatPanelProps) => {
   const [rows, setRows] = useState<ChatRow[]>([]);
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
+  const [commandPets, setCommandPets] = useState<Array<{ id: string; name: string }>>([]);
   const [isExpanded, setIsExpanded] = useState(false);
   const [pendingImage, setPendingImage] = useState<PendingImageContext | null>(null);
   const [imageQuestionMode, setImageQuestionMode] = useState(false);
+  const [expandedImage, setExpandedImage] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imageModelRef = useRef<any>(null);
@@ -136,6 +232,37 @@ export const AiChatPanel = ({ className }: AiChatPanelProps) => {
     };
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadPetsForCommands = async () => {
+      try {
+        const res = await petApi.list();
+        const pets = Array.isArray((res as any)?.pets) ? (res as any).pets : [];
+        if (cancelled) return;
+        setCommandPets(
+          pets
+            .map((p: any) => ({ id: String(p?.id || ""), name: String(p?.name || "").trim() }))
+            .filter((p: { id: string; name: string }) => Boolean(p.id && p.name))
+            .slice(0, 4),
+        );
+      } catch {
+        if (!cancelled) setCommandPets([]);
+      }
+    };
+
+    loadPetsForCommands();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const BOOKING_SHORTCUTS: Array<{ label: string; command: string }> = [
+    { label: "My bookings", command: "Show my bookings and reservation statuses." },
+    { label: "Upcoming reservations", command: "Show my upcoming reservations." },
+    { label: "Pending reservations", command: "Show my pending bookings." },
+  ];
+
   const TOOL_LABELS: Record<string, string> = {
     search_services: "🔍 Searching services...",
     get_pets: "🐾 Fetching your pet profiles...",
@@ -151,6 +278,12 @@ export const AiChatPanel = ({ className }: AiChatPanelProps) => {
   const IMAGE_ACTION_OPTIONS: ImageQuickReply[] = [
     { id: "analyze", label: "🔍 Analyze breed & health" },
     { id: "scan_records", label: "📋 Scan health records" },
+    { id: "ask_question", label: "💬 Ask a question about it" },
+    { id: "cancel", label: "❌ Cancel" },
+  ];
+
+  const DOCUMENT_ACTION_OPTIONS: ImageQuickReply[] = [
+    { id: "scan_records", label: "📋 Scan medical record" },
     { id: "ask_question", label: "💬 Ask a question about it" },
     { id: "cancel", label: "❌ Cancel" },
   ];
@@ -246,9 +379,11 @@ export const AiChatPanel = ({ className }: AiChatPanelProps) => {
     });
 
     const healthAssessment = healthResponse;
+    const sourceImageDataUrl = await fileToDataUrl(file);
     const intents: CtaIntent[] = ["find_vet", "find_groomer", "save_pet", "view_details"];
 
     const structured: PetRecommendation = {
+      source_image_data_url: sourceImageDataUrl || undefined,
       breed_detected: {
         primary: String(recommendationResponse.breed?.primary || finalPrimaryBreed),
         confidence:
@@ -330,6 +465,17 @@ export const AiChatPanel = ({ className }: AiChatPanelProps) => {
   const onImageActionSelect = async (rowId: string, action: ImageActionIntent) => {
     clearQuickReplies(rowId);
     if (!pendingImage) return;
+    if (action === "analyze" && !pendingImage.isImage) {
+      setRows((prev) => [
+        ...prev,
+        makeRow({
+          role: "assistant",
+          content: "Breed and visual health analysis works with image files only. For PDFs/documents, use Scan medical record.",
+        }),
+      ]);
+      return;
+    }
+
 
     if (action === "cancel") {
       setPendingImage(null);
@@ -373,15 +519,33 @@ export const AiChatPanel = ({ className }: AiChatPanelProps) => {
 
         const summary = await aiChatApi.chat({
           sessionId,
-          message:
-            `Summarize the following OCR text from a pet health record image. ` +
-            `Return concise bullet points for: pet identity, dates, vaccinations, medications, diagnoses/findings, and follow-up recommendations. ` +
-            `If a field is missing, say \"Not visible\". OCR text:\n${extractedText}`,
+          message: [
+            "You are reviewing OCR text from a pet health record.",
+            "Provide a concise, practical report for the pet owner.",
+            "Return plain markdown with these sections:",
+            "1) Current Record Snapshot",
+            "2) Health Status (Healthy / Needs Attention / Unclear) with short reason",
+            "3) Unusual or Risky Data To Discuss With Vet",
+            "4) Personalized Recommendations (next steps with timeline)",
+            "Rules:",
+            "- Base conclusions only on OCR text.",
+            "- If details are missing, explicitly say 'Not visible'.",
+            "- Flag inconsistent dates (example: vaccine before birth date) and overdue vaccines/checkups.",
+            "- Mention urgent warnings if any red-flag terms appear.",
+            "- Keep language clear and reassuring, but honest about uncertainty.",
+            "OCR text:",
+            extractedText,
+          ].join("\n"),
         });
 
         setRows((prev) => [
           ...prev,
-          makeRow({ role: "assistant", content: summary.message || "I summarized the visible health record details." }),
+          makeRow({
+            role: "assistant",
+            content:
+              summary.message ||
+              "I reviewed the visible health record and highlighted status, unusual findings, and personalized next steps.",
+          }),
         ]);
         return;
       }
@@ -402,27 +566,112 @@ export const AiChatPanel = ({ className }: AiChatPanelProps) => {
     }
   };
 
-  const onSend = async () => {
-    if (!message.trim() || loading) return;
+  const sendMessage = async (rawMessage: string) => {
+    const userMessage = String(rawMessage || "").trim();
+    if (!userMessage || loading) return;
 
-    const userMessage = message.trim();
     setRows((prev) => [...prev, makeRow({ role: "user", content: userMessage })]);
-    setMessage("");
 
-    if (pendingImage && !imageQuestionMode) {
-      setRows((prev) => [
-        ...prev,
-        makeRow({
-          role: "assistant",
-          content: "Please choose what you'd like to do with the uploaded photo first.",
-        }),
-      ]);
-      return;
+    const shouldUseImageContext = Boolean(pendingImage) && (imageQuestionMode || userMessage.length > 0);
+    if (shouldUseImageContext && !imageQuestionMode) {
+      setImageQuestionMode(true);
     }
 
     try {
       setLoading(true);
-      if (pendingImage && imageQuestionMode) {
+
+      const normalizedMessage = userMessage.toLowerCase();
+      const wantsServiceHistoryScan = /(scan|analy[sz]e|review).*(service history|health record|medical record|vaccine)/i.test(normalizedMessage)
+        || /(vaccine|medical).*(scan|analy[sz]e|review)/i.test(normalizedMessage);
+
+      if (wantsServiceHistoryScan) {
+        if (pendingImage) {
+          // Explicit service-history scan command should not be hijacked by pending image Q&A mode.
+          setPendingImage(null);
+          setImageQuestionMode(false);
+        }
+
+        setRows((prev) => [...prev, makeRow({ role: "tool-activity", content: "📄 Scanning service-history health records..." })]);
+
+        const petsRes = await petApi.list();
+        const pets = Array.isArray((petsRes as any)?.pets) ? (petsRes as any).pets : [];
+
+        if (pets.length === 0) {
+          setRows((prev) => [
+            ...prev,
+            makeRow({ role: "assistant", content: "I couldn't find any pets on your account yet. Add a pet first, then I can scan their service-history records." }),
+          ]);
+          return;
+        }
+
+        const explicitPet = pets.find((p: any) => normalizedMessage.includes(String(p?.name || "").toLowerCase()));
+        if (!explicitPet && pets.length > 1) {
+          setRows((prev) => [
+            ...prev,
+            makeRow({
+              role: "assistant",
+              content: `I can scan service-history records, but I need which pet to scan. Reply with one name: ${pets.map((p: any) => p.name).join(", ")}.`,
+            }),
+          ]);
+          return;
+        }
+
+        const selectedPet = explicitPet || pets[0];
+        const insights = await petApi.getServiceHistoryInsights(selectedPet.id, 5);
+        const stats = (insights as any)?.stats || {};
+        const progression = (insights as any)?.progression || {};
+        const identity = (insights as any)?.identity_check || {};
+        const notableChanges = Array.isArray((insights as any)?.notable_changes)
+          ? (insights as any).notable_changes
+          : [];
+        const feedback = Array.isArray((insights as any)?.feedback)
+          ? (insights as any).feedback
+          : [];
+        const recommendations = Array.isArray((insights as any)?.recommendations)
+          ? (insights as any).recommendations
+          : [];
+
+        const responseLines = [
+          `I scanned ${selectedPet.name}'s latest service-history records (up to 5) and analyzed attached vaccine/medical files via OCR.`,
+          "",
+          "Common statistics:",
+          `- Services reviewed: ${Number(stats?.services_reviewed || 0)}`,
+          `- Records found: ${Number(stats?.records_found || 0)}`,
+          `- Records scanned: ${Number(stats?.records_scanned || 0)}`,
+          `- Vaccine mentions: ${Number(stats?.vaccine_mentions || 0)}`,
+          `- Condition mentions: ${Number(stats?.condition_mentions || 0)}`,
+          `- Medication mentions: ${Number(stats?.medication_mentions || 0)}`,
+          "",
+          "Notable changes:",
+          ...(notableChanges.length
+            ? notableChanges.map((item: string) => `- ${item}`)
+            : ["- No strong notable changes detected."]),
+          "",
+          "Progression / Degression:",
+          `- Trend: ${String(progression?.trend || "stable")}`,
+          `- Why: ${String(progression?.rationale || "No major movement detected.")}`,
+          "",
+          "Record-to-Pet Identity Check:",
+          `- Selected pet: ${String(identity?.selected_pet_name || selectedPet.name)}`,
+          `- OCR top detected pet name: ${String(identity?.top_detected_pet_name || "N/A")}`,
+          `- Mismatch: ${Boolean(identity?.mismatch) ? "Yes" : "No"}`,
+          "",
+          "Feedback:",
+          ...(feedback.length
+            ? feedback.map((item: string) => `- ${item}`)
+            : ["- OCR quality and record completeness can affect accuracy."]),
+          "",
+          "Recommendations:",
+          ...(recommendations.length
+            ? recommendations.map((item: any) => `- ${String(item?.title || "Recommendation")}: ${String(item?.reason || "")}`)
+            : ["- Continue routine monitoring and keep service records updated."]),
+        ];
+
+        setRows((prev) => [...prev, makeRow({ role: "assistant", content: responseLines.join("\n") })]);
+        return;
+      }
+
+      if (pendingImage && shouldUseImageContext) {
         let extractedText = pendingImage.ocrText || "";
         if (!extractedText) {
           const ocr = await aiChatApi.readImageText(pendingImage.file).catch(() => undefined);
@@ -476,6 +725,19 @@ export const AiChatPanel = ({ className }: AiChatPanelProps) => {
     }
   };
 
+  const onSend = async () => {
+    if (!message.trim() || loading) return;
+    const outgoing = message.trim();
+    setMessage("");
+    await sendMessage(outgoing);
+  };
+
+  const onQuickCommand = async (command: string) => {
+    if (loading) return;
+    setMessage("");
+    await sendMessage(command);
+  };
+
   const onOpenImagePicker = () => {
     if (loading) return;
     fileInputRef.current?.click();
@@ -515,6 +777,19 @@ export const AiChatPanel = ({ className }: AiChatPanelProps) => {
         : [];
     } finally {
       URL.revokeObjectURL(imageUrl);
+    }
+  };
+
+  const fileToDataUrl = async (file: File): Promise<string | null> => {
+    try {
+      return await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result || ""));
+        reader.onerror = () => reject(new Error("Failed to read image file"));
+        reader.readAsDataURL(file);
+      });
+    } catch {
+      return null;
     }
   };
 
@@ -586,19 +861,44 @@ export const AiChatPanel = ({ className }: AiChatPanelProps) => {
     e.currentTarget.value = "";
     if (!file) return;
 
-    const previewUrl = URL.createObjectURL(file);
-    previewUrlsRef.current.push(previewUrl);
+    const mime = String(file.type || "").toLowerCase();
+    const isImage = mime.startsWith("image/");
+    const lowerName = file.name.toLowerCase();
+    const isPdf = mime === "application/pdf" || lowerName.endsWith(".pdf");
+    const isTxt = mime === "text/plain" || lowerName.endsWith(".txt");
+    const isDocx = mime === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" || lowerName.endsWith(".docx");
+    const isDocument = isPdf || isTxt || isDocx;
 
-    setPendingImage({ file, previewUrl, fileName: file.name });
+    if (!isImage && !isDocument) {
+      setRows((prev) => [
+        ...prev,
+        makeRow({
+          role: "assistant",
+          content: "Unsupported file type. Please upload an image, PDF, TXT, or DOCX file for record scanning.",
+        }),
+      ]);
+      return;
+    }
+
+    let previewUrl: string | undefined;
+    if (isImage) {
+      previewUrl = URL.createObjectURL(file);
+      previewUrlsRef.current.push(previewUrl);
+    }
+
+    setPendingImage({ file, previewUrl, fileName: file.name, isImage });
     setImageQuestionMode(false);
+
+    const quickReplies = isImage ? IMAGE_ACTION_OPTIONS : DOCUMENT_ACTION_OPTIONS;
+    const uploadLabel = isImage ? "photo" : "document";
 
     setRows((prev) => [
       ...prev,
       makeRow({ role: "user", content: file.name, image: previewUrl }),
       makeRow({
         role: "assistant",
-        content: "What would you like to do with this photo?",
-        quickReplies: IMAGE_ACTION_OPTIONS,
+        content: `What would you like to do with this ${uploadLabel}?`,
+        quickReplies,
       }),
     ]);
   };
@@ -617,7 +917,63 @@ export const AiChatPanel = ({ className }: AiChatPanelProps) => {
     view_details: "View details",
   };
 
-  const onActionClick = (intent: CtaIntent) => {
+  const onActionClick = async (intent: CtaIntent, recommendation?: PetRecommendation) => {
+    if (intent === "find_vet" || intent === "find_groomer") {
+      const today = new Date().toISOString().split("T")[0];
+      let resolved: { location: string; source: "geolocation" | "profile" | "none"; geoPending: boolean } = {
+        location: "",
+        source: "none",
+        geoPending: true,
+      };
+
+      try {
+        resolved = await resolveLocationForSearch();
+      } catch {
+        // Continue with geoPending fallback instead of blocking navigation
+      }
+
+      const params = new URLSearchParams();
+
+      if (resolved.location) params.set("location", resolved.location);
+      params.set("date", today);
+      if (resolved.geoPending) params.set("geoPending", "1");
+      // Ensure same-route clicks still trigger destination page search handlers.
+      params.set("src", "ai-chat");
+      params.set("t", String(Date.now()));
+
+      navigate(`${intentToPath[intent]}?${params.toString()}`);
+      return;
+    }
+
+    if (intent === "save_pet") {
+      const breed = String(recommendation?.breed_detected?.primary || "").trim();
+      const breedConfidence = Number(recommendation?.breed_detected?.confidence ?? 0) / 100;
+
+      const ageRange = recommendation?.health_assessment?.age_estimate?.range || null;
+      const ageConfidence = Number(recommendation?.health_assessment?.age_estimate?.confidence ?? 0) / 100;
+      const weightRange = recommendation?.health_assessment?.weight_estimate?.range || null;
+      const weightConfidence = Number(recommendation?.health_assessment?.weight_estimate?.confidence ?? 0) / 100;
+
+      const ageYears = estimateYearsFromRange(ageRange);
+      const weightKg = estimateWeightKgFromRange(weightRange);
+
+      savePetAutofillPayload({
+        createdAt: new Date().toISOString(),
+        imageDataUrl: recommendation?.source_image_data_url,
+        breed: breed ? { value: breed, confidence: breedConfidence, source: "chat_breed_detection" } : undefined,
+        ageYears: ageYears !== null ? { value: String(ageYears), confidence: ageConfidence, source: "chat_health_estimate" } : undefined,
+        weightKg: weightKg !== null ? { value: String(weightKg), confidence: weightConfidence, source: "chat_health_estimate" } : undefined,
+        notes: {
+          breed: !breed ? "Breed could not be confidently detected from this session." : "",
+          age: ageYears === null ? "Age could not be confidently detected from this session." : "",
+          weight: weightKg === null ? "Weight could not be confidently detected from this session." : "",
+        },
+      });
+
+      navigate(intentToPath[intent]);
+      return;
+    }
+
     navigate(intentToPath[intent]);
   };
 
@@ -662,7 +1018,7 @@ export const AiChatPanel = ({ className }: AiChatPanelProps) => {
               </p>
               {recommendation.health_assessment.visible_signs?.length > 0 && (
                 <p className="mb-0.5 text-violet-800">
-                  Visible signs: {recommendation.health_assessment.visible_signs.join(", ")}
+                  Visible signs: {renderBookingLinkedText(recommendation.health_assessment.visible_signs.join(", "))}
                 </p>
               )}
               <p className="text-[11px] text-violet-700">{recommendation.health_assessment.disclaimer}</p>
@@ -673,7 +1029,7 @@ export const AiChatPanel = ({ className }: AiChatPanelProps) => {
               <p className="text-xs font-semibold text-rose-700">Watch for</p>
               <ul className="list-disc pl-5 text-xs text-gray-700">
                 {recommendation.watch_for.map((item, index) => (
-                  <li key={`${item}-${index}`}>{item}</li>
+                  <li key={`${item}-${index}`}>{renderBookingLinkedText(item)}</li>
                 ))}
               </ul>
             </div>
@@ -683,7 +1039,7 @@ export const AiChatPanel = ({ className }: AiChatPanelProps) => {
               <p className="text-xs font-semibold text-rose-700">Care recommendations</p>
               <ul className="list-disc pl-5 text-xs text-gray-700">
                 {recommendation.care_recommendations.map((item, index) => (
-                  <li key={`${item}-${index}`}>{item}</li>
+                  <li key={`${item}-${index}`}>{renderBookingLinkedText(item)}</li>
                 ))}
               </ul>
             </div>
@@ -694,7 +1050,7 @@ export const AiChatPanel = ({ className }: AiChatPanelProps) => {
                 key={`${action.intent}-${index}`}
                 type="button"
                 className="rounded-full border border-rose-200 px-3 py-1 text-xs font-medium text-rose-700 hover:bg-rose-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-300"
-                onClick={() => onActionClick(action.intent)}
+                onClick={() => onActionClick(action.intent, recommendation)}
                 aria-label={action.label || intentToLabel[action.intent]}
               >
                 {action.label || intentToLabel[action.intent]}
@@ -782,7 +1138,8 @@ export const AiChatPanel = ({ className }: AiChatPanelProps) => {
                   <img
                     src={row.image}
                     alt={row.content ? `Uploaded image: ${row.content}` : "Uploaded image"}
-                    className="w-full object-cover"
+                    className="w-full object-cover cursor-zoom-in"
+                    onClick={() => setExpandedImage(row.image || null)}
                   />
                 </div>
                 <div className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-gray-200 text-gray-600">
@@ -799,7 +1156,8 @@ export const AiChatPanel = ({ className }: AiChatPanelProps) => {
                   <img
                     src={row.image}
                     alt={row.content ? `Assistant image: ${row.content}` : "Assistant image"}
-                    className="w-full object-cover"
+                    className="w-full object-cover cursor-zoom-in"
+                    onClick={() => setExpandedImage(row.image || null)}
                   />
                 </div>
               </>
@@ -833,10 +1191,35 @@ export const AiChatPanel = ({ className }: AiChatPanelProps) => {
                               ? rawHref.replace("https://localhost", "http://localhost")
                               : rawHref;
 
+                            const isInternal = safeHref && safeHref.startsWith("/");
+
+                            if (isInternal) {
+                              return (
+                                <a
+                                  {...props}
+                                  href={safeHref}
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    try {
+                                      navigate(safeHref);
+                                    } catch {
+                                      // fallback to default navigation
+                                      window.location.href = safeHref;
+                                    }
+                                  }}
+                                  className="font-semibold underline underline-offset-2 text-rose-700 hover:text-rose-800 inline-flex items-center gap-1"
+                                >
+                                  <span>{children}</span>
+                                </a>
+                              );
+                            }
+
                             return (
                               <a
                                 {...props}
                                 href={safeHref}
+                                target="_blank"
+                                rel="noopener noreferrer"
                                 className="font-semibold underline underline-offset-2 text-rose-700 hover:text-rose-800 inline-flex items-center gap-1"
                               >
                                 <span>{children}</span>
@@ -850,7 +1233,7 @@ export const AiChatPanel = ({ className }: AiChatPanelProps) => {
                           li: ({ children }) => <li className="mb-1 last:mb-0">{children}</li>,
                         }}
                       >
-                        {row.content}
+                        {linkifyBookingIdsInMarkdown(normalizePipeTableMarkdown(row.content))}
                       </ReactMarkdown>
 
                       {Array.isArray(row.quickReplies) && row.quickReplies.length > 0 && (
@@ -903,8 +1286,59 @@ export const AiChatPanel = ({ className }: AiChatPanelProps) => {
         <div ref={bottomRef} />
       </div>
 
+      {/* Quick commands */}
+      <div className="border-t px-3 pt-2 pb-1">
+        <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+          Quick Actions
+        </p>
+
+        <div className="mb-1">
+          <p className="mb-1 text-[10px] font-medium text-rose-700">Scan Records</p>
+          <div className="flex flex-wrap gap-1.5">
+            {commandPets.length > 0 ? (
+              commandPets.map((pet) => (
+                <button
+                  key={`scan-${pet.id}`}
+                  type="button"
+                  disabled={loading}
+                  onClick={() => onQuickCommand(`Scan service-history records for ${pet.name}.`) }
+                  className="rounded-full border border-rose-200 bg-rose-50 px-2.5 py-1 text-[11px] font-medium text-rose-700 hover:bg-rose-100 disabled:opacity-50"
+                >
+                  For {pet.name}
+                </button>
+              ))
+            ) : (
+              <button
+                type="button"
+                disabled
+                className="rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1 text-[11px] font-medium text-gray-500"
+              >
+                No pets found
+              </button>
+            )}
+          </div>
+        </div>
+
+        <div>
+          <p className="mb-1 text-[10px] font-medium text-gray-700">Bookings</p>
+          <div className="flex flex-wrap gap-1.5">
+            {BOOKING_SHORTCUTS.map((shortcut) => (
+              <button
+                key={shortcut.label}
+                type="button"
+                disabled={loading}
+                onClick={() => onQuickCommand(shortcut.command)}
+                className="rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1 text-[11px] font-medium text-gray-700 hover:bg-gray-100 disabled:opacity-50"
+              >
+                {shortcut.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
       {/* Input */}
-      <div className="flex items-center gap-2 border-t px-3 py-2">
+      <div className="flex items-center gap-2 px-3 py-2">
         <input
           value={message}
           onChange={(e) => setMessage(e.target.value)}
@@ -916,7 +1350,7 @@ export const AiChatPanel = ({ className }: AiChatPanelProps) => {
         <input
           ref={fileInputRef}
           type="file"
-          accept="image/*"
+          accept="image/*,application/pdf,text/plain,application/vnd.openxmlformats-officedocument.wordprocessingml.document,.pdf,.txt,.docx"
           onChange={onImageSelected}
           className="hidden"
         />
@@ -925,8 +1359,8 @@ export const AiChatPanel = ({ className }: AiChatPanelProps) => {
           onClick={onOpenImagePicker}
           disabled={loading}
           className="flex h-9 w-9 items-center justify-center rounded-full border border-rose-200 text-rose-700 transition hover:bg-rose-50 disabled:opacity-40"
-          aria-label="Upload image"
-          title="Upload image for OCR and breed detection"
+          aria-label="Upload image or document"
+          title="Upload image, PDF, TXT, or DOCX for OCR; images also support breed detection"
         >
           <ImagePlus size={16} />
         </button>
@@ -940,6 +1374,18 @@ export const AiChatPanel = ({ className }: AiChatPanelProps) => {
           <Send size={16} />
         </button>
       </div>
+
+      <Dialog open={Boolean(expandedImage)} onOpenChange={(open) => !open && setExpandedImage(null)}>
+        <DialogContent className="max-w-4xl p-2">
+          {expandedImage && (
+            <img
+              src={expandedImage}
+              alt="Expanded upload preview"
+              className="w-full max-h-[80vh] object-contain rounded-md"
+            />
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

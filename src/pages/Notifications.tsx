@@ -23,6 +23,7 @@ import {
   type Notification,
 } from "@/services/notificationsApi";
 import { useToast } from "@/hooks/use-toast";
+import BookingIdText from "@/components/BookingIdText";
 
 const NOTIFICATION_ICONS: Record<string, string> = {
   booking_confirmed: "🎉",
@@ -70,6 +71,13 @@ function resolveNotificationLink(notification: Notification): string | null {
   }
 
   return baseLink;
+}
+
+function shouldShowBookNowCta(notification: Notification): boolean {
+  const target = resolveNotificationLink(notification) || "";
+  if (!target) return false;
+  if (/^\/(veterinary|grooming)(\?|$)/i.test(target)) return true;
+  return /book now/i.test(String(notification.message || ""));
 }
 
 function formatDate(dateStr: string): string {
@@ -415,7 +423,7 @@ const NotificationList = ({
               </div>
 
               <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
-                {notification.message}
+                <BookingIdText text={notification.message} />
               </p>
 
               <div className="flex items-center justify-between mt-2">
@@ -451,6 +459,22 @@ const NotificationList = ({
                   </Button>
                 </div>
               </div>
+
+              {shouldShowBookNowCta(notification) && (
+                <div className="mt-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 rounded-full border-rose-200 bg-rose-50 px-3 text-[11px] font-medium text-rose-700 hover:bg-rose-100"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onClick(notification);
+                    }}
+                  >
+                    Book now
+                  </Button>
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>

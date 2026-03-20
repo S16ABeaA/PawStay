@@ -35,6 +35,7 @@ import { bookingApi } from "@/services/bookingApi";
 import { reviewsApi } from "@/services/reviewsApi";
 import ReviewDialog from "@/components/ReviewDialog";
 import { useToast } from "@/hooks/use-toast";
+import BookingIdText from "@/components/BookingIdText";
 
 interface Booking {
   id: string;
@@ -762,7 +763,7 @@ function BookingDetailDialog({
               {b.special_requirements && (
                 <div className="col-span-2">
                   <p className="text-sm text-muted-foreground">Special Requirements</p>
-                  <p className="text-sm bg-muted/50 p-3 rounded-lg mt-1">{b.special_requirements}</p>
+                  <p className="text-sm bg-muted/50 p-3 rounded-lg mt-1"><BookingIdText text={b.special_requirements} /></p>
                 </div>
               )}
             </div>
