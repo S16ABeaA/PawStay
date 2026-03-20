@@ -29,7 +29,6 @@ const getSuperAdminIds = async (): Promise<string[]> => {
   }
 };
 
-
 /* ─── controller ─── */
 export const supportController = {
   /* ============================================
@@ -270,17 +269,19 @@ export const supportController = {
           : "A user";
 
         await Promise.all(
-          superAdminIds.map((adminId) =>
-            notificationModel.create({
-              user_id: adminId,
-              type: "new_ticket",
-              title: "New Support Ticket",
-              message: `${userName} has submitted a new support ticket: "${subject}"`,
-              link: `/superadmin/support?ticket=${ticket.id}`,
-              reference_id: ticket.id,
-              reference_type: "support_ticket",
-            })
-          )
+          superAdminIds
+            .filter((adminId) => adminId !== user.id)
+            .map((adminId) =>
+              notificationModel.create({
+                user_id: adminId,
+                type: "new_ticket",
+                title: "New Support Ticket",
+                message: `${userName} has submitted a new support ticket: "${subject}"`,
+                link: `/superadmin/support?ticket=${ticket.id}`,
+                reference_id: ticket.id,
+                reference_type: "support_ticket",
+              })
+            )
         );
       } catch (notifErr) {
         console.warn("Failed to notify admins about new ticket:", notifErr);
@@ -356,9 +357,8 @@ export const supportController = {
           .eq("id", id);
       }
 
-      // Notify only relevant parties about the new message:
-      // - staff reply → notify the ticket owner
-      // - customer reply → notify all super admins
+      // Notify ticket participants about new ticket messages.
+      // If sender is staff: notify ticket owner. If sender is user: notify super_admin staff.
       try {
         const senderProfile = await supabaseAdmin
           .from("profiles")
@@ -373,7 +373,7 @@ export const supportController = {
         const preview = msg.message.length > 60 ? `${msg.message.substring(0, 60)}...` : msg.message;
 
         if (isStaff) {
-          // Staff replied — notify the ticket owner only
+          // Staff replied: notify the ticket owner (if they are not the sender)
           if (ticket.user_id !== user.id) {
             await notificationModel.create({
               user_id: ticket.user_id,
@@ -386,20 +386,22 @@ export const supportController = {
             });
           }
         } else {
-          // Customer replied — notify all super admins
+          // User replied: notify all super_admin staff
           const superAdminIds = await getSuperAdminIds();
           await Promise.all(
-            superAdminIds.map((adminId) =>
-              notificationModel.create({
-                user_id: adminId,
-                type: "ticket_reply",
-                title: "New Ticket Message",
-                message: `${senderName} sent a new message: "${preview}"`,
-                link: `/superadmin/support?ticket=${ticket.id}`,
-                reference_id: ticket.id,
-                reference_type: "support_ticket",
-              })
-            )
+            superAdminIds
+              .filter((adminId) => adminId !== user.id)
+              .map((adminId) =>
+                notificationModel.create({
+                  user_id: adminId,
+                  type: "ticket_reply",
+                  title: "New Ticket Message",
+                  message: `${senderName} sent a new message: "${preview}"`,
+                  link: `/superadmin/support?ticket=${ticket.id}`,
+                  reference_id: ticket.id,
+                  reference_type: "support_ticket",
+                })
+              )
           );
         }
       } catch (notifErr) {
