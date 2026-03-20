@@ -2,7 +2,10 @@ import { Request, Response } from "express";
 import { supabaseAdmin } from "../config/supabaseAdmin";
 import { supabaseClient } from "../config/supabaseClient";
 import { userModel } from "../models/userModel";
-import { clearAuthCookies } from "../middleware/authMiddleware";
+import { clearAuthCookies, setAuthCookies } from "../middleware/authMiddleware";
+
+const isProd = process.env.NODE_ENV === "production";
+const sameSitePolicy: "lax" | "none" = isProd ? "none" : "lax";
 
 export const authController = {
   signUp: async (req: Request, res: Response) => {
@@ -153,22 +156,8 @@ export const authController = {
 
       const userId = signInData.user.id;
 
-      // Set Supabase auth cookies
-      res.cookie("sb-access-token", signInData.session.access_token, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "lax",
-        maxAge: 7 * 24 * 60 * 60 * 1000,
-        path: "/",
-      });
-
-      res.cookie("sb-refresh-token", signInData.session.refresh_token, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "lax",
-        maxAge: 7 * 24 * 60 * 60 * 1000,
-        path: "/",
-      });
+      // Set Supabase auth cookies with consistent policy
+      setAuthCookies(res, signInData.session);
 
       // Return profile info
       const userProfile = await userModel.getUserById(userId);
@@ -237,21 +226,7 @@ export const authController = {
       }
 
       // Set cookies
-      res.cookie("sb-access-token", data.session.access_token, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "lax",
-        maxAge: 7 * 24 * 60 * 60 * 1000,
-        path: "/",
-      });
-
-      res.cookie("sb-refresh-token", data.session.refresh_token, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "lax",
-        maxAge: 7 * 24 * 60 * 60 * 1000,
-        path: "/",
-      });
+      setAuthCookies(res, data.session);
       
       // Get user info for welcome message
       const user = data.session.user;
@@ -266,8 +241,8 @@ export const authController = {
           avatar: data.session.user.user_metadata?.avatar_url,
         }), {
           httpOnly: false,
-          secure: process.env.NODE_ENV === "production",
-          sameSite: "lax",
+          secure: isProd,
+          sameSite: sameSitePolicy,
           maxAge: 7 * 24 * 60 * 60 * 1000,
           path: "/",
         });
@@ -334,6 +309,8 @@ export const authController = {
           address: userProfile.address || "",
           avatar_url: userProfile.avatar_url || "",
           email: userProfile.email || user.email, // Get email from DB or token
+          email_confirmed_at: user.email_confirmed_at || null,
+          is_verified: Boolean(user.email_confirmed_at),
         }
       });
     }catch(err: any){

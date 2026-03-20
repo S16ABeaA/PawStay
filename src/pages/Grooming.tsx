@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Slider } from "@/components/ui/slider";
 import { Badge } from "@/components/ui/badge";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { fetchProperties } from "@/services/propertyApi";
 import { fetchAmenities } from "@/services/amenitiesApi";
 
@@ -19,6 +19,7 @@ const timeSlots = [
 
 const Grooming = () => {
   const resultsRef = useRef<HTMLDivElement>(null);
+  const routerLocation = useLocation();
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const PAGE_SIZE = 9;
   const [displayCount, setDisplayCount] = useState(PAGE_SIZE);
@@ -85,16 +86,17 @@ const Grooming = () => {
     }, 120);
   };
 
-  const loadGrooming = async () => {
+  const loadGrooming = async (amenitiesOverride?: string[]) => {
     setLoading(true);
     try {
+      const effectiveAmenities = amenitiesOverride ?? selectedAmenities;
       const data = await fetchProperties({
         propertyType: "grooming",
         serviceCategory: "Grooming",
         location: location.trim() || undefined,
         minPrice: priceRange[0] > 0 ? priceRange[0] : undefined,
         maxPrice: priceRange[1],
-        amenities: selectedAmenities.length > 0 ? selectedAmenities : undefined,
+        amenities: effectiveAmenities.length > 0 ? effectiveAmenities : undefined,
         rating: minRating ?? undefined,
         petType: petTypes.length > 0 ? petTypes.map(p => p.toLowerCase()) : undefined,
         dogSize: petTypes.includes("Dog") && dogSizes.length > 0 ? dogSizes : undefined,
@@ -111,10 +113,19 @@ const Grooming = () => {
     }
   };
 
-  // Load initial data
+  // Load initial data, applying `amenities` query param if present
   useEffect(() => {
+    const params = new URLSearchParams(routerLocation.search);
+    const amenitiesParam = params.get("amenities");
+    if (amenitiesParam) {
+      const list = Array.from(new Set(amenitiesParam.split(",").map(a => a.trim()).filter(Boolean)));
+      setSelectedAmenities(list);
+      loadGrooming(list);
+      return;
+    }
+
     loadGrooming();
-  }, []);
+  }, [routerLocation.search]);
 
   // Load amenities dynamically
   useEffect(() => {
@@ -122,6 +133,21 @@ const Grooming = () => {
       .then((data) => setAmenitiesList(data || []))
       .catch((err) => console.error("Failed to load amenities:", err));
   }, []);
+
+  useEffect(() => {
+    if (routerLocation.hash !== "#salons") return;
+
+    const timer = window.setTimeout(() => {
+      const el = resultsRef.current ?? document.getElementById("salons");
+      if (!el) return;
+      const header = document.querySelector("header");
+      const offset = (header?.clientHeight ?? 0) + 8;
+      const y = el.getBoundingClientRect().top + window.scrollY - offset;
+      window.scrollTo({ top: y, behavior: "smooth" });
+    }, 120);
+
+    return () => window.clearTimeout(timer);
+  }, [routerLocation.hash]);
 
   return (
     <div className="min-h-screen bg-background">
@@ -429,7 +455,7 @@ const Grooming = () => {
             </aside>
 
             {/* Main Content */}
-            <div className="flex-1" ref={resultsRef}>
+            <div id="salons" className="flex-1" ref={resultsRef}>
               {/* Controls */}
               <div className="flex items-center justify-between mb-6">
                 <Button 

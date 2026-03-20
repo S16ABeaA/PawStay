@@ -1,5 +1,6 @@
 import { Router } from "express";
-import { authMiddleware, requireSuperAdmin } from "../middleware/authMiddleware";
+import { authMiddleware } from "../middleware/authMiddleware";
+import { requireSuperAdmin } from "../middleware/requireSuperAdmin";
 import {
   createBooking,
   listBookings,
@@ -34,18 +35,6 @@ router.get("/availability/:propertyId", checkAvailability);
 // All other booking routes require authentication
 router.use(authMiddleware);
 
-// Revenue endpoints (super admin only — guarded by requireSuperAdmin middleware)
-router.get("/revenue/total", requireSuperAdmin, getTotalRevenue);
-router.get("/revenue/by-service-type", requireSuperAdmin, getRevenueByServiceType);
-router.get("/revenue/by-property", requireSuperAdmin, getRevenueByProperty);
-router.get("/revenue/by-location", requireSuperAdmin, getRevenueByLocation);
-router.get("/revenue/by-time-period", requireSuperAdmin, getRevenueByTimePeriod);
-router.get("/revenue/period-comparison", requireSuperAdmin, getRevenuePeriodComparison);
-router.get("/revenue/monthly-series", requireSuperAdmin, getRevenueMonthlySeries);
-
-// Accounts Receivable per property (super admin only)
-router.get("/receivables", requireSuperAdmin, getReceivables);
-
 // Admin calendar — returns bookings across all proprietor's properties
 router.get("/admin/calendar", adminCalendar);
 
@@ -60,29 +49,34 @@ router.patch("/admin/:id/payment", adminUpdatePaymentStatus);
 
 // Admin soft-delete a booking
 router.delete("/admin/:id", adminDeleteBooking);
-
 // Proprietor: today's check-ins for their properties
 router.get('/mine/today', getTodayCheckInsForOwner);
-
 // Proprietor: recent bookings for their properties
 router.get('/mine/recent', getRecentBookingsForOwner);
-
 // Proprietor: list bookings (paginated)
 router.get('/mine/list', listBookingsForOwner);
-
 // Compatibility: accept /mine as alias for /mine/list
 router.get('/mine', listBookingsForOwner);
-
 // Proprietor: get single booking detail (with images)
 router.get('/mine/:id', getBookingForOwner);
-
 // Proprietor: update booking status
 router.post('/:id/status', updateBookingStatusForOwner);
 
-// Generic routes - MUST be last to avoid matching specific routes
+// Super admin revenue analytics
+router.get('/revenue/total', requireSuperAdmin, getTotalRevenue);
+router.get('/revenue/by-service-type', requireSuperAdmin, getRevenueByServiceType);
+router.get('/revenue/by-property', requireSuperAdmin, getRevenueByProperty);
+router.get('/revenue/by-location', requireSuperAdmin, getRevenueByLocation);
+router.get('/revenue/by-time-period', requireSuperAdmin, getRevenueByTimePeriod);
+router.get('/revenue/period-comparison', requireSuperAdmin, getRevenuePeriodComparison);
+router.get('/revenue/monthly-series', requireSuperAdmin, getRevenueMonthlySeries);
+
+// Super admin receivables
+router.get('/receivables', requireSuperAdmin, getReceivables);
+
 router.get("/", listBookings);
-router.get("/:id/payment-status", checkPaymentStatus);
 router.get("/:id", getBooking);
+router.get("/:id/payment-status", checkPaymentStatus);
 router.post("/", createBooking);
 
 export default router;

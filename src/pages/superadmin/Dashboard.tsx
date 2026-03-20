@@ -1,4 +1,5 @@
 import SuperAdminLayout from "@/components/superadmin/SuperAdminLayout";
+import { SuperAdminTicketNotifications } from "@/components/superadmin/SuperAdminTicketNotifications";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -215,6 +216,9 @@ const SuperAdminDashboard = () => {
           )}
         </div>
       )}
+
+      {/* ── Ticket Notifications ── */}
+      <SuperAdminTicketNotifications />
 
       {/* ── Stats Grid ── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">

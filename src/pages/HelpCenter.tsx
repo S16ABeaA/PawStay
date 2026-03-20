@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { Button } from "@/components/ui/button";
@@ -43,8 +43,6 @@ import {
 } from "lucide-react";
 import { supportApi, type SupportTicket, type TicketDetail } from "@/services/supportApi";
 import { useToast } from "@/hooks/use-toast";
-import RandomFullPagePetLoader from "@/components/ui/RandomFullPagePetLoader";
-import { useBlockingPageLoad } from "@/hooks/useBlockingPageLoad";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 
 /* ─── helpers ─── */
@@ -140,6 +138,7 @@ const quickTopics = [
 
 const HelpCenter = () => {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { toast } = useToast();
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
@@ -150,6 +149,7 @@ const HelpCenter = () => {
 
   // State
   const [tickets, setTickets] = useState<SupportTicket[]>([]);
+  const [ticketUnreadMap, setTicketUnreadMap] = useState<Record<string, number>>({});
   const [selectedTicket, setSelectedTicket] = useState<TicketDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -165,14 +165,17 @@ const HelpCenter = () => {
 
   // View mode
   const [view, setView] = useState<"list" | "chat">("list");
-  const [isPageBlocking, notifyLoaderFinished] = useBlockingPageLoad(loading && tickets.length === 0, 800);
 
   /* ─── load tickets ─── */
   const loadTickets = async () => {
     try {
       setLoading(true);
-      const data = await supportApi.getTickets();
+      const [data, unread] = await Promise.all([
+        supportApi.getTickets(),
+        supportApi.getUnreadIndicators(),
+      ]);
       setTickets(data);
+      setTicketUnreadMap(unread.indicators || {});
     } catch {
       // silent
     } finally {
@@ -185,17 +188,18 @@ const HelpCenter = () => {
     else setLoading(false);
   }, []);
 
-  if (isPageBlocking) {
-    return <RandomFullPagePetLoader dataLoaded={!loading} onComplete={notifyLoaderFinished} />;
-  }
-
   /* ─── select ticket ─── */
   const openTicket = async (id: string) => {
     try {
       setDetailLoading(true);
       const detail = await supportApi.getTicket(id);
-      setSelectedTicket(detail);
+      setSelectedTicket({
+        ...detail,
+        messages: Array.isArray(detail.messages) ? detail.messages : [],
+      });
       setView("chat");
+      setTicketUnreadMap((prev) => ({ ...prev, [id]: 0 }));
+      setSearchParams({ ticket: id });
     } catch {
       toast({
         title: "Error",
@@ -211,6 +215,22 @@ const HelpCenter = () => {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [selectedTicket?.messages]);
+
+  useEffect(() => {
+    const ticketId = searchParams.get("ticket");
+    if (!ticketId || tickets.length === 0 || selectedTicket) return;
+
+    const exists = tickets.some((t) => t.id === ticketId);
+    if (exists) {
+      openTicket(ticketId);
+    }
+  }, [tickets, searchParams, selectedTicket]);
+
+  useEffect(() => {
+    const openNew = searchParams.get("new") === "1";
+    if (!openNew || !isLoggedIn) return;
+    setShowNewTicket(true);
+  }, [searchParams, isLoggedIn]);
 
   /* ─── create ticket ─── */
   const handleCreateTicket = async () => {
@@ -253,7 +273,12 @@ const HelpCenter = () => {
         replyText.trim()
       );
       setSelectedTicket((prev) =>
-        prev ? { ...prev, messages: [...prev.messages, msg] } : prev
+        prev
+          ? {
+              ...prev,
+              messages: [...(Array.isArray(prev.messages) ? prev.messages : []), msg],
+            }
+          : prev
       );
       setReplyText("");
     } catch {
@@ -500,6 +525,12 @@ const HelpCenter = () => {
                                 {ticket.message_count}{" "}
                                 {ticket.message_count === 1 ? "message" : "messages"}
                               </span>
+                              {ticketUnreadMap[ticket.id] > 0 && (
+                                <span className="inline-flex items-center gap-1 text-primary font-medium">
+                                  <span className="h-2 w-2 rounded-full bg-primary animate-pulse" />
+                                  New
+                                </span>
+                              )}
                             </div>
                           </div>
 
@@ -535,6 +566,7 @@ const HelpCenter = () => {
                     onClick={() => {
                       setView("list");
                       setSelectedTicket(null);
+                      setSearchParams({});
                       loadTickets();
                     }}
                   >
@@ -615,7 +647,7 @@ const HelpCenter = () => {
                       </div>
                     )}
 
-                    {selectedTicket?.messages.map((msg, idx) => {
+                    {(selectedTicket?.messages ?? []).map((msg, idx) => {
                       const isMe = !msg.is_staff;
                       return (
                         <div

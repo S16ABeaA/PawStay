@@ -1,5 +1,7 @@
 import { Request, Response } from 'express';
 import { createClient } from '@supabase/supabase-js';
+import { notificationModel } from '../models/notificationModel';
+import { getSuperAdminRecipients } from '../services/notificationRecipients';
 
 interface PropertySubmissionData {
   propertyName: string;
@@ -15,7 +17,6 @@ interface PropertySubmissionData {
   email: string;
   password: string;
   description: string;
-  isPinAccurate: boolean;
   services: string[];
   petTypesAccepted: string[];
   dogSizes: string[];
@@ -461,6 +462,24 @@ export const submitProperty = async (req: Request, res: Response) => {
       propertyId,
       message: 'Property listing submitted successfully',
     });
+
+    // Notify super admins that a new property application is pending review.
+    try {
+      const superAdmins = await getSuperAdminRecipients();
+      for (const admin of superAdmins) {
+        await notificationModel.create({
+          user_id: admin.id,
+          type: 'system',
+          title: 'New Property Application',
+          message: `${d.propertyName} was submitted and is awaiting review.`,
+          link: '/superadmin/properties',
+          reference_id: propertyId,
+          reference_type: 'property',
+        });
+      }
+    } catch (notifErr) {
+      console.error('Failed to create new property application notifications:', notifErr);
+    }
   } catch (error) {
     const errorPayload = error instanceof Error
       ? { message: error.message, stack: error.stack }

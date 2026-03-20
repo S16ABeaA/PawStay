@@ -2,6 +2,9 @@ import { Request, Response, NextFunction } from "express";
 import { supabaseClient } from "../config/supabaseClient";
 import { userModel } from "../models/userModel";
 
+const isProd = process.env.NODE_ENV === "production";
+const sameSitePolicy: "lax" | "none" = isProd ? "none" : "lax";
+
 /**
  * Middleware to protect routes using Supabase Auth.
  * Checks for Supabase auth tokens and attaches user info to req.user.
@@ -65,6 +68,7 @@ export const authMiddleware = async (req: Request, res: Response, next: NextFunc
       (req as any).user = {
         ...userProfile,
         email: refreshedUser.email,
+        email_confirmed_at: refreshedUser.email_confirmed_at,
       };
 
       return next();
@@ -81,6 +85,7 @@ export const authMiddleware = async (req: Request, res: Response, next: NextFunc
     (req as any).user = {
       ...userProfile,
       email: user.email,
+      email_confirmed_at: user.email_confirmed_at,
     };
 
     next(); // continue to the protected route
@@ -99,16 +104,16 @@ export const setAuthCookies = (res: Response, session: any) => {
   
   res.cookie("sb-access-token", session.access_token, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
+    secure: isProd,
+    sameSite: sameSitePolicy,
     maxAge: SESSION_DURATION_MS,
     path: "/",
   });
 
   res.cookie("sb-refresh-token", session.refresh_token, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
+    secure: isProd,
+    sameSite: sameSitePolicy,
     maxAge: SESSION_DURATION_MS,
     path: "/",
   });

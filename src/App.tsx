@@ -16,7 +16,7 @@ import About from "./pages/About";
 import SignIn from "./pages/SignIn";
 import CheckEmail from "./pages/CheckEmail";
 import ForgotPassword from "./pages/ForgotPassword";
-import ListProperty from "./pages/ListProperty";
+import ListProperty from "@/pages/user/ListProperty";
 import Favorites from "./pages/Favorites";
 import Booking from "./pages/Booking";
 import SearchResults from "./pages/SearchResults";
@@ -43,6 +43,7 @@ import AdminServices from "./pages/admin/Services";
 import AdminReviews from "./pages/admin/Reviews";
 import AdminSettings from "./pages/admin/Settings";
 import AdminCalendar from "./pages/admin/Calendar";
+import AdminSettlements from "./pages/admin/Settlements";
 
 // SuperAdmin pages
 import SuperAdminDashboard from "./pages/superadmin/Dashboard";
@@ -133,6 +134,7 @@ const App = () => (
             <Route path="reviews" element={<AdminReviews />} />
             <Route path="settings" element={<AdminSettings />} />
             <Route path="calendar" element={<AdminCalendar />} />
+            <Route path="settlements" element={<AdminSettlements />} />
           </Route>
           
           {/* SuperAdmin routes */}

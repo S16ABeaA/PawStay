@@ -88,6 +88,26 @@ interface Pet {
    }
  };
 
+const parseDocumentUrls = (raw?: string | null): string[] => {
+  if (!raw) return [];
+  const value = String(raw).trim();
+  if (!value) return [];
+  if (value.startsWith("[")) {
+    try {
+      const parsed = JSON.parse(value);
+      if (Array.isArray(parsed)) {
+        return parsed.filter((u) => typeof u === "string" && u.length > 0);
+      }
+    } catch {
+      // Fall back to treating as a single URL
+    }
+  }
+  return [value];
+};
+
+const isImageUrl = (url: string): boolean =>
+  /^data:image\//i.test(url) || /\.(png|jpe?g|gif|webp|bmp|svg)(\?|$)/i.test(url);
+
  const MyPets = () => {
    const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
    const [editingPet, setEditingPet] = useState<Pet | null>(null);
@@ -843,43 +863,75 @@ interface Pet {
                          )}
 
                          {/* Pet Documents */}
-                         {(bookingDetail.vaccine_record_url || bookingDetail.med_cert_url) && (
+                         {(parseDocumentUrls(bookingDetail.vaccine_record_url).length > 0 || parseDocumentUrls(bookingDetail.med_cert_url).length > 0) && (
                            <div className="border-t pt-4">
                              <h4 className="font-semibold text-sm mb-3 flex items-center gap-2">
                                <FileText className="h-4 w-4 text-primary" />
                                Pet Documents
                              </h4>
                              <div className="flex flex-wrap gap-4">
-                               {bookingDetail.vaccine_record_url && (
+                               {parseDocumentUrls(bookingDetail.vaccine_record_url).length > 0 && (
                                  <div>
                                    <p className="text-sm text-muted-foreground mb-2">Vaccine Record</p>
-                                   <div
-                                     className="cursor-pointer inline-block border border-border rounded-lg overflow-hidden hover:ring-2 hover:ring-primary/50 transition-all"
-                                     onClick={() => setImagePreview(bookingDetail.vaccine_record_url)}
-                                   >
-                                     <img
-                                       src={bookingDetail.vaccine_record_url}
-                                       alt="Vaccine record"
-                                       className="w-40 h-40 object-cover"
-                                     />
+                                   <div className="flex flex-wrap gap-3">
+                                     {parseDocumentUrls(bookingDetail.vaccine_record_url).map((url, idx) => (
+                                       <div key={`vaccine-${idx}`}>
+                                         {isImageUrl(url) ? (
+                                           <div
+                                             className="cursor-pointer inline-block border border-border rounded-lg overflow-hidden hover:ring-2 hover:ring-primary/50 transition-all"
+                                             onClick={() => setImagePreview(url)}
+                                           >
+                                             <img
+                                               src={url}
+                                               alt={`Vaccine record ${idx + 1}`}
+                                               className="w-40 h-40 object-cover"
+                                             />
+                                           </div>
+                                         ) : (
+                                           <button
+                                             type="button"
+                                             className="w-40 h-40 border border-border rounded-lg bg-muted/30 text-xs px-3 py-2 text-muted-foreground hover:bg-muted/50"
+                                             onClick={() => window.open(url, "_blank", "noopener,noreferrer")}
+                                           >
+                                             Open vaccine document {idx + 1}
+                                           </button>
+                                         )}
+                                       </div>
+                                     ))}
                                    </div>
-                                   <p className="text-xs text-muted-foreground mt-1">Click to enlarge</p>
+                                   <p className="text-xs text-muted-foreground mt-1">Click an image to enlarge or open files in a new tab.</p>
                                  </div>
                                )}
-                               {bookingDetail.med_cert_url && (
+                               {parseDocumentUrls(bookingDetail.med_cert_url).length > 0 && (
                                  <div>
                                    <p className="text-sm text-muted-foreground mb-2">Medical Certificate</p>
-                                   <div
-                                     className="cursor-pointer inline-block border border-border rounded-lg overflow-hidden hover:ring-2 hover:ring-primary/50 transition-all"
-                                     onClick={() => setImagePreview(bookingDetail.med_cert_url)}
-                                   >
-                                     <img
-                                       src={bookingDetail.med_cert_url}
-                                       alt="Medical certificate"
-                                       className="w-40 h-40 object-cover"
-                                     />
+                                   <div className="flex flex-wrap gap-3">
+                                     {parseDocumentUrls(bookingDetail.med_cert_url).map((url, idx) => (
+                                       <div key={`med-${idx}`}>
+                                         {isImageUrl(url) ? (
+                                           <div
+                                             className="cursor-pointer inline-block border border-border rounded-lg overflow-hidden hover:ring-2 hover:ring-primary/50 transition-all"
+                                             onClick={() => setImagePreview(url)}
+                                           >
+                                             <img
+                                               src={url}
+                                               alt={`Medical certificate ${idx + 1}`}
+                                               className="w-40 h-40 object-cover"
+                                             />
+                                           </div>
+                                         ) : (
+                                           <button
+                                             type="button"
+                                             className="w-40 h-40 border border-border rounded-lg bg-muted/30 text-xs px-3 py-2 text-muted-foreground hover:bg-muted/50"
+                                             onClick={() => window.open(url, "_blank", "noopener,noreferrer")}
+                                           >
+                                             Open medical document {idx + 1}
+                                           </button>
+                                         )}
+                                       </div>
+                                     ))}
                                    </div>
-                                   <p className="text-xs text-muted-foreground mt-1">Click to enlarge</p>
+                                   <p className="text-xs text-muted-foreground mt-1">Click an image to enlarge or open files in a new tab.</p>
                                  </div>
                                )}
                              </div>

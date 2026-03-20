@@ -141,6 +141,7 @@ const Profile = () => {
           firstName: profile.user.first_name,
           lastName: profile.user.last_name,
           email: profile.user.email,
+          isVerified: Boolean(profile.user.is_verified ?? profile.user.email_confirmed_at),
           phone: profile.user.phone || "",
           address: profile.user.address || "",
           avatar: profile.user.avatar_url || "",
@@ -413,6 +414,12 @@ const Profile = () => {
                     Admin
                   </Badge>
                 )}
+                <Badge
+                  variant="outline"
+                  className={user.isVerified ? "border-emerald-300 text-emerald-700" : "border-amber-300 text-amber-700"}
+                >
+                  {user.isVerified ? "Verified" : "Unverified"}
+                </Badge>
               </div>
               <p className="text-muted-foreground">{user.email}</p>
             </div>

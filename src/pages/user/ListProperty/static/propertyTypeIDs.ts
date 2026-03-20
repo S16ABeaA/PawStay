@@ -1,0 +1,1 @@
+export type PropertyTypeId = "hotel" | "grooming" | "veterinary";

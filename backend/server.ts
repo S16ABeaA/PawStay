@@ -22,6 +22,12 @@ import analyticsRoutes from './routes/analyticsRoute';
 import dashboardRoute from './routes/dashboardRoute';
 import settlementRoutes from './routes/settlementRoute';
 import aiRoutes from './routes/aiRoute';
+import { dispatchSettlementRemindersJob } from './controllers/settlementController';
+import {
+  dispatchBookingLifecycleNotificationsJob,
+  dispatchWeeklyReportNotificationsJob,
+} from './services/notificationJobs';
+import { ensureStorageBucket } from './utils/storageMedia';
  
 dotenv.config({ path: '../.env' });
 dotenv.config();
@@ -115,4 +121,45 @@ app.get('/', (_req, res) => {
 
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
+
+  Promise.all([
+    ensureStorageBucket('property-images', false),
+    ensureStorageBucket('legal-documents', false),
+    ensureStorageBucket('pet-photos', false),
+    ensureStorageBucket('booking-documents', false),
+    ensureStorageBucket('booking-payments', false),
+  ]).catch((err) => {
+    console.warn('[storage] bucket bootstrap failed:', err?.message || err);
+  });
+
+  // Settlement reminders are time-based; run once at startup and then every 6 hours.
+  dispatchSettlementRemindersJob()
+    .then((result) => console.log('[settlement-reminders] startup run:', result))
+    .catch((err) => console.warn('[settlement-reminders] startup run failed:', err?.message || err));
+
+  setInterval(() => {
+    dispatchSettlementRemindersJob()
+      .then((result) => console.log('[settlement-reminders] interval run:', result))
+      .catch((err) => console.warn('[settlement-reminders] interval run failed:', err?.message || err));
+  }, 6 * 60 * 60 * 1000);
+
+  dispatchBookingLifecycleNotificationsJob()
+    .then((result) => console.log('[booking-notifications] startup run:', result))
+    .catch((err) => console.warn('[booking-notifications] startup run failed:', err?.message || err));
+
+  setInterval(() => {
+    dispatchBookingLifecycleNotificationsJob()
+      .then((result) => console.log('[booking-notifications] interval run:', result))
+      .catch((err) => console.warn('[booking-notifications] interval run failed:', err?.message || err));
+  }, 6 * 60 * 60 * 1000);
+
+  dispatchWeeklyReportNotificationsJob()
+    .then((result) => console.log('[weekly-report-notifications] startup run:', result))
+    .catch((err) => console.warn('[weekly-report-notifications] startup run failed:', err?.message || err));
+
+  setInterval(() => {
+    dispatchWeeklyReportNotificationsJob()
+      .then((result) => console.log('[weekly-report-notifications] interval run:', result))
+      .catch((err) => console.warn('[weekly-report-notifications] interval run failed:', err?.message || err));
+  }, 24 * 60 * 60 * 1000);
 });

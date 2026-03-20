@@ -1,35 +1,23 @@
 import { Request, Response } from "express";
 import { supabaseAdmin } from "../config/supabaseAdmin";
+import { notificationModel } from "../models/notificationModel";
+import {
+  batchSignStorageRefs,
+  getSignedStorageUrl,
+  parseStorageRef,
+} from "../utils/storageMedia";
 
-const BUCKET = "property-images";
+const PROPERTY_IMAGE_BUCKET = "property-images";
+const PROPERTY_LEGAL_BUCKET = "legal-documents";
 
-/** Extract the storage object path from a full public URL, or return bare path as-is. */
-function urlToPath(urlOrPath: string | null | undefined): string | null {
-  if (!urlOrPath) return null;
-  const marker = `/object/public/${BUCKET}/`;
-  const idx = urlOrPath.indexOf(marker);
-  if (idx !== -1) return decodeURIComponent(urlOrPath.slice(idx + marker.length));
-  if (!urlOrPath.startsWith("http")) return urlOrPath;
-  return null;
-}
-
-/** Batch-sign an array of storage paths. Returns a map of path → signedUrl. */
-async function batchSignUrls(paths: string[], expiresIn = 3600): Promise<Record<string, string>> {
-  const unique = [...new Set(paths.filter(Boolean))];
-  if (!unique.length) return {};
-  const { data: signed } = await supabaseAdmin.storage.from(BUCKET).createSignedUrls(unique, expiresIn);
-  const map: Record<string, string> = {};
-  (signed ?? []).forEach((item: any) => { if (item.signedUrl) map[item.path] = item.signedUrl; });
-  return map;
-}
-
-/** Returns a getter that resolves raw URLs/paths to their signed counterpart. */
-function makeSignedUrlGetter(signedMap: Record<string, string>) {
-  return (raw: string | null | undefined): string | null => {
-    if (!raw) return null;
-    const path = urlToPath(raw);
-    return path ? (signedMap[path] ?? null) : null;
-  };
+function toStringArray(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value.map((v) => String(v)).filter(Boolean);
+  }
+  if (typeof value === "string" && value.trim()) {
+    return [value];
+  }
+  return [];
 }
 
 /**
@@ -126,11 +114,10 @@ export const adminPropertyController = {
       }
 
       // Batch-sign cover images (one API call for all properties on this page)
-      const rawCoverPaths = (properties ?? [])
-        .map((p: any) => urlToPath(p.cover_image ?? p.images?.[0]))
-        .filter((p): p is string => !!p);
-      const coverSignedMap = await batchSignUrls(rawCoverPaths);
-      const getSignedUrl = makeSignedUrlGetter(coverSignedMap);
+      const coverRefs = (properties ?? [])
+        .map((p: any) => parseStorageRef(p.cover_image ?? p.images?.[0], PROPERTY_IMAGE_BUCKET))
+        .filter((ref): ref is { bucket: string; path: string } => !!ref);
+      const coverSignedMap = await batchSignStorageRefs(coverRefs);
 
       const formatted = (properties ?? []).map((p: any) => ({
         id: p.id,
@@ -143,7 +130,7 @@ export const adminPropertyController = {
         property_type: p.property_type,
         status: p.status,
         capacity: p.capacity,
-        cover_image: getSignedUrl(p.cover_image ?? p.images?.[0]),
+        cover_image: getSignedStorageUrl(p.cover_image ?? p.images?.[0], coverSignedMap, PROPERTY_IMAGE_BUCKET),
         rating: p.rating,
         review_count: p.review_count,
         rejection_reason: p.rejection_reason,
@@ -296,20 +283,55 @@ export const adminPropertyController = {
         { total: 0, revenue: 0 }
       );
 
-      // Batch-sign all images for the detail view
-      const allImageRaws = [
+      // Batch-sign all images and legal uploads for the detail view
+      const lguPermits = toStringArray((legal as any)?.lgu_permits);
+      const baiDocument = (legal as any)?.bai_document ? String((legal as any).bai_document) : null;
+      const contractDocument = (legal as any)?.contract_document ? String((legal as any).contract_document) : null;
+
+      const imageRaws = [
         property.cover_image ?? property.images?.[0],
         ...(property.images ?? []),
       ].filter(Boolean) as string[];
-      const allPaths = allImageRaws.map(urlToPath).filter((p): p is string => !!p);
-      const detailSignedMap = await batchSignUrls(allPaths);
-      const getDetailSignedUrl = makeSignedUrlGetter(detailSignedMap);
+
+      const legalRaws = [
+        ...lguPermits,
+        baiDocument,
+        contractDocument,
+      ].filter(Boolean) as string[];
+
+      const allRefs = [
+        ...imageRaws
+          .map((raw) => parseStorageRef(raw, PROPERTY_IMAGE_BUCKET))
+          .filter((ref): ref is { bucket: string; path: string } => !!ref),
+        ...legalRaws
+          .map((raw) => parseStorageRef(raw, PROPERTY_LEGAL_BUCKET))
+          .filter((ref): ref is { bucket: string; path: string } => !!ref),
+      ];
+
+      const detailSignedMap = await batchSignStorageRefs(allRefs);
 
       const resolvedProperty = {
         ...property,
-        cover_image: getDetailSignedUrl(property.cover_image ?? property.images?.[0]),
-        images: (property.images ?? []).map((img: string) => getDetailSignedUrl(img)).filter(Boolean),
+        cover_image: getSignedStorageUrl(property.cover_image ?? property.images?.[0], detailSignedMap, PROPERTY_IMAGE_BUCKET),
+        images: (property.images ?? [])
+          .map((img: string) => getSignedStorageUrl(img, detailSignedMap, PROPERTY_IMAGE_BUCKET))
+          .filter(Boolean),
       };
+
+      const resolvedLegal = legal
+        ? {
+            ...legal,
+            lgu_permits: lguPermits
+              .map((p) => getSignedStorageUrl(p, detailSignedMap, PROPERTY_LEGAL_BUCKET))
+              .filter(Boolean),
+            bai_document: baiDocument
+              ? getSignedStorageUrl(baiDocument, detailSignedMap, PROPERTY_LEGAL_BUCKET)
+              : null,
+            contract_document: contractDocument
+              ? getSignedStorageUrl(contractDocument, detailSignedMap, PROPERTY_LEGAL_BUCKET)
+              : null,
+          }
+        : null;
 
       return res.json({
         property: {
@@ -326,7 +348,7 @@ export const adminPropertyController = {
         services: services ?? [],
         pricing: pricing ?? null,
         setup: setup ?? null,
-        legal: legal ?? null,
+        legal: resolvedLegal,
         amenities: (amenityLinks ?? []).map((a: any) => a.amenities),
         recent_bookings: bookings ?? [],
         recent_reviews: reviews ?? [],
@@ -379,12 +401,40 @@ export const adminPropertyController = {
         .update(updatePayload)
         .eq("id", id)
         .eq("is_deleted", false)
-        .select("id, name, status")
+        .select("id, name, status, owner_id")
         .single();
 
       if (error || !data) {
         console.error("updatePropertyStatus error:", error);
         return res.status(404).json({ error: "Property not found or update failed." });
+      }
+
+      // Create notification when property is approved, rejected, or suspended.
+      if (status === "approved" || status === "rejected" || status === "suspended") {
+        try {
+          const isApproved = status === "approved";
+          const isRejected = status === "rejected";
+          await notificationModel.create({
+            user_id: data.owner_id,
+            type: isApproved ? "property_approved" : isRejected ? "property_rejected" : "property_suspended",
+            title: isApproved
+              ? "Property Approved!"
+              : isRejected
+                ? "Property Application Rejected"
+                : "Property Suspended",
+            message: isApproved
+              ? `Your property "${data.name}" has been approved and is now live on PawStay.`
+              : isRejected
+                ? `Your property "${data.name}" was rejected.${rejection_reason ? ` Reason: ${rejection_reason}` : " Please review the feedback and resubmit."}`
+                : `Your property "${data.name}" has been suspended and is temporarily hidden from customers.`,
+            link: `/admin/services?propertyId=${data.id}`,
+            reference_id: data.id,
+            reference_type: "property",
+          });
+        } catch (notifErr) {
+          console.warn("Failed to create property status notification:", notifErr);
+          // Don't fail the request if notification creation fails
+        }
       }
 
       const statusMessages: Record<string, string> = {

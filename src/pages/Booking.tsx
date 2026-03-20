@@ -100,10 +100,10 @@ const Booking = () => {
   const [weight, setWeight] = useState("");
   const [specialRequirements, setSpecialRequirements] = useState("");
   const [dogSize, setDogSize] = useState<string>("");
-  const [medCert, setMedCert] = useState<string | null>(null);
-  const [medCertName, setMedCertName] = useState<string>("");
-  const [vaccineRecord, setVaccineRecord] = useState<string | null>(null);
-  const [vaccineRecordName, setVaccineRecordName] = useState<string>("");
+  const [medCertFiles, setMedCertFiles] = useState<string[]>([]);
+  const [medCertNames, setMedCertNames] = useState<string[]>([]);
+  const [vaccineRecordFiles, setVaccineRecordFiles] = useState<string[]>([]);
+  const [vaccineRecordNames, setVaccineRecordNames] = useState<string[]>([]);
 
   // Step 4 fields
   const [firstName, setFirstName] = useState("");
@@ -368,21 +368,52 @@ const Booking = () => {
     setPetType("dog");
   };
 
-  // File upload handler (converts to base64)
+  // File upload handler (converts one or more files to base64 data URLs)
   const handleFileUpload = (
+    e: React.ChangeEvent<HTMLInputElement>,
+    setter: (val: string[]) => void,
+    nameSetter: (val: string[]) => void
+  ) => {
+    const files = Array.from(e.target.files ?? []);
+    if (!files.length) return;
+
+    const readAsDataUrl = (file: File) =>
+      new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result as string);
+        reader.onerror = () => reject(new Error(`Failed to read ${file.name}`));
+        reader.readAsDataURL(file);
+      });
+
+    Promise.all(files.map(readAsDataUrl))
+      .then((urls) => {
+        setter(urls);
+        nameSetter(files.map((f) => f.name));
+      })
+      .catch((err) => {
+        console.error("Failed to process selected files:", err);
+        toast({
+          title: "Upload Error",
+          description: "One or more files could not be read. Please try again.",
+          variant: "destructive",
+        });
+      });
+  };
+
+  const handleSingleFileUpload = (
     e: React.ChangeEvent<HTMLInputElement>,
     setter: (val: string | null) => void,
     nameSetter: (val: string) => void
   ) => {
     const file = e.target.files?.[0];
-    if (file) {
-      nameSetter(file.name);
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setter(reader.result as string);
-      };
-      reader.readAsDataURL(file);
-    }
+    if (!file) return;
+
+    nameSetter(file.name);
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setter(reader.result as string);
+    };
+    reader.readAsDataURL(file);
   };
 
   const validateStep1 = (): boolean => {
@@ -435,10 +466,10 @@ const Booking = () => {
     if (!breed.trim()) missing.push("breed");
     if (!age.trim()) missing.push("age");
     if (!weight.trim()) missing.push("weight");
-    if (!vaccineRecord) missing.push("vaccineRecord");
+    if (!vaccineRecordFiles.length) missing.push("vaccineRecord");
     if (missing.length > 0) {
       setError(missing);
-      toast({ title: "Required Fields", description: !vaccineRecord ? "Please upload the vaccine record to continue." : "Please fill in all required pet details.", variant: "destructive" });
+      toast({ title: "Required Fields", description: !vaccineRecordFiles.length ? "Please upload at least one vaccine record to continue." : "Please fill in all required pet details.", variant: "destructive" });
       return false;
     }
     clearErrors();
@@ -538,8 +569,8 @@ const Booking = () => {
         pet_age: age,
         pet_weight: weight,
         special_requirements: specialRequirements,
-        med_cert_url: medCert,
-        vaccine_record_url: vaccineRecord,
+        med_cert_url: medCertFiles.length <= 1 ? (medCertFiles[0] ?? null) : JSON.stringify(medCertFiles),
+        vaccine_record_url: vaccineRecordFiles.length <= 1 ? (vaccineRecordFiles[0] ?? null) : JSON.stringify(vaccineRecordFiles),
         service_name: shop?.serviceName || shop?.name || "",
         service_type: serviceType || undefined,
         owner_name: `${firstName} ${lastName}`,
@@ -1037,14 +1068,16 @@ const Booking = () => {
                           <div className="relative">
                             <label
                               htmlFor="vaccineRecord"
-                              className={`flex items-center gap-3 p-4 rounded-xl border-2 border-dashed cursor-pointer transition-all hover:border-primary/50 hover:bg-primary/5 ${vaccineRecord ? "border-green-500 bg-green-50/50" : errors["vaccineRecord"] ? "border-destructive bg-destructive/5" : "border-border"}`}
+                              className={`flex items-center gap-3 p-4 rounded-xl border-2 border-dashed cursor-pointer transition-all hover:border-primary/50 hover:bg-primary/5 ${vaccineRecordFiles.length ? "border-green-500 bg-green-50/50" : errors["vaccineRecord"] ? "border-destructive bg-destructive/5" : "border-border"}`}
                             >
-                              {vaccineRecord ? (
+                              {vaccineRecordFiles.length ? (
                                 <>
                                   <div className="h-10 w-10 rounded-full bg-green-100 flex items-center justify-center shrink-0"><Check className="h-5 w-5 text-green-600" /></div>
                                   <div className="min-w-0">
-                                    <p className="text-sm font-medium truncate">{vaccineRecordName}</p>
-                                    <p className="text-xs text-green-600">Uploaded</p>
+                                    <p className="text-sm font-medium truncate">
+                                      {vaccineRecordFiles.length} file{vaccineRecordFiles.length > 1 ? "s" : ""} uploaded
+                                    </p>
+                                    <p className="text-xs text-green-600 truncate">{vaccineRecordNames.slice(0, 2).join(", ")}{vaccineRecordNames.length > 2 ? "..." : ""}</p>
                                   </div>
                                 </>
                               ) : (
@@ -1052,12 +1085,12 @@ const Booking = () => {
                                   <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center shrink-0"><Upload className="h-5 w-5 text-muted-foreground" /></div>
                                   <div>
                                     <p className="text-sm font-medium">Upload vaccine record</p>
-                                    <p className="text-xs text-muted-foreground">PDF, JPG, or PNG</p>
+                                    <p className="text-xs text-muted-foreground">PDF, JPG, or PNG (multiple allowed)</p>
                                   </div>
                                 </>
                               )}
                             </label>
-                            <input id="vaccineRecord" type="file" accept="image/*,.pdf" className="hidden" onChange={(e) => handleFileUpload(e, setVaccineRecord, setVaccineRecordName)} />
+                            <input id="vaccineRecord" type="file" accept="image/*,.pdf" multiple className="hidden" onChange={(e) => handleFileUpload(e, setVaccineRecordFiles, setVaccineRecordNames)} />
                           </div>
                         </div>
 
@@ -1071,14 +1104,16 @@ const Booking = () => {
                           <div className="relative">
                             <label
                               htmlFor="medCert"
-                              className={`flex items-center gap-3 p-4 rounded-xl border-2 border-dashed cursor-pointer transition-all hover:border-primary/50 hover:bg-primary/5 ${medCert ? "border-blue-500 bg-blue-50/50" : "border-border"}`}
+                              className={`flex items-center gap-3 p-4 rounded-xl border-2 border-dashed cursor-pointer transition-all hover:border-primary/50 hover:bg-primary/5 ${medCertFiles.length ? "border-blue-500 bg-blue-50/50" : "border-border"}`}
                             >
-                              {medCert ? (
+                              {medCertFiles.length ? (
                                 <>
                                   <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center shrink-0"><Check className="h-5 w-5 text-blue-600" /></div>
                                   <div className="min-w-0">
-                                    <p className="text-sm font-medium truncate">{medCertName}</p>
-                                    <p className="text-xs text-blue-600">Uploaded</p>
+                                    <p className="text-sm font-medium truncate">
+                                      {medCertFiles.length} file{medCertFiles.length > 1 ? "s" : ""} uploaded
+                                    </p>
+                                    <p className="text-xs text-blue-600 truncate">{medCertNames.slice(0, 2).join(", ")}{medCertNames.length > 2 ? "..." : ""}</p>
                                   </div>
                                 </>
                               ) : (
@@ -1086,12 +1121,12 @@ const Booking = () => {
                                   <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center shrink-0"><Upload className="h-5 w-5 text-muted-foreground" /></div>
                                   <div>
                                     <p className="text-sm font-medium">Upload medical certificate</p>
-                                    <p className="text-xs text-muted-foreground">PDF, JPG, or PNG</p>
+                                    <p className="text-xs text-muted-foreground">PDF, JPG, or PNG (multiple allowed)</p>
                                   </div>
                                 </>
                               )}
                             </label>
-                            <input id="medCert" type="file" accept="image/*,.pdf" className="hidden" onChange={(e) => handleFileUpload(e, setMedCert, setMedCertName)} />
+                            <input id="medCert" type="file" accept="image/*,.pdf" multiple className="hidden" onChange={(e) => handleFileUpload(e, setMedCertFiles, setMedCertNames)} />
                           </div>
                         </div>
                       </div>
@@ -1270,7 +1305,7 @@ const Booking = () => {
                         <div className="space-y-2">
                           <Label htmlFor="paymentProof">Payment Screenshot *</Label>
                           <div className={`relative ${errorClass("paymentScreenshot")}`}>
-                            <Input id="paymentProof" type="file" accept="image/*" className="cursor-pointer" onChange={(e) => handleFileUpload(e, setPaymentScreenshot, setPaymentScreenshotName)} />
+                            <Input id="paymentProof" type="file" accept="image/*" className="cursor-pointer" onChange={(e) => handleSingleFileUpload(e, setPaymentScreenshot, setPaymentScreenshotName)} />
                           </div>
                           {paymentScreenshotName && (
                             <p className="text-xs text-green-600 flex items-center gap-1"><Check className="h-3 w-3" /> {paymentScreenshotName}</p>
