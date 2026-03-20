@@ -28,6 +28,7 @@ import {
   dispatchWeeklyReportNotificationsJob,
 } from './services/notificationJobs';
 import { ensureStorageBucket } from './utils/storageMedia';
+import { withJobLock } from './utils/jobLock';
  
 dotenv.config({ path: '../.env' });
 dotenv.config();
@@ -132,34 +133,48 @@ app.listen(PORT, () => {
     console.warn('[storage] bucket bootstrap failed:', err?.message || err);
   });
 
-  // Settlement reminders are time-based; run once at startup and then every 6 hours.
-  dispatchSettlementRemindersJob()
-    .then((result) => console.log('[settlement-reminders] startup run:', result))
+  // Interval durations (ms) and their stale-lock thresholds (seconds).
+  // Stale thresholds are set to 92 % of the interval so a lock held by a
+  // crashed instance is always cleaned up before the next scheduled run.
+  const SIX_HOURS_MS   = 6  * 60 * 60 * 1000;
+  const ONE_DAY_MS     = 24 * 60 * 60 * 1000;
+  const toStaleSecs    = (intervalMs: number) => Math.floor(intervalMs * 0.92 / 1000);
+
+  const SETTLEMENT_STALE_SECS    = toStaleSecs(SIX_HOURS_MS);
+  const BOOKING_NOTIF_STALE_SECS = toStaleSecs(SIX_HOURS_MS);
+  const WEEKLY_REPORT_STALE_SECS = toStaleSecs(ONE_DAY_MS);
+
+  // Settlement reminders: run once at startup, then every 6 hours.
+  // withJobLock ensures only one instance executes the job at a time.
+  withJobLock('settlement-reminders', SETTLEMENT_STALE_SECS, dispatchSettlementRemindersJob)
+    .then((result) => result !== null && console.log('[settlement-reminders] startup run:', result))
     .catch((err) => console.warn('[settlement-reminders] startup run failed:', err?.message || err));
 
   setInterval(() => {
-    dispatchSettlementRemindersJob()
-      .then((result) => console.log('[settlement-reminders] interval run:', result))
+    withJobLock('settlement-reminders', SETTLEMENT_STALE_SECS, dispatchSettlementRemindersJob)
+      .then((result) => result !== null && console.log('[settlement-reminders] interval run:', result))
       .catch((err) => console.warn('[settlement-reminders] interval run failed:', err?.message || err));
-  }, 6 * 60 * 60 * 1000);
+  }, SIX_HOURS_MS);
 
-  dispatchBookingLifecycleNotificationsJob()
-    .then((result) => console.log('[booking-notifications] startup run:', result))
+  // Booking lifecycle notifications: run once at startup, then every 6 hours.
+  withJobLock('booking-lifecycle-notifications', BOOKING_NOTIF_STALE_SECS, dispatchBookingLifecycleNotificationsJob)
+    .then((result) => result !== null && console.log('[booking-notifications] startup run:', result))
     .catch((err) => console.warn('[booking-notifications] startup run failed:', err?.message || err));
 
   setInterval(() => {
-    dispatchBookingLifecycleNotificationsJob()
-      .then((result) => console.log('[booking-notifications] interval run:', result))
+    withJobLock('booking-lifecycle-notifications', BOOKING_NOTIF_STALE_SECS, dispatchBookingLifecycleNotificationsJob)
+      .then((result) => result !== null && console.log('[booking-notifications] interval run:', result))
       .catch((err) => console.warn('[booking-notifications] interval run failed:', err?.message || err));
-  }, 6 * 60 * 60 * 1000);
+  }, SIX_HOURS_MS);
 
-  dispatchWeeklyReportNotificationsJob()
-    .then((result) => console.log('[weekly-report-notifications] startup run:', result))
+  // Weekly report notifications: run once at startup, then every 24 hours.
+  withJobLock('weekly-report-notifications', WEEKLY_REPORT_STALE_SECS, dispatchWeeklyReportNotificationsJob)
+    .then((result) => result !== null && console.log('[weekly-report-notifications] startup run:', result))
     .catch((err) => console.warn('[weekly-report-notifications] startup run failed:', err?.message || err));
 
   setInterval(() => {
-    dispatchWeeklyReportNotificationsJob()
-      .then((result) => console.log('[weekly-report-notifications] interval run:', result))
+    withJobLock('weekly-report-notifications', WEEKLY_REPORT_STALE_SECS, dispatchWeeklyReportNotificationsJob)
+      .then((result) => result !== null && console.log('[weekly-report-notifications] interval run:', result))
       .catch((err) => console.warn('[weekly-report-notifications] interval run failed:', err?.message || err));
-  }, 24 * 60 * 60 * 1000);
+  }, ONE_DAY_MS);
 });
