@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { aiChatApi } from "@/services/aiChatApi";
 import type { PetHealthCheckResponse } from "@/services/aiChatApi";
 import { petApi } from "@/services/petApi";
-import { Send, Bot, User, ExternalLink, ImagePlus, Maximize2 } from "lucide-react";
+import { Send, Bot, User, ExternalLink, ImagePlus, ChevronDown, ChevronUp } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import {
@@ -187,15 +187,18 @@ const renderBookingLinkedText = (text: string): ReactNode => {
 interface AiChatPanelProps {
   /** Extra Tailwind classes on the root wrapper */
   className?: string;
+  /** floating: compact popover; page: stretches in container */
+  variant?: "floating" | "page";
 }
 
-export const AiChatPanel = ({ className }: AiChatPanelProps) => {
+export const AiChatPanel = ({ className, variant = "floating" }: AiChatPanelProps) => {
   const navigate = useNavigate();
   const [rows, setRows] = useState<ChatRow[]>([]);
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
   const [commandPets, setCommandPets] = useState<Array<{ id: string; name: string }>>([]);
   const [isExpanded, setIsExpanded] = useState(false);
+  const [showQuickActions, setShowQuickActions] = useState(true);
   const [pendingImage, setPendingImage] = useState<PendingImageContext | null>(null);
   const [imageQuestionMode, setImageQuestionMode] = useState(false);
   const [expandedImage, setExpandedImage] = useState<string | null>(null);
@@ -231,6 +234,12 @@ export const AiChatPanel = ({ className }: AiChatPanelProps) => {
       previewUrlsRef.current = [];
     };
   }, []);
+
+  useEffect(() => {
+    if (rows.length > 0 && showQuickActions) {
+      setShowQuickActions(false);
+    }
+  }, [rows.length, showQuickActions]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1072,10 +1081,30 @@ export const AiChatPanel = ({ className }: AiChatPanelProps) => {
   const smallSize = { w: 340, h: 480 };
 
   const panelStyle: React.CSSProperties = {
-    width: isExpanded ? "min(540px, 90vw)" : `${smallSize.w}px`,
-    height: isExpanded ? "min(600px, 80vh)" : `${smallSize.h}px`,
-    maxWidth: isExpanded ? "min(540px, 90vw)" : `${smallSize.w}px`,
-    maxHeight: isExpanded ? "min(600px, 80vh)" : `${smallSize.h}px`,
+    width:
+      variant === "page"
+        ? "100%"
+        : isExpanded
+          ? "min(540px, 90vw)"
+          : `${smallSize.w}px`,
+    height:
+      variant === "page"
+        ? "100%"
+        : isExpanded
+          ? "min(600px, 80vh)"
+          : `${smallSize.h}px`,
+    maxWidth:
+      variant === "page"
+        ? "100%"
+        : isExpanded
+          ? "min(540px, 90vw)"
+          : `${smallSize.w}px`,
+    maxHeight:
+      variant === "page"
+        ? "100%"
+        : isExpanded
+          ? "min(600px, 80vh)"
+          : `${smallSize.h}px`,
     display: "flex",
     flexDirection: "column",
     borderRadius: 16,
@@ -1105,15 +1134,17 @@ export const AiChatPanel = ({ className }: AiChatPanelProps) => {
           </div>
         </div>
         <div className="flex items-center gap-1">
-          <button
-            type="button"
-            onClick={() => setIsExpanded((prev) => !prev)}
-            className="flex h-8 w-8 items-center justify-center rounded-full border border-rose-200 text-rose-700 transition hover:bg-rose-50"
-            aria-label={isExpanded ? "Collapse chat" : "Expand chat"}
-            title={isExpanded ? "Collapse chat" : "Expand chat"}
-          >
-            <span style={{ fontSize: 14, lineHeight: 1 }}>{isExpanded ? "↙" : "↗"}</span>
-          </button>
+          {variant === "floating" && (
+            <button
+              type="button"
+              onClick={() => setIsExpanded((prev) => !prev)}
+              className="flex h-8 w-8 items-center justify-center rounded-full border border-rose-200 text-rose-700 transition hover:bg-rose-50"
+              aria-label={isExpanded ? "Collapse chat" : "Expand chat"}
+              title={isExpanded ? "Collapse chat" : "Expand chat"}
+            >
+              <span style={{ fontSize: 14, lineHeight: 1 }}>{isExpanded ? "↙" : "↗"}</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -1287,54 +1318,69 @@ export const AiChatPanel = ({ className }: AiChatPanelProps) => {
       </div>
 
       {/* Quick commands */}
-      <div className="border-t px-3 pt-2 pb-1">
-        <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-          Quick Actions
-        </p>
-
-        <div className="mb-1">
-          <p className="mb-1 text-[10px] font-medium text-rose-700">Scan Records</p>
-          <div className="flex flex-wrap gap-1.5">
-            {commandPets.length > 0 ? (
-              commandPets.map((pet) => (
-                <button
-                  key={`scan-${pet.id}`}
-                  type="button"
-                  disabled={loading}
-                  onClick={() => onQuickCommand(`Scan service-history records for ${pet.name}.`) }
-                  className="rounded-full border border-rose-200 bg-rose-50 px-2.5 py-1 text-[11px] font-medium text-rose-700 hover:bg-rose-100 disabled:opacity-50"
-                >
-                  For {pet.name}
-                </button>
-              ))
-            ) : (
-              <button
-                type="button"
-                disabled
-                className="rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1 text-[11px] font-medium text-gray-500"
-              >
-                No pets found
-              </button>
-            )}
-          </div>
+      <div className="border-t bg-muted/20 px-3 py-2">
+        <div className="mb-2 flex items-center justify-between">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+            Quick Actions
+          </p>
+          <button
+            type="button"
+            onClick={() => setShowQuickActions((prev) => !prev)}
+            className="inline-flex items-center gap-1 text-[11px] font-medium text-rose-700 hover:text-rose-800"
+            aria-expanded={showQuickActions}
+          >
+            {showQuickActions ? "Hide" : "Show"}
+            {showQuickActions ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
+          </button>
         </div>
 
-        <div>
-          <p className="mb-1 text-[10px] font-medium text-gray-700">Bookings</p>
-          <div className="flex flex-wrap gap-1.5">
-            {BOOKING_SHORTCUTS.map((shortcut) => (
-              <button
-                key={shortcut.label}
-                type="button"
-                disabled={loading}
-                onClick={() => onQuickCommand(shortcut.command)}
-                className="rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1 text-[11px] font-medium text-gray-700 hover:bg-gray-100 disabled:opacity-50"
-              >
-                {shortcut.label}
-              </button>
-            ))}
+        {showQuickActions && (
+          <div className="space-y-2">
+            <div>
+              <p className="mb-1 text-[10px] font-medium text-rose-700">Scan Records</p>
+              <div className="flex gap-1.5 overflow-x-auto pb-1">
+                {commandPets.length > 0 ? (
+                  commandPets.map((pet) => (
+                    <button
+                      key={`scan-${pet.id}`}
+                      type="button"
+                      disabled={loading}
+                      onClick={() => onQuickCommand(`Scan service-history records for ${pet.name}.`) }
+                      className="shrink-0 rounded-full border border-rose-200 bg-rose-50 px-2.5 py-1 text-[11px] font-medium text-rose-700 hover:bg-rose-100 disabled:opacity-50"
+                    >
+                      For {pet.name}
+                    </button>
+                  ))
+                ) : (
+                  <button
+                    type="button"
+                    disabled
+                    className="shrink-0 rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1 text-[11px] font-medium text-gray-500"
+                  >
+                    No pets found
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <div>
+              <p className="mb-1 text-[10px] font-medium text-gray-700">Bookings</p>
+              <div className="flex gap-1.5 overflow-x-auto pb-1">
+                {BOOKING_SHORTCUTS.map((shortcut) => (
+                  <button
+                    key={shortcut.label}
+                    type="button"
+                    disabled={loading}
+                    onClick={() => onQuickCommand(shortcut.command)}
+                    className="shrink-0 rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1 text-[11px] font-medium text-gray-700 hover:bg-gray-100 disabled:opacity-50"
+                  >
+                    {shortcut.label}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
       {/* Input */}

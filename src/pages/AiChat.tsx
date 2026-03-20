@@ -12,7 +12,7 @@ const AiChat = () => {
           <p className="text-muted-foreground text-sm mb-4">
             Ask about pet services, bookings, cancellations, and more.
           </p>
-          <AiChatPanel className="h-[520px]" />
+          <AiChatPanel variant="page" className="h-[70vh] min-h-[520px] max-h-[760px]" />
         </div>
       </main>
       <Footer />
