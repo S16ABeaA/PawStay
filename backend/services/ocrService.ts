@@ -48,6 +48,7 @@ const cleanGeminiOcrText = (value: string): string => {
 export const extractTextFromImageBuffer = async (
   imageBuffer: Buffer,
   language?: string,
+  mimeType?: string,
 ): Promise<{ text: string; language: string }> => {
   if (!imageBuffer || imageBuffer.length === 0) {
     throw new Error("Image content is empty");
@@ -75,7 +76,7 @@ export const extractTextFromImageBuffer = async (
     {
       inlineData: {
         data: imageBuffer.toString("base64"),
-        mimeType: "image/jpeg",
+        mimeType: mimeType || "image/jpeg",
       },
     },
   ]);
