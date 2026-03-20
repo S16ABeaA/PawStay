@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { Card, CardContent } from "@/components/ui/card";
@@ -9,6 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -28,7 +29,8 @@ import {
   FileText,
   Eye,
 } from "lucide-react";
-import { PetLoader } from "@/components/ui/PetLoader";
+import RandomFullPagePetLoader from "@/components/ui/RandomFullPagePetLoader";
+import { useBlockingPageLoad } from "@/hooks/useBlockingPageLoad";
 import { bookingApi } from "@/services/bookingApi";
 import { reviewsApi } from "@/services/reviewsApi";
 import ReviewDialog from "@/components/ReviewDialog";
@@ -53,6 +55,12 @@ interface Booking {
   total_price: number | null;
   payment_method: string | null;
   payment_status: string;
+  payment_screenshot_url?: string | null;
+  reference_number?: string | null;
+  vaccine_record_url?: string | null;
+  med_cert_url?: string | null;
+  room_name?: string | null;
+  special_requirements?: string | null;
   status: string;
   created_at: string;
 }
@@ -60,6 +68,7 @@ interface Booking {
 const statusConfig: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
   pending: { label: "Pending", variant: "secondary" },
   confirmed: { label: "Confirmed", variant: "default" },
+  completed: { label: "Completed", variant: "outline" },
   cancelled: { label: "Cancelled", variant: "destructive" },
 };
 
@@ -77,7 +86,7 @@ function isUpcoming(b: Booking): boolean {
   const end = b.checkout ? new Date(b.checkout) : new Date(b.checkin);
   return (
     end >= now &&
-    !["cancelled"].includes(b.status)
+    !["cancelled", "completed"].includes(b.status)
   );
 }
 
@@ -91,10 +100,8 @@ function isPastDate(b: Booking): boolean {
 
 /** Whether a past booking qualifies for writing a review */
 function canWriteReview(b: Booking): boolean {
-  const validStatuses = ["confirmed"];
-  return (
-    validStatuses.includes(b.status) && isPastDate(b)
-  );
+  if (b.status === "completed") return true;
+  return b.status === "confirmed" && isPastDate(b);
 }
 
 function formatDate(dateStr: string): string {
@@ -110,15 +117,42 @@ function formatCurrency(amount: number | null): string {
   return `₱${Number(amount).toLocaleString("en-PH", { minimumFractionDigits: 2 })}`;
 }
 
+function parseDocumentUrls(raw?: string | null): string[] {
+  if (!raw) return [];
+  const value = String(raw).trim();
+  if (!value) return [];
+  if (value.startsWith("[")) {
+    try {
+      const parsed = JSON.parse(value);
+      if (Array.isArray(parsed)) {
+        return parsed.filter((u) => typeof u === "string" && u.length > 0);
+      }
+    } catch {
+      // Fall back to treating as a single URL
+    }
+  }
+  return [value];
+}
+
+function isImageUrl(url: string): boolean {
+  return /^data:image\//i.test(url) || /\.(png|jpe?g|gif|webp|bmp|svg)(\?|$)/i.test(url);
+}
+
 const MyBookings = () => {
   const { toast } = useToast();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
   const [reviewedBookings, setReviewedBookings] = useState<Set<string>>(new Set());
   const [reviewDialogOpen, setReviewDialogOpen] = useState(false);
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
   const [detailBooking, setDetailBooking] = useState<Booking | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [checkingPayment, setCheckingPayment] = useState<string | null>(null);
+  const [isPageBlocking, notifyLoaderFinished] = useBlockingPageLoad(loading, 800);
+  const [activeTab, setActiveTab] = useState<"upcoming" | "past">("upcoming");
+
+  const requestedBookingId = searchParams.get("bookingId");
 
   const fetchBookings = async () => {
     try {
@@ -166,6 +200,15 @@ const MyBookings = () => {
     fetchBookings();
   }, []);
 
+  useEffect(() => {
+    if (loading || !requestedBookingId || bookings.length === 0) return;
+    const targetBooking = bookings.find((b) => b.id === requestedBookingId);
+    if (!targetBooking) return;
+
+    setActiveTab(isUpcoming(targetBooking) ? "upcoming" : "past");
+    setDetailBooking((prev) => (prev?.id === targetBooking.id ? prev : targetBooking));
+  }, [bookings, loading, requestedBookingId]);
+
   // Check which past bookings already have reviews
   useEffect(() => {
     const pastBookings = bookings.filter((b) => !isUpcoming(b) && canWriteReview(b));
@@ -207,16 +250,8 @@ const MyBookings = () => {
   const upcoming = bookings.filter(isUpcoming);
   const past = bookings.filter((b) => !isUpcoming(b));
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-background">
-        <Header />
-        <main className="py-16 flex items-center justify-center">
-          <PetLoader text="Loading bookings..." />
-        </main>
-        <Footer />
-      </div>
-    );
+  if (isPageBlocking) {
+    return <RandomFullPagePetLoader dataLoaded={!loading} onComplete={notifyLoaderFinished} />;
   }
 
   return (
@@ -258,7 +293,7 @@ const MyBookings = () => {
               </CardContent>
             </Card>
           ) : (
-            <Tabs defaultValue="upcoming" className="space-y-6">
+            <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as "upcoming" | "past")} className="space-y-6">
               <TabsList className="grid w-full grid-cols-2">
                 <TabsTrigger value="upcoming">
                   Current & Upcoming ({upcoming.length})
@@ -274,6 +309,7 @@ const MyBookings = () => {
                     <BookingCard
                       key={b.id}
                       booking={b}
+                      onViewDetail={() => handleOpenDetail(b)}
                       onCheckPayment={() => handleCheckPayment(b.id)}
                       isCheckingPayment={checkingPayment === b.id}
                     />
@@ -316,12 +352,22 @@ const MyBookings = () => {
         />
       )}
 
-      {/* Past Booking Detail Dialog */}
+      {/* Booking Detail Dialog */}
       {detailBooking && (
-        <PastBookingDetailDialog
+        <BookingDetailDialog
           booking={detailBooking}
           open={!!detailBooking}
-          onOpenChange={(open) => { if (!open) setDetailBooking(null); }}
+          onOpenChange={(open) => {
+            if (!open) {
+              setDetailBooking(null);
+              if (requestedBookingId) {
+                const next = new URLSearchParams(searchParams);
+                next.delete("bookingId");
+                setSearchParams(next, { replace: true });
+              }
+            }
+          }}
+          onPreviewImage={setImagePreview}
           isReviewed={reviewedBookings.has(detailBooking.id)}
           onWriteReview={() => {
             setDetailBooking(null);
@@ -329,6 +375,21 @@ const MyBookings = () => {
           }}
         />
       )}
+
+      {/* Image Preview Dialog */}
+      <Dialog open={!!imagePreview} onOpenChange={() => setImagePreview(null)}>
+        <DialogContent className="max-w-3xl p-2">
+          <DialogHeader>
+            <DialogTitle>Image Preview</DialogTitle>
+            <DialogDescription>Click outside or press Escape to close</DialogDescription>
+          </DialogHeader>
+          {imagePreview && (
+            <div className="flex items-center justify-center">
+              <img src={imagePreview} alt="Preview" className="max-w-full max-h-[75vh] object-contain rounded-lg" />
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
@@ -374,7 +435,18 @@ function BookingCard({
   const canReview = canWriteReview(b) && !isReviewed;
 
   return (
-    <Card className="overflow-hidden hover:shadow-elevated transition-shadow">
+    <Card
+      className="overflow-hidden hover:shadow-elevated transition-shadow cursor-pointer"
+      role="button"
+      tabIndex={0}
+      onClick={onViewDetail}
+      onKeyDown={(e) => {
+        if ((e.key === "Enter" || e.key === " ") && onViewDetail) {
+          e.preventDefault();
+          onViewDetail();
+        }
+      }}
+    >
       <div className="flex flex-col sm:flex-row">
         {/* Thumbnail */}
         <div className="sm:w-40 h-32 sm:h-auto bg-muted flex-shrink-0">
@@ -462,7 +534,10 @@ function BookingCard({
                   variant="ghost"
                   size="sm"
                   className="h-6 px-2 text-xs text-primary hover:text-primary/80 gap-1"
-                  onClick={onCheckPayment}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onCheckPayment();
+                  }}
                   disabled={isCheckingPayment}
                 >
                   {isCheckingPayment ? (
@@ -486,7 +561,10 @@ function BookingCard({
                 variant="outline"
                 size="sm"
                 className="flex-1 gap-2"
-                onClick={onViewDetail}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onViewDetail?.();
+                }}
               >
                 <Eye className="h-4 w-4" />
                 View Details
@@ -496,7 +574,10 @@ function BookingCard({
                   variant="outline"
                   size="sm"
                   className="flex-1 gap-2"
-                  onClick={onWriteReview}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onWriteReview?.();
+                  }}
                 >
                   <Star className="h-4 w-4" />
                   Write a Review
@@ -518,7 +599,10 @@ function BookingCard({
                 variant="outline"
                 size="sm"
                 className="w-full gap-2"
-                onClick={onWriteReview}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onWriteReview?.();
+                }}
               >
                 <Star className="h-4 w-4" />
                 Write a Review
@@ -537,18 +621,20 @@ function BookingCard({
   );
 }
 
-/* ────────────── Past Booking Detail Dialog ────────────── */
+/* ────────────── Booking Detail Dialog ────────────── */
 
-function PastBookingDetailDialog({
+function BookingDetailDialog({
   booking,
   open,
   onOpenChange,
+  onPreviewImage,
   isReviewed,
   onWriteReview,
 }: {
   booking: Booking;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onPreviewImage: (url: string) => void;
   isReviewed: boolean;
   onWriteReview: () => void;
 }) {
@@ -561,98 +647,252 @@ function PastBookingDetailDialog({
     : formatDate(b.checkin);
 
   const canReview = canWriteReview(b) && !isReviewed;
+  const vaccineDocs = parseDocumentUrls(b.vaccine_record_url);
+  const medDocs = parseDocumentUrls(b.med_cert_url);
+  const hasPetDocs = vaccineDocs.length > 0 || medDocs.length > 0;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="text-xl">Booking Details</DialogTitle>
+          <DialogTitle className="flex items-center gap-2">
+            <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center">
+              <FileText className="h-4 w-4 text-muted-foreground" />
+            </div>
+            Service Details
+          </DialogTitle>
+          <DialogDescription>{b.service_name || b.service_type || "Booking"}</DialogDescription>
         </DialogHeader>
 
-        {/* Property image + name */}
-        <div className="space-y-4">
-          {b.property_image && (
-            <div className="rounded-lg overflow-hidden h-48 bg-muted">
-              <img
-                src={b.property_image}
-                alt={b.property_name ?? "Property"}
-                className="w-full h-full object-cover"
-              />
+        <div className="space-y-6">
+          {/* Service Info */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <p className="text-sm text-muted-foreground">Service Name</p>
+              <p className="font-medium">{b.service_name || b.service_type || "Booking"}</p>
+            </div>
+            <div>
+              <p className="text-sm text-muted-foreground">Type</p>
+              <Badge className="capitalize mt-1">{b.service_type || "other"}</Badge>
+            </div>
+            <div>
+              <p className="text-sm text-muted-foreground">Date</p>
+              <p className="font-medium flex items-center gap-1">
+                <Calendar className="h-4 w-4" />
+                {new Date(b.checkin).toLocaleDateString()}
+              </p>
+            </div>
+          </div>
+
+          {/* Booking Information */}
+          <div className="border-t pt-4">
+            <h4 className="font-semibold text-sm flex items-center gap-2">
+              <FileText className="h-4 w-4 text-primary" />
+              Booking Information
+            </h4>
+
+            <div className="grid grid-cols-2 gap-4 mt-3">
+              {b.pet_name && (
+                <div>
+                  <p className="text-sm text-muted-foreground">Pet</p>
+                  <p className="font-medium">{b.pet_name}</p>
+                </div>
+              )}
+              <div>
+                <p className="text-sm text-muted-foreground">Service</p>
+                <p className="font-medium">{b.service_name || b.service_type || "Booking"}</p>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Check-in</p>
+                <p className="font-medium flex items-center gap-1">
+                  <Calendar className="h-3.5 w-3.5" />
+                  {new Date(b.checkin).toLocaleDateString()}
+                  {b.time_slot && (
+                    <span className="text-muted-foreground ml-1 flex items-center gap-0.5">
+                      <Clock className="h-3 w-3" /> {b.time_slot}
+                    </span>
+                  )}
+                </p>
+              </div>
+              {b.checkout && (
+                <div>
+                  <p className="text-sm text-muted-foreground">Check-out</p>
+                  <p className="font-medium flex items-center gap-1">
+                    <Calendar className="h-3.5 w-3.5" />
+                    {new Date(b.checkout).toLocaleDateString()}
+                  </p>
+                </div>
+              )}
+              {b.total_price != null && (
+                <div>
+                  <p className="text-sm text-muted-foreground">Amount</p>
+                  <p className="font-medium">₱{Number(b.total_price).toLocaleString()}</p>
+                </div>
+              )}
+              <div>
+                <p className="text-sm text-muted-foreground">Status</p>
+                <Badge variant={statusVariant} className="mt-1 capitalize">
+                  {statusLabel}
+                </Badge>
+              </div>
+              {b.room_name && (
+                <div>
+                  <p className="text-sm text-muted-foreground">Room</p>
+                  <p className="font-medium">{b.room_name}</p>
+                </div>
+              )}
+              {b.property_name && (
+                <div>
+                  <p className="text-sm text-muted-foreground">Property</p>
+                  <p className="font-medium flex items-center gap-1">
+                    <MapPin className="h-3.5 w-3.5" />
+                    {b.property_name}
+                  </p>
+                </div>
+              )}
+              {b.owner_name && (
+                <div>
+                  <p className="text-sm text-muted-foreground">Booked By</p>
+                  <p className="font-medium flex items-center gap-1">
+                    <User className="h-3.5 w-3.5" />
+                    {b.owner_name}
+                  </p>
+                </div>
+              )}
+              {b.special_requirements && (
+                <div className="col-span-2">
+                  <p className="text-sm text-muted-foreground">Special Requirements</p>
+                  <p className="text-sm bg-muted/50 p-3 rounded-lg mt-1">{b.special_requirements}</p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Payment Information */}
+          {b.payment_method && (
+            <div className="border-t pt-4">
+              <h4 className="font-semibold text-sm mb-3 flex items-center gap-2">
+                <CreditCard className="h-4 w-4 text-primary" />
+                Payment Information
+              </h4>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-sm text-muted-foreground">Payment Method</p>
+                  <p className="font-medium capitalize">{b.payment_method.replace("_", " ")}</p>
+                </div>
+                {b.reference_number && (
+                  <div>
+                    <p className="text-sm text-muted-foreground">Reference Number</p>
+                    <p className="font-medium font-mono text-sm bg-muted/50 px-2 py-1 rounded inline-block">{b.reference_number}</p>
+                  </div>
+                )}
+                <div>
+                  <p className="text-sm text-muted-foreground">Payment Status</p>
+                  <Badge
+                    variant={b.payment_status === "paid" ? "default" : "secondary"}
+                    className={`mt-1 capitalize ${b.payment_status === "paid" ? "bg-green-600" : ""}`}
+                  >
+                    {b.payment_status === "paid" ? "Paid" : b.payment_status.replace("_", " ")}
+                  </Badge>
+                </div>
+              </div>
+              {b.payment_screenshot_url && (
+                <div className="mt-3">
+                  <p className="text-sm text-muted-foreground mb-2">Payment Screenshot</p>
+                  <div
+                    className="cursor-pointer inline-block border border-border rounded-lg overflow-hidden hover:ring-2 hover:ring-primary/50 transition-all"
+                    onClick={() => onPreviewImage(b.payment_screenshot_url as string)}
+                  >
+                    <img
+                      src={b.payment_screenshot_url}
+                      alt="Payment proof"
+                      className="w-40 h-40 object-cover"
+                    />
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">Click to enlarge</p>
+                </div>
+              )}
             </div>
           )}
 
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="text-lg font-semibold">{b.property_name ?? "Booking"}</h3>
-              {b.service_type && (
-                <p className="text-sm text-muted-foreground">
-                  {serviceTypeLabel[b.service_type] ?? b.service_type}
-                </p>
-              )}
-            </div>
-            <Badge variant={statusVariant}>{statusLabel}</Badge>
-          </div>
-
-          {/* Full info grid */}
-          <div className="space-y-3 text-sm">
-            <DetailRow icon={<Calendar className="h-4 w-4" />} label="Date" value={dateRange} />
-            {b.time_slot && (
-              <DetailRow icon={<Clock className="h-4 w-4" />} label="Time Slot" value={b.time_slot} />
-            )}
-            {b.pet_name && (
-              <DetailRow
-                icon={<PawPrint className="h-4 w-4" />}
-                label="Pet"
-                value={`${b.pet_name}${b.pet_breed ? ` (${b.pet_breed})` : ""}${b.pet_type ? ` · ${b.pet_type}` : ""}`}
-              />
-            )}
-            {b.service_name && (
-              <DetailRow icon={<FileText className="h-4 w-4" />} label="Service" value={b.service_name} />
-            )}
-            {b.owner_name && (
-              <DetailRow icon={<User className="h-4 w-4" />} label="Booked By" value={b.owner_name} />
-            )}
-          </div>
-
-          {/* Payment section */}
-          <div className="rounded-lg bg-muted/50 p-4 space-y-2">
-            <h4 className="font-medium text-sm">Payment Summary</h4>
-            {b.subtotal != null && (
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Subtotal</span>
-                <span>{formatCurrency(b.subtotal)}</span>
+          {/* Pet Documents */}
+          {hasPetDocs && (
+            <div className="border-t pt-4">
+              <h4 className="font-semibold text-sm mb-3 flex items-center gap-2">
+                <FileText className="h-4 w-4 text-primary" />
+                Pet Documents
+              </h4>
+              <div className="flex flex-wrap gap-4">
+                {vaccineDocs.length > 0 && (
+                  <div>
+                    <p className="text-sm text-muted-foreground mb-2">Vaccine Record</p>
+                    <div className="flex flex-wrap gap-3">
+                      {vaccineDocs.map((url, idx) => (
+                        <div key={`vaccine-${idx}`}>
+                          {isImageUrl(url) ? (
+                            <div
+                              className="cursor-pointer inline-block border border-border rounded-lg overflow-hidden hover:ring-2 hover:ring-primary/50 transition-all"
+                              onClick={() => onPreviewImage(url)}
+                            >
+                              <img
+                                src={url}
+                                alt={`Vaccine record ${idx + 1}`}
+                                className="w-40 h-40 object-cover"
+                              />
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              className="w-40 h-40 border border-border rounded-lg bg-muted/30 text-xs px-3 py-2 text-muted-foreground hover:bg-muted/50"
+                              onClick={() => window.open(url, "_blank", "noopener,noreferrer")}
+                            >
+                              Open vaccine document {idx + 1}
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">Click an image to enlarge or open files in a new tab.</p>
+                  </div>
+                )}
+                {medDocs.length > 0 && (
+                  <div>
+                    <p className="text-sm text-muted-foreground mb-2">Medical Certificate</p>
+                    <div className="flex flex-wrap gap-3">
+                      {medDocs.map((url, idx) => (
+                        <div key={`med-${idx}`}>
+                          {isImageUrl(url) ? (
+                            <div
+                              className="cursor-pointer inline-block border border-border rounded-lg overflow-hidden hover:ring-2 hover:ring-primary/50 transition-all"
+                              onClick={() => onPreviewImage(url)}
+                            >
+                              <img
+                                src={url}
+                                alt={`Medical certificate ${idx + 1}`}
+                                className="w-40 h-40 object-cover"
+                              />
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              className="w-40 h-40 border border-border rounded-lg bg-muted/30 text-xs px-3 py-2 text-muted-foreground hover:bg-muted/50"
+                              onClick={() => window.open(url, "_blank", "noopener,noreferrer")}
+                            >
+                              Open medical document {idx + 1}
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">Click an image to enlarge or open files in a new tab.</p>
+                  </div>
+                )}
               </div>
-            )}
-            {b.service_fee != null && (
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Service Fee</span>
-                <span>{formatCurrency(b.service_fee)}</span>
-              </div>
-            )}
-            <div className="flex justify-between text-sm font-semibold border-t pt-2">
-              <span>Total</span>
-              <span>{formatCurrency(b.total_price)}</span>
             </div>
-            <div className="flex items-center gap-2 text-sm pt-1">
-              <CreditCard className="h-4 w-4 text-muted-foreground" />
-              <span className="capitalize text-muted-foreground">
-                {b.payment_method?.replace("_", " ") ?? "—"}
-              </span>
-              <Badge
-                variant={b.payment_status === "paid" ? "default" : b.payment_status === "refunded" ? "destructive" : "secondary"}
-                className={`text-[10px] px-1.5 py-0 ${b.payment_status === "paid" ? "bg-green-600" : ""}`}
-              >
-                {b.payment_status === "paid" ? "✓ Paid" : b.payment_status === "refunded" ? "Refunded" : b.payment_status === "partially_refunded" ? "Partial Refund" : "Unpaid"}
-              </Badge>
-            </div>
-          </div>
+          )}
 
-          {/* Booked on */}
-          <p className="text-xs text-muted-foreground">
-            Booked on {formatDate(b.created_at)}
-          </p>
+          <p className="text-xs text-muted-foreground">Booked on {formatDate(b.created_at)}</p>
 
-          {/* Review section */}
           {canReview && (
             <Button className="w-full gap-2" onClick={onWriteReview}>
               <Star className="h-4 w-4" />
@@ -670,21 +910,13 @@ function PastBookingDetailDialog({
               Reviews are not available for this booking status.
             </p>
           )}
+
+          <div className="flex justify-end pt-4 border-t">
+            <Button variant="outline" onClick={() => onOpenChange(false)}>Close</Button>
+          </div>
         </div>
       </DialogContent>
     </Dialog>
-  );
-}
-
-function DetailRow({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
-  return (
-    <div className="flex items-start gap-3">
-      <div className="text-muted-foreground mt-0.5 flex-shrink-0">{icon}</div>
-      <div>
-        <p className="text-xs text-muted-foreground">{label}</p>
-        <p className="font-medium">{value}</p>
-      </div>
-    </div>
   );
 }
 

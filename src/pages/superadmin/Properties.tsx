@@ -100,6 +100,9 @@ const statusBadge = (status: string) => {
   }
 };
 
+const isImageUrl = (url: string): boolean =>
+  /^data:image\//i.test(url) || /\.(png|jpe?g|gif|webp|bmp|svg)(\?|$)/i.test(url);
+
 const SuperAdminProperties = () => {
   const { toast } = useToast();
 
@@ -120,6 +123,8 @@ const SuperAdminProperties = () => {
   const [selectedProperty, setSelectedProperty] = useState<AdminProperty | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detail, setDetail] = useState<any>(null);
+  const [activeGalleryImage, setActiveGalleryImage] = useState<string | null>(null);
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
 
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
   const [rejectTarget, setRejectTarget] = useState<AdminProperty | null>(null);
@@ -281,7 +286,15 @@ const SuperAdminProperties = () => {
   const handleView = async (property: AdminProperty) => {
     setSelectedProperty(property); setViewDialogOpen(true);
     setDetailLoading(true); setDetail(null);
-    try { setDetail(await adminApi.getProperty(property.id)); } catch { /* show basic info */ }
+    setActiveGalleryImage(property.cover_image ?? null);
+    try {
+      const fullDetail = await adminApi.getProperty(property.id);
+      setDetail(fullDetail);
+      const firstGalleryImage = fullDetail?.property?.cover_image ?? fullDetail?.property?.images?.[0] ?? property.cover_image ?? null;
+      setActiveGalleryImage(firstGalleryImage);
+    } catch {
+      /* show basic info */
+    }
     finally { setDetailLoading(false); }
   };
 
@@ -524,12 +537,17 @@ const SuperAdminProperties = () => {
           </DialogHeader>
           {selectedProperty && (
             <div className="space-y-5">
-              {/* Cover image */}
-              {selectedProperty.cover_image ? (
+              {/* Cover image / selected gallery image */}
+              {(activeGalleryImage || selectedProperty.cover_image) ? (
                 <img
-                  src={selectedProperty.cover_image}
+                  src={activeGalleryImage || selectedProperty.cover_image || ""}
                   alt={selectedProperty.name}
-                  className="w-full h-48 object-cover rounded-lg"
+                  className="w-full h-48 object-cover rounded-lg cursor-zoom-in"
+                  onClick={() => {
+                    if (activeGalleryImage || selectedProperty.cover_image) {
+                      setPreviewImage(activeGalleryImage || selectedProperty.cover_image || null);
+                    }
+                  }}
                   onError={(e) => {
                     (e.currentTarget as HTMLImageElement).style.display = "none";
                     (e.currentTarget.nextSibling as HTMLElement)?.style.setProperty("display", "flex");
@@ -549,9 +567,17 @@ const SuperAdminProperties = () => {
                   <p className="text-xs text-[#808080] mb-2 flex items-center gap-1"><Image className="h-3 w-3" />All Photos ({detail.property.images.length})</p>
                   <div className="flex gap-2 overflow-x-auto pb-2">
                     {detail.property.images.map((img: string, i: number) => (
-                      <img key={i} src={img} alt={`Photo ${i + 1}`} className="h-20 w-28 rounded-lg object-cover flex-shrink-0 border border-white/10" />
+                      <button
+                        key={i}
+                        type="button"
+                        className={`rounded-lg border overflow-hidden flex-shrink-0 ${activeGalleryImage === img ? "border-[#ffa31a] ring-2 ring-[#ffa31a]/30" : "border-white/10"}`}
+                        onClick={() => setActiveGalleryImage(img)}
+                      >
+                        <img src={img} alt={`Photo ${i + 1}`} className="h-20 w-28 object-cover cursor-pointer" />
+                      </button>
                     ))}
                   </div>
+                  <p className="text-[11px] text-[#808080]">Click a thumbnail to view it above. Click the large image to enlarge.</p>
                 </div>
               )}
 
@@ -603,29 +629,6 @@ const SuperAdminProperties = () => {
 
               {detail && !detailLoading && (
                 <>
-                  {/* Booking Stats */}
-                  <div className="pt-4 border-t border-white/10">
-                    <p className="text-sm font-semibold text-white mb-3 flex items-center gap-2"><DollarSign className="h-4 w-4 text-[#ffa31a]" />Booking Stats</p>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                      <div className="bg-[#292929] rounded-lg p-3 text-center">
-                        <p className="text-xl font-bold text-white">{detail.booking_stats.total}</p>
-                        <p className="text-xs text-[#808080]">Total</p>
-                      </div>
-                      <div className="bg-[#292929] rounded-lg p-3 text-center">
-                        <p className="text-xl font-bold text-emerald-400">{detail.booking_stats.completed ?? 0}</p>
-                        <p className="text-xs text-[#808080]">Completed</p>
-                      </div>
-                      <div className="bg-[#292929] rounded-lg p-3 text-center">
-                        <p className="text-xl font-bold text-amber-400">{detail.booking_stats.pending ?? 0}</p>
-                        <p className="text-xs text-[#808080]">Pending</p>
-                      </div>
-                      <div className="bg-[#292929] rounded-lg p-3 text-center">
-                        <p className="text-xl font-bold text-[#ffa31a]">₱{Number(detail.booking_stats.revenue ?? 0).toLocaleString()}</p>
-                        <p className="text-xs text-[#808080]">Revenue</p>
-                      </div>
-                    </div>
-                  </div>
-
                   {/* Services with capacity */}
                   {detail.services.length > 0 && (
                     <div className="pt-4 border-t border-white/10">
@@ -780,6 +783,7 @@ const SuperAdminProperties = () => {
                           <div>
                             <p className="text-xs text-[#808080]">Entity Type</p>
                             <p className="text-white capitalize">{detail.legal.legal_entity_type || "—"}</p>
+                            <p className="text-[11px] text-[#808080] mt-1">Listing type declaration for legal and tax purposes</p>
                           </div>
                           {detail.legal.contracting_party && (
                             <div>
@@ -801,6 +805,86 @@ const SuperAdminProperties = () => {
                           {detail.legal.legal_agreements?.termsAccepted && <Badge variant="outline" className="border-blue-400/30 text-blue-400 text-xs">Terms accepted</Badge>}
                           {detail.legal.legal_agreements?.dataProcessing && <Badge variant="outline" className="border-blue-400/30 text-blue-400 text-xs">DPA accepted</Badge>}
                         </div>
+
+                        {(detail.legal.lgu_permits?.length || detail.legal.bai_document || detail.legal.contract_document) ? (
+                          <div className="pt-3 border-t border-white/[0.08] space-y-3">
+                            {detail.legal.lgu_permits && (detail.legal.lgu_permits as string[]).length > 0 && (
+                              <div>
+                                <p className="text-xs text-[#808080] mb-2">LGU Permits</p>
+                                <div className="flex flex-wrap gap-2">
+                                  {(detail.legal.lgu_permits as string[]).map((url: string, idx: number) => (
+                                    isImageUrl(url) ? (
+                                      <button
+                                        key={`lgu-${idx}`}
+                                        type="button"
+                                        className="border border-white/10 rounded-lg overflow-hidden hover:border-[#ffa31a]/60 transition-colors"
+                                        onClick={() => setPreviewImage(url)}
+                                      >
+                                        <img src={url} alt={`LGU Permit ${idx + 1}`} className="h-20 w-28 object-cover" />
+                                      </button>
+                                    ) : (
+                                      <button
+                                        key={`lgu-file-${idx}`}
+                                        type="button"
+                                        className="h-20 w-28 border border-white/10 rounded-lg text-xs text-[#c7c7c7] hover:border-[#ffa31a]/60 hover:text-white px-2"
+                                        onClick={() => window.open(url, "_blank", "noopener,noreferrer")}
+                                      >
+                                        Open LGU file {idx + 1}
+                                      </button>
+                                    )
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+
+                            {detail.legal.bai_document && (
+                              <div>
+                                <p className="text-xs text-[#808080] mb-2">BAI Document</p>
+                                <button
+                                  type="button"
+                                  className="border border-white/10 rounded-lg overflow-hidden hover:border-[#ffa31a]/60 transition-colors"
+                                  onClick={() => {
+                                    if (isImageUrl(detail.legal.bai_document)) {
+                                      setPreviewImage(detail.legal.bai_document);
+                                    } else {
+                                      window.open(detail.legal.bai_document, "_blank", "noopener,noreferrer");
+                                    }
+                                  }}
+                                >
+                                  {isImageUrl(detail.legal.bai_document) ? (
+                                    <img src={detail.legal.bai_document} alt="BAI Document" className="h-20 w-28 object-cover" />
+                                  ) : (
+                                    <span className="h-20 w-28 text-xs text-[#c7c7c7] hover:text-white px-2 flex items-center justify-center text-center">Open BAI file</span>
+                                  )}
+                                </button>
+                              </div>
+                            )}
+
+                            {detail.legal.contract_document && (
+                              <div>
+                                <p className="text-xs text-[#808080] mb-2">Contract Document</p>
+                                <button
+                                  type="button"
+                                  className="border border-white/10 rounded-lg overflow-hidden hover:border-[#ffa31a]/60 transition-colors"
+                                  onClick={() => {
+                                    if (isImageUrl(detail.legal.contract_document)) {
+                                      setPreviewImage(detail.legal.contract_document);
+                                    } else {
+                                      window.open(detail.legal.contract_document, "_blank", "noopener,noreferrer");
+                                    }
+                                  }}
+                                >
+                                  {isImageUrl(detail.legal.contract_document) ? (
+                                    <img src={detail.legal.contract_document} alt="Contract Document" className="h-20 w-28 object-cover" />
+                                  ) : (
+                                    <span className="h-20 w-28 text-xs text-[#c7c7c7] hover:text-white px-2 flex items-center justify-center text-center">Open contract file</span>
+                                  )}
+                                </button>
+                              </div>
+                            )}
+                            <p className="text-[11px] text-[#808080]">Images open in preview. PDFs/docs open in a new tab.</p>
+                          </div>
+                        ) : null}
                       </div>
                     </div>
                   )}
@@ -897,6 +981,20 @@ const SuperAdminProperties = () => {
                 </Button>
                 <Button variant="outline" onClick={() => setViewDialogOpen(false)} className="border-white/10 text-white/80 ml-auto">Close</Button>
               </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!previewImage} onOpenChange={() => setPreviewImage(null)}>
+        <DialogContent className="bg-[#1b1b1b] border-white/[0.08] max-w-4xl p-3">
+          <DialogHeader>
+            <DialogTitle className="text-white">Image Preview</DialogTitle>
+            <DialogDescription className="text-[#808080]">Click outside to close</DialogDescription>
+          </DialogHeader>
+          {previewImage && (
+            <div className="flex items-center justify-center">
+              <img src={previewImage} alt="Preview" className="max-w-full max-h-[75vh] object-contain rounded-lg" />
             </div>
           )}
         </DialogContent>

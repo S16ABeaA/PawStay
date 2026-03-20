@@ -31,6 +31,10 @@ import RequireAuth from "./components/RequireAuth";
 import RequireAdmin from "./components/RequireAdmin";
 import RequireSuperAdmin from "./components/RequireSuperAdmin";
 import { AdminPropertyProvider } from "./hooks/useAdminProperty";
+import AiChat from "./pages/AiChat";
+import PetAnalyzerPage from "./pages/PetAnalyzerPage";
+import { AiChatButton } from "./components/ai/AiChatButton";
+
 
 // Admin pages
 import AdminDashboard from "./pages/admin/Dashboard";
@@ -39,6 +43,7 @@ import AdminServices from "./pages/admin/Services";
 import AdminReviews from "./pages/admin/Reviews";
 import AdminSettings from "./pages/admin/Settings";
 import AdminCalendar from "./pages/admin/Calendar";
+import AdminSettlements from "./pages/admin/Settlements";
 
 // SuperAdmin pages
 import SuperAdminDashboard from "./pages/superadmin/Dashboard";
@@ -129,6 +134,7 @@ const App = () => (
             <Route path="reviews" element={<AdminReviews />} />
             <Route path="settings" element={<AdminSettings />} />
             <Route path="calendar" element={<AdminCalendar />} />
+            <Route path="settlements" element={<AdminSettlements />} />
           </Route>
           
           {/* SuperAdmin routes */}
@@ -141,9 +147,12 @@ const App = () => (
           <Route path="/superadmin/settings" element={<RequireSuperAdmin><SuperAdminSettings /></RequireSuperAdmin>} />
           <Route path="/superadmin/amenities" element={<RequireSuperAdmin><SuperAdminAmenities /></RequireSuperAdmin>} />
           
+          <Route path="/ai-chat" element={<AiChat />} />
+          <Route path="/pet-analyzer" element={<PetAnalyzerPage />} />
           
           <Route path="*" element={<NotFound />} />
         </Routes>
+        <AiChatButton />
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>

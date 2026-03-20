@@ -43,6 +43,21 @@ export const petModel = {
     return data ?? null;
   },
 
+  /** Get a single pet by owner and pet name (case-insensitive) */
+  async getByOwnerAndName(ownerId: string, name: string): Promise<Pet | null> {
+    const { data, error } = await supabaseAdmin
+      .from("pets")
+      .select("*")
+      .eq("owner_id", ownerId)
+      .ilike("name", name)
+      .eq("is_deleted", false)
+      .limit(1)
+      .single();
+
+    if (error && error.code !== "PGRST116") throw error;
+    return data ?? null;
+  },
+
   /** Create a new pet */
   async create(
     ownerId: string,

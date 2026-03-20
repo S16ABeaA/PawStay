@@ -1,6 +1,23 @@
 import { Request, Response } from "express";
-import { getProperties, getPropertyById, getRandomProperties, HotelFilters } from "../services/property.service";
+import { getProperties, getPropertyById, HotelFilters } from "../services/property.service";
 import { supabaseAdmin } from "../config/supabaseAdmin";
+
+const normalizeText = (value: unknown): string =>
+  String(value || "")
+    .trim()
+    .toLowerCase();
+
+const parseCityFromAddress = (address?: string | null): string | null => {
+  if (!address) return null;
+  const parts = String(address)
+    .split("|")
+    .map((p) => p.trim())
+    .filter(Boolean);
+
+  if (parts.length >= 3) return parts[2].toLowerCase();
+  if (parts.length > 0) return parts[parts.length - 1].toLowerCase();
+  return null;
+};
 
 export const propertyController = {
   searchProperties: async (req: Request, res: Response) => {
@@ -67,7 +84,7 @@ export const propertyController = {
 
       // Call service
       const properties = await getProperties(filters);
-      //console.log("[searchProperties] Retrieved properties:", properties);
+      console.log("[searchProperties] Retrieved properties:", properties);
       // Return JSON response
       res.status(200).json({ properties });
     } catch (err: any) {
@@ -86,6 +103,133 @@ export const propertyController = {
       res.status(200).json({ properties });
     } catch (err: any) {
       res.status(500).json({ message: err.message || "Failed to fetch random properties" });
+    }
+  },
+
+  recommendedProperties: async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).user?.id;
+      if (!userId) return res.status(401).json({ message: "Unauthorized" });
+
+      const source = req.method === "GET" ? req.query : req.body;
+      const limitRaw = Number(source?.limit);
+      const limit = Number.isFinite(limitRaw)
+        ? Math.min(Math.max(limitRaw, 1), 18)
+        : 6;
+
+      const allProperties = await getProperties({});
+      if (!allProperties.length) {
+        return res.status(200).json({ properties: [] });
+      }
+
+      const [profileRes, petsRes, bookingsRes] = await Promise.all([
+        supabaseAdmin
+          .from("profiles")
+          .select("address")
+          .eq("id", userId)
+          .maybeSingle(),
+        supabaseAdmin
+          .from("pets")
+          .select("species, breed")
+          .eq("owner_id", userId)
+          .eq("is_deleted", false),
+        supabaseAdmin
+          .from("bookings")
+          .select("property_id, service_type, pet_type, pet_breed, properties:property_id(city, property_type)")
+          .eq("user_id", userId)
+          .eq("is_deleted", false)
+          .order("created_at", { ascending: false })
+          .limit(100),
+      ]);
+
+      if (profileRes.error) throw profileRes.error;
+      if (petsRes.error) throw petsRes.error;
+      if (bookingsRes.error) throw bookingsRes.error;
+
+      const profileCity = parseCityFromAddress(profileRes.data?.address);
+      const bookingRows = bookingsRes.data ?? [];
+      const userPets = petsRes.data ?? [];
+
+      const propertyVisitCount = new Map<string, number>();
+      const preferredPropertyTypes = new Set<string>();
+      const citiesFromBookings = new Map<string, number>();
+      const preferredPetTypes = new Set<string>();
+
+      for (const booking of bookingRows as any[]) {
+        if (booking.property_id) {
+          const key = String(booking.property_id);
+          propertyVisitCount.set(key, (propertyVisitCount.get(key) || 0) + 1);
+        }
+
+        const bookingCity = normalizeText(booking?.properties?.city);
+        if (bookingCity) {
+          citiesFromBookings.set(bookingCity, (citiesFromBookings.get(bookingCity) || 0) + 1);
+        }
+
+        const bookingPropertyType = booking?.properties?.property_type;
+        if (Array.isArray(bookingPropertyType)) {
+          for (const t of bookingPropertyType) {
+            const normalized = normalizeText(t);
+            if (normalized) preferredPropertyTypes.add(normalized);
+          }
+        } else {
+          const normalized = normalizeText(bookingPropertyType);
+          if (normalized) preferredPropertyTypes.add(normalized);
+        }
+
+        const bookingPetType = normalizeText(booking.pet_type);
+        if (bookingPetType) preferredPetTypes.add(bookingPetType);
+      }
+
+      for (const pet of userPets as any[]) {
+        const species = normalizeText(pet.species);
+        if (species) preferredPetTypes.add(species);
+      }
+
+      const fallbackCity = [...citiesFromBookings.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || null;
+      const targetCity = profileCity || fallbackCity;
+
+      const scored = allProperties.map((property: any) => {
+        let score = 0;
+
+        const city = normalizeText(property.city || property.address);
+        if (targetCity && city) {
+          if (city === targetCity) score += 35;
+          else if (city.includes(targetCity) || targetCity.includes(city)) score += 20;
+        }
+
+        const visitCount = propertyVisitCount.get(String(property.id)) || 0;
+        score += Math.min(24, visitCount * 8);
+
+        const propertyTypes = Array.isArray(property.property_type)
+          ? property.property_type.map((t: unknown) => normalizeText(t)).filter(Boolean)
+          : [normalizeText(property.property_type)].filter(Boolean);
+        if (propertyTypes.some((t: string) => preferredPropertyTypes.has(t))) {
+          score += 14;
+        }
+
+        const acceptedPetTypes = Array.isArray(property.pet_types_accepted)
+          ? property.pet_types_accepted.map((t: unknown) => normalizeText(t)).filter(Boolean)
+          : [];
+        if (acceptedPetTypes.some((t: string) => preferredPetTypes.has(t))) {
+          score += 12;
+        }
+
+        score += Math.min(10, Number(property.rating || 0) * 2);
+        score += Math.min(5, Math.log10(Number(property.review_count || 0) + 1) * 3);
+        if (property.featured) score += 3;
+
+        // Small tie-breaker noise to avoid repeating identical orders.
+        score += Math.random() * 0.2;
+
+        return { property, score };
+      });
+
+      scored.sort((a, b) => b.score - a.score);
+      return res.status(200).json({ properties: scored.slice(0, limit).map((row) => row.property) });
+    } catch (err: any) {
+      console.error("[recommendedProperties]", err);
+      return res.status(500).json({ message: err.message || "Failed to fetch recommended properties" });
     }
   },
 
@@ -122,6 +266,17 @@ export const propertyController = {
         return res.status(400).json({ message: "Invalid Property ID format" });
       }
 
+      const { data: propertyRow, error: propertyErr } = await supabaseAdmin
+        .from("properties")
+        .select("id")
+        .eq("id", id)
+        .eq("status", "approved")
+        .eq("is_deleted", false)
+        .maybeSingle();
+
+      if (propertyErr) throw propertyErr;
+      if (!propertyRow) return res.status(404).json({ message: "Property not found" });
+
       const { data, error } = await supabaseAdmin
         .from("property_pricing")
         .select("payment_options")
@@ -144,6 +299,90 @@ export const propertyController = {
     }
   },
 
+  /**
+   * GET /api/properties/:id/cancellation-policy
+   * Public endpoint — returns the cancellation policy for a property.
+   * Supports lookup by property_id or property_name via query param.
+   */
+  getCancellationPolicy: async (req: Request, res: Response) => {
+    try {
+      let id = req.params.id as string;
+      const propertyName = req.query.property_name as string | undefined;
+
+      let property: any = null;
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+      // If property_name is provided, search by name first
+      if (propertyName) {
+        const { data, error } = await supabaseAdmin
+          .from("properties")
+          .select("id, name")
+          .ilike("name", `%${propertyName}%`)
+          .eq("is_deleted", false)
+          .single();
+
+        if (error && error.code !== "PGRST116") {
+          // PGRST116 = no rows
+          throw error;
+        }
+
+        if (data) {
+          id = data.id;
+          property = data;
+        }
+      }
+
+      // If no property found yet and id is a valid UUID, use that id
+      if (!property && id && uuidRegex.test(id)) {
+        const { data, error } = await supabaseAdmin
+          .from("properties")
+          .select("id, name")
+          .eq("id", id)
+          .eq("is_deleted", false)
+          .single();
+
+        if (error && error.code !== "PGRST116") {
+          throw error;
+        }
+
+        property = data;
+      }
+
+      if (!property || !id) {
+        const searchDescription = propertyName
+          ? `Property with name containing "${propertyName}"`
+          : id && uuidRegex.test(id)
+            ? "Property"
+            : propertyName || id;
+
+        return res.status(404).json({
+          message: `${searchDescription} not found`,
+        });
+      }
+
+      // Fetch cancellation policy from property_setup table
+      const { data: setupData, error: setupError } = await supabaseAdmin
+        .from("property_setup")
+        .select("cancellation_policy")
+        .eq("property_id", id)
+        .single();
+
+      if (setupError && setupError.code !== "PGRST116") {
+        throw setupError;
+      }
+
+      return res.json({
+        property_id: property.id,
+        property_name: property.name,
+        cancellation_policy: setupData?.cancellation_policy || {},
+        message: "Cancellation policy retrieved successfully",
+      });
+    } catch (err: any) {
+      console.error("getCancellationPolicy error:", err);
+      res.status(500).json({ message: err.message || "Failed to fetch cancellation policy" });
+    }
+  },
+
   getReviews: async (req: Request, res: Response) => {
     try {
       const id = req.params.id as string;
@@ -151,6 +390,17 @@ export const propertyController = {
       if (!id || !uuidRegex.test(id)) {
         return res.status(400).json({ message: "Invalid Property ID format" });
       }
+
+      const { data: propertyRow, error: propertyErr } = await supabaseAdmin
+        .from("properties")
+        .select("id")
+        .eq("id", id)
+        .eq("status", "approved")
+        .eq("is_deleted", false)
+        .maybeSingle();
+
+      if (propertyErr) throw propertyErr;
+      if (!propertyRow) return res.status(404).json({ message: "Property not found" });
 
       const { data, error } = await supabaseAdmin
         .from("reviews")
@@ -193,6 +443,7 @@ export const propertyController = {
           )
         `)
         .eq("owner_id", userId)
+        .in("status", ["approved", "suspended"])
         .eq("is_deleted", false);
 
       if (error) throw error;
@@ -294,6 +545,7 @@ export const propertyController = {
         .from('properties')
         .select('id, capacity')
         .eq('owner_id', userId)
+        .eq('status', 'approved')
         .eq('is_deleted', false);
 
       if (filterPropertyId) {
@@ -394,9 +646,15 @@ export const propertyController = {
         query = query.eq('is_active', true);
       } else {
         // check ownership
-        const { data: propRows } = await supabaseAdmin.from('properties').select('owner_id').eq('id', propertyId).single();
+        const { data: propRows } = await supabaseAdmin
+          .from('properties')
+          .select('owner_id, status, is_deleted')
+          .eq('id', propertyId)
+          .single();
         const ownerId = propRows?.owner_id;
-        if (!ownerId || String(ownerId) !== String(userId)) {
+        const isOwner = ownerId && String(ownerId) === String(userId);
+        const isApproved = propRows?.status === 'approved' && propRows?.is_deleted === false;
+        if (!isOwner || !isApproved) {
           query = query.eq('is_active', true);
         }
       }
@@ -418,9 +676,14 @@ export const propertyController = {
       if (!propertyId) return res.status(400).json({ message: 'property id required' });
 
       // verify owner
-      const { data: propRow, error: propErr } = await supabaseAdmin.from('properties').select('owner_id').eq('id', propertyId).single();
+      const { data: propRow, error: propErr } = await supabaseAdmin
+        .from('properties')
+        .select('owner_id, status, is_deleted')
+        .eq('id', propertyId)
+        .single();
       if (propErr) throw propErr;
       if (!propRow || String(propRow.owner_id) !== String(userId)) return res.status(403).json({ message: 'Forbidden' });
+      if (propRow.is_deleted || propRow.status !== 'approved') return res.status(403).json({ message: 'Property is not active.' });
 
       const { name, description, price, category, capacity, is_active } = req.body;
 
@@ -493,9 +756,14 @@ export const propertyController = {
       if (!svcRow) return res.status(404).json({ message: 'service not found' });
 
       const propertyId = svcRow.property_id;
-      const { data: propRow, error: propErr } = await supabaseAdmin.from('properties').select('owner_id').eq('id', propertyId).single();
+      const { data: propRow, error: propErr } = await supabaseAdmin
+        .from('properties')
+        .select('owner_id, status, is_deleted')
+        .eq('id', propertyId)
+        .single();
       if (propErr) throw propErr;
       if (!propRow || String(propRow.owner_id) !== String(userId)) return res.status(403).json({ message: 'Forbidden' });
+      if (propRow.is_deleted || propRow.status !== 'approved') return res.status(403).json({ message: 'Property is not active.' });
 
       const updates = { ...req.body };
       const { data, error } = await supabaseAdmin.from('property_services').update(updates).eq('id', serviceId).select().single();
@@ -521,9 +789,14 @@ export const propertyController = {
       if (!svcRow) return res.status(404).json({ message: 'service not found' });
 
       const propertyId = svcRow.property_id;
-      const { data: propRow, error: propErr } = await supabaseAdmin.from('properties').select('owner_id').eq('id', propertyId).single();
+      const { data: propRow, error: propErr } = await supabaseAdmin
+        .from('properties')
+        .select('owner_id, status, is_deleted')
+        .eq('id', propertyId)
+        .single();
       if (propErr) throw propErr;
       if (!propRow || String(propRow.owner_id) !== String(userId)) return res.status(403).json({ message: 'Forbidden' });
+      if (propRow.is_deleted || propRow.status !== 'approved') return res.status(403).json({ message: 'Property is not active.' });
 
       // soft delete
       const { data, error } = await supabaseAdmin.from('property_services').update({ is_deleted: true, is_active: false }).eq('id', serviceId).select().single();

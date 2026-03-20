@@ -8,7 +8,8 @@ import {
   ArrowLeft, Share2, Check,
   Phone, Mail, Clock, Award, Users
 } from "lucide-react";
-import { PetLoader } from "@/components/ui/PetLoader";
+import RandomFullPagePetLoader from "@/components/ui/RandomFullPagePetLoader";
+import { useBlockingPageLoad } from "@/hooks/useBlockingPageLoad";
 import { useState, useEffect } from "react";
 import { favoritesApi } from "../services/favoritesApi";
 import { fetchPropertyById, fetchPropertyReviews } from "../services/propertyApi";
@@ -22,6 +23,7 @@ const GroomingDetail = () => {
   const [isLiked, setIsLiked] = useState(false);
   const [selectedService, setSelectedService] = useState<any>(null);
   const [reviews, setReviews] = useState<any[]>([]);
+  const [isPageBlocking, notifyLoaderFinished] = useBlockingPageLoad(loading, 800);
 
   const isAuthenticated =
     typeof window !== "undefined" &&
@@ -94,16 +96,8 @@ const GroomingDetail = () => {
   };
 
   // ── Loading state ──
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-background">
-        <Header />
-        <div className="flex flex-col items-center justify-center py-32">
-          <PetLoader text="Loading salon details..." />
-        </div>
-        <Footer />
-      </div>
-    );
+  if (isPageBlocking) {
+    return <RandomFullPagePetLoader dataLoaded={!loading} onComplete={notifyLoaderFinished} />;
   }
 
   // ── Not found ──
@@ -387,11 +381,7 @@ const GroomingDetail = () => {
                 )}
               </div>
 
-              {/* Reviews */}
-              <div className="mb-8">
-                <h2 className="font-semibold text-xl mb-4">Customer Reviews</h2>
-                <ReviewList propertyId={property.id} />
-              </div>
+    
             </div>
 
             {/* Booking Card */}

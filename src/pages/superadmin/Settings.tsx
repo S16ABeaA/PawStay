@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import SuperAdminLayout from "@/components/superadmin/SuperAdminLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -6,11 +7,58 @@ import { Switch } from "@/components/ui/switch";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
-import { Globe, Bell, Shield, Palette, Mail } from "lucide-react";
-import { useState } from "react";
+import { Globe, Bell, Shield, Mail, Upload, X, Palette, Mail } from "lucide-react";
+import { bookingApi } from "@/services/bookingApi";
 
 const SuperAdminSettings = () => {
   const { toast } = useToast();
+  const [paymentChannels, setPaymentChannels] = useState({
+    gcash: { imageUrl: "", description: "" },
+    paymaya: { imageUrl: "", description: "" },
+    bankTransfer: { imageUrl: "", number: "", provider: "" },
+    card: { number: "", provider: "" },
+    cashCheque: { description: "To be settled personally between owner and proprietor." },
+  });
+  const [savingChannels, setSavingChannels] = useState(false);
+  const gcashInputRef = useRef<HTMLInputElement>(null);
+  const paymayaInputRef = useRef<HTMLInputElement>(null);
+  const bankTransferInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const loadPaymentChannels = async () => {
+      try {
+        const res = await bookingApi.getSettlementPaymentChannels();
+        setPaymentChannels({
+          gcash: {
+            imageUrl: res?.paymentChannels?.gcash?.imageUrl || "",
+            description: res?.paymentChannels?.gcash?.description || "",
+          },
+          paymaya: {
+            imageUrl: res?.paymentChannels?.paymaya?.imageUrl || "",
+            description: res?.paymentChannels?.paymaya?.description || "",
+          },
+          bankTransfer: {
+            imageUrl: res?.paymentChannels?.bankTransfer?.imageUrl || "",
+            number: res?.paymentChannels?.bankTransfer?.number || "",
+            provider: res?.paymentChannels?.bankTransfer?.provider || "",
+          },
+          card: {
+            number: res?.paymentChannels?.card?.number || "",
+            provider: res?.paymentChannels?.card?.provider || "",
+          },
+          cashCheque: {
+            description:
+              res?.paymentChannels?.cashCheque?.description ||
+              "To be settled personally between owner and proprietor.",
+          },
+        });
+      } catch (err) {
+        console.error("Failed to load settlement payment channels", err);
+      }
+    };
+
+    loadPaymentChannels();
+  }, []);
 
   // controlled settings
   const [platformName, setPlatformName] = useState<string>("PawStay");
@@ -25,6 +73,91 @@ const SuperAdminSettings = () => {
     });
     // TODO: persist to backend
     console.log("Save platform settings", { platformName, supportEmail, platformFee, minBookingAmount });
+  };
+
+  const handleImageUpload = (e: ChangeEvent<HTMLInputElement>, target: "gcash" | "paymaya" | "bankTransfer") => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setPaymentChannels((prev) => ({
+        ...prev,
+        [target]: {
+          ...prev[target],
+          imageUrl: String(reader.result || ""),
+        },
+      }));
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const savePaymentChannels = async () => {
+    try {
+      setSavingChannels(true);
+      const res = await bookingApi.updateSettlementPaymentChannels({
+        paymentChannels: {
+          gcash: {
+            imageUrl: paymentChannels.gcash.imageUrl || null,
+            description: paymentChannels.gcash.description,
+          },
+          paymaya: {
+            imageUrl: paymentChannels.paymaya.imageUrl || null,
+            description: paymentChannels.paymaya.description,
+          },
+          bankTransfer: {
+            imageUrl: paymentChannels.bankTransfer.imageUrl || null,
+            number: paymentChannels.bankTransfer.number,
+            provider: paymentChannels.bankTransfer.provider,
+          },
+          card: {
+            number: paymentChannels.card.number,
+            provider: paymentChannels.card.provider,
+          },
+          cashCheque: {
+            description: paymentChannels.cashCheque.description,
+          },
+        },
+      });
+
+      setPaymentChannels({
+        gcash: {
+          imageUrl: res?.paymentChannels?.gcash?.imageUrl || "",
+          description: res?.paymentChannels?.gcash?.description || "",
+        },
+        paymaya: {
+          imageUrl: res?.paymentChannels?.paymaya?.imageUrl || "",
+          description: res?.paymentChannels?.paymaya?.description || "",
+        },
+        bankTransfer: {
+          imageUrl: res?.paymentChannels?.bankTransfer?.imageUrl || "",
+          number: res?.paymentChannels?.bankTransfer?.number || "",
+          provider: res?.paymentChannels?.bankTransfer?.provider || "",
+        },
+        card: {
+          number: res?.paymentChannels?.card?.number || "",
+          provider: res?.paymentChannels?.card?.provider || "",
+        },
+        cashCheque: {
+          description:
+            res?.paymentChannels?.cashCheque?.description ||
+            "To be settled personally between owner and proprietor.",
+        },
+      });
+
+      toast({
+        title: "Payment accounts saved",
+        description: "Settlement payment images are now updated for proprietors.",
+      });
+    } catch (err: any) {
+      console.error("Failed to save settlement payment channels", err);
+      toast({
+        title: "Save failed",
+        description: err?.error || err?.message || "Could not save payment account images.",
+        variant: "destructive",
+      });
+    } finally {
+      setSavingChannels(false);
+    }
   };
 
   return (
@@ -155,6 +288,150 @@ const SuperAdminSettings = () => {
               >
                 Save Changes
               </Button>
+
+              <div className="space-y-4 pt-4 border-t border-white/[0.06]">
+                <div>
+                  <p className="font-medium text-white">Settlement Payment Accounts</p>
+                  <p className="text-sm text-[#808080]">Add descriptions and images for settlement channels shown to proprietors.</p>
+                </div>
+
+                <div className="grid md:grid-cols-2 gap-5">
+                  <div>
+                    <p className="text-xs text-[#808080] mb-2">GCash Account Image</p>
+                    {paymentChannels.gcash.imageUrl ? (
+                      <div className="relative w-44 h-44 rounded-lg border border-white/[0.12] bg-white p-2">
+                        <img src={paymentChannels.gcash.imageUrl} alt="GCash payment account" className="w-full h-full object-contain rounded" />
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="absolute -top-2 -right-2 h-7 w-7 bg-black/60 text-white hover:bg-black/80"
+                          onClick={() => setPaymentChannels((prev) => ({ ...prev, gcash: { ...prev.gcash, imageUrl: "" } }))}
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        className="w-44 h-44 rounded-lg border-2 border-dashed border-white/[0.14] flex flex-col items-center justify-center gap-2 text-[#808080] hover:text-white hover:border-[#ffa31a]/70"
+                        onClick={() => gcashInputRef.current?.click()}
+                      >
+                        <Upload className="h-4 w-4" />
+                        <span className="text-xs">Upload Image</span>
+                      </button>
+                    )}
+                    <input ref={gcashInputRef} type="file" accept="image/*" className="hidden" onChange={(e) => handleImageUpload(e, "gcash")} />
+                    <Input
+                      value={paymentChannels.gcash.description}
+                      onChange={(e) => setPaymentChannels((prev) => ({ ...prev, gcash: { ...prev.gcash, description: (e.target as HTMLInputElement).value } }))}
+                      placeholder="GCash description (optional)"
+                      className="mt-2 bg-[#292929] border-white/[0.09] text-white"
+                    />
+                  </div>
+
+                  <div>
+                    <p className="text-xs text-[#808080] mb-2">PayMaya Account Image</p>
+                    {paymentChannels.paymaya.imageUrl ? (
+                      <div className="relative w-44 h-44 rounded-lg border border-white/[0.12] bg-white p-2">
+                        <img src={paymentChannels.paymaya.imageUrl} alt="PayMaya payment account" className="w-full h-full object-contain rounded" />
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="absolute -top-2 -right-2 h-7 w-7 bg-black/60 text-white hover:bg-black/80"
+                          onClick={() => setPaymentChannels((prev) => ({ ...prev, paymaya: { ...prev.paymaya, imageUrl: "" } }))}
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        className="w-44 h-44 rounded-lg border-2 border-dashed border-white/[0.14] flex flex-col items-center justify-center gap-2 text-[#808080] hover:text-white hover:border-[#ffa31a]/70"
+                        onClick={() => paymayaInputRef.current?.click()}
+                      >
+                        <Upload className="h-4 w-4" />
+                        <span className="text-xs">Upload Image</span>
+                      </button>
+                    )}
+                    <input ref={paymayaInputRef} type="file" accept="image/*" className="hidden" onChange={(e) => handleImageUpload(e, "paymaya")} />
+                    <Input
+                      value={paymentChannels.paymaya.description}
+                      onChange={(e) => setPaymentChannels((prev) => ({ ...prev, paymaya: { ...prev.paymaya, description: (e.target as HTMLInputElement).value } }))}
+                      placeholder="PayMaya description (optional)"
+                      className="mt-2 bg-[#292929] border-white/[0.09] text-white"
+                    />
+                  </div>
+
+                  <div>
+                    <p className="text-xs text-[#808080] mb-2">Bank Transfer (Description and/or Image)</p>
+                    {paymentChannels.bankTransfer.imageUrl ? (
+                      <div className="relative w-44 h-44 rounded-lg border border-white/[0.12] bg-white p-2">
+                        <img src={paymentChannels.bankTransfer.imageUrl} alt="Bank transfer account" className="w-full h-full object-contain rounded" />
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="absolute -top-2 -right-2 h-7 w-7 bg-black/60 text-white hover:bg-black/80"
+                          onClick={() => setPaymentChannels((prev) => ({ ...prev, bankTransfer: { ...prev.bankTransfer, imageUrl: "" } }))}
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        className="w-44 h-44 rounded-lg border-2 border-dashed border-white/[0.14] flex flex-col items-center justify-center gap-2 text-[#808080] hover:text-white hover:border-[#ffa31a]/70"
+                        onClick={() => bankTransferInputRef.current?.click()}
+                      >
+                        <Upload className="h-4 w-4" />
+                        <span className="text-xs">Upload Image</span>
+                      </button>
+                    )}
+                    <input ref={bankTransferInputRef} type="file" accept="image/*" className="hidden" onChange={(e) => handleImageUpload(e, "bankTransfer")} />
+                    <Input
+                      value={paymentChannels.bankTransfer.number}
+                      onChange={(e) => setPaymentChannels((prev) => ({ ...prev, bankTransfer: { ...prev.bankTransfer, number: (e.target as HTMLInputElement).value } }))}
+                      placeholder="Bank transfer number"
+                      className="mt-2 bg-[#292929] border-white/[0.09] text-white"
+                    />
+                    <Input
+                      value={paymentChannels.bankTransfer.provider}
+                      onChange={(e) => setPaymentChannels((prev) => ({ ...prev, bankTransfer: { ...prev.bankTransfer, provider: (e.target as HTMLInputElement).value } }))}
+                      placeholder="Bank transfer provider"
+                      className="mt-2 bg-[#292929] border-white/[0.09] text-white"
+                    />
+                  </div>
+
+                  <div>
+                    <p className="text-xs text-[#808080] mb-2">Card</p>
+                    <Input
+                      value={paymentChannels.card.number}
+                      onChange={(e) => setPaymentChannels((prev) => ({ ...prev, card: { ...prev.card, number: (e.target as HTMLInputElement).value } }))}
+                      placeholder="Card number"
+                      className="bg-[#292929] border-white/[0.09] text-white"
+                    />
+                    <Input
+                      value={paymentChannels.card.provider}
+                      onChange={(e) => setPaymentChannels((prev) => ({ ...prev, card: { ...prev.card, provider: (e.target as HTMLInputElement).value } }))}
+                      placeholder="Card provider"
+                      className="mt-2 bg-[#292929] border-white/[0.09] text-white"
+                    />
+                  </div>
+
+                  <div className="md:col-span-2">
+                    <p className="text-xs text-[#808080] mb-2">Cash/Cheque (No Image)</p>
+                    <Input
+                      value={paymentChannels.cashCheque.description}
+                      onChange={(e) => setPaymentChannels((prev) => ({ ...prev, cashCheque: { description: (e.target as HTMLInputElement).value } }))}
+                      placeholder="To be settled personally between owner and proprietor."
+                      className="bg-[#292929] border-white/[0.09] text-white"
+                    />
+                  </div>
+                </div>
+
+                <Button onClick={savePaymentChannels} disabled={savingChannels} className="bg-[#ffa31a] hover:bg-[#ffa31a]/90 text-[#1b1b1b]">
+                  {savingChannels ? "Saving..." : "Save Payment Accounts"}
+                </Button>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>

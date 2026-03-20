@@ -8,6 +8,8 @@ import {
 } from "@/components/ui/select";
 import { Building2, Loader2 } from "lucide-react";
 
+const isSelectable = (status?: string) => status === "approved";
+
 const BusinessSelector = () => {
   const { properties, selectedPropertyId, setSelectedPropertyId, loading } = useAdminProperty();
 
@@ -23,12 +25,15 @@ const BusinessSelector = () => {
   // Only show selector when there are 2+ properties
   if (properties.length <= 1) {
     if (properties.length === 1) {
+      const only = properties[0];
+      const suspended = only.status === "suspended";
       return (
-        <div className="flex items-center gap-2 text-sm">
-          <Building2 className="h-4 w-4 text-primary" />
-          <span className="font-medium text-foreground truncate max-w-[200px] whitespace-nowrap">
-            {properties[0].name}
+        <div className={`flex items-center gap-2 text-sm ${suspended ? "opacity-60" : ""}`}>
+          <Building2 className={`h-4 w-4 ${suspended ? "text-muted-foreground" : "text-primary"}`} />
+          <span className={`font-medium truncate max-w-[200px] whitespace-nowrap ${suspended ? "text-muted-foreground" : "text-foreground"}`}>
+            {only.name}
           </span>
+          {suspended && <span className="text-xs text-muted-foreground">(Suspended)</span>}
         </div>
       );
     }
@@ -44,11 +49,14 @@ const BusinessSelector = () => {
         </SelectTrigger>
         <SelectContent>
           {properties.map((p) => (
-            <SelectItem key={p.id} value={p.id}>
+            <SelectItem key={p.id} value={p.id} disabled={!isSelectable(p.status)}>
               <div className="flex items-center gap-2 min-w-0">
-                <span className="truncate flex-1 min-w-0">{p.name}</span>
+                <span className={`truncate flex-1 min-w-0 ${isSelectable(p.status) ? "" : "text-muted-foreground"}`}>{p.name}</span>
                 {p.city && (
                   <span className="text-xs text-muted-foreground flex-shrink-0 ml-2 whitespace-nowrap">— {p.city}</span>
+                )}
+                {p.status === "suspended" && (
+                  <span className="text-[10px] uppercase tracking-wide text-muted-foreground">suspended</span>
                 )}
               </div>
             </SelectItem>

@@ -21,6 +21,14 @@ import supportRoutes from './routes/supportRoute';
 import analyticsRoutes from './routes/analyticsRoute';
 import dashboardRoute from './routes/dashboardRoute';
 import settlementRoutes from './routes/settlementRoute';
+import aiRoutes from './routes/aiRoute';
+import { dispatchSettlementRemindersJob } from './controllers/settlementController';
+import {
+  dispatchBookingLifecycleNotificationsJob,
+  dispatchWeeklyReportNotificationsJob,
+} from './services/notificationJobs';
+import { ensureStorageBucket } from './utils/storageMedia';
+import { withJobLock } from './utils/jobLock';
  
 dotenv.config({ path: '../.env' });
 dotenv.config();
@@ -106,6 +114,7 @@ app.use('/api/notifications', notificationRoutes);
 app.use('/api/support', supportRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/settlements', settlementRoutes);
+app.use('/api/ai', aiRoutes);
 
 // Simple health/root route
 app.get('/', (_req, res) => {
@@ -114,4 +123,59 @@ app.get('/', (_req, res) => {
 
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
+
+  Promise.all([
+    ensureStorageBucket('property-images', false),
+    ensureStorageBucket('legal-documents', false),
+    ensureStorageBucket('pet-photos', false),
+    ensureStorageBucket('booking-documents', false),
+    ensureStorageBucket('booking-payments', false),
+  ]).catch((err) => {
+    console.warn('[storage] bucket bootstrap failed:', err?.message || err);
+  });
+
+  // Interval durations (ms) and their stale-lock thresholds (seconds).
+  // Stale thresholds are set to 92 % of the interval so a lock held by a
+  // crashed instance is always cleaned up before the next scheduled run.
+  const SIX_HOURS_MS   = 6  * 60 * 60 * 1000;
+  const ONE_DAY_MS     = 24 * 60 * 60 * 1000;
+  const toStaleSecs    = (intervalMs: number) => Math.floor(intervalMs * 0.92 / 1000);
+
+  const SETTLEMENT_STALE_SECS    = toStaleSecs(SIX_HOURS_MS);
+  const BOOKING_NOTIF_STALE_SECS = toStaleSecs(SIX_HOURS_MS);
+  const WEEKLY_REPORT_STALE_SECS = toStaleSecs(ONE_DAY_MS);
+
+  // Settlement reminders: run once at startup, then every 6 hours.
+  // withJobLock ensures only one instance executes the job at a time.
+  withJobLock('settlement-reminders', SETTLEMENT_STALE_SECS, dispatchSettlementRemindersJob)
+    .then((result) => result !== null && console.log('[settlement-reminders] startup run:', result))
+    .catch((err) => console.warn('[settlement-reminders] startup run failed:', err?.message || err));
+
+  setInterval(() => {
+    withJobLock('settlement-reminders', SETTLEMENT_STALE_SECS, dispatchSettlementRemindersJob)
+      .then((result) => result !== null && console.log('[settlement-reminders] interval run:', result))
+      .catch((err) => console.warn('[settlement-reminders] interval run failed:', err?.message || err));
+  }, SIX_HOURS_MS);
+
+  // Booking lifecycle notifications: run once at startup, then every 6 hours.
+  withJobLock('booking-lifecycle-notifications', BOOKING_NOTIF_STALE_SECS, dispatchBookingLifecycleNotificationsJob)
+    .then((result) => result !== null && console.log('[booking-notifications] startup run:', result))
+    .catch((err) => console.warn('[booking-notifications] startup run failed:', err?.message || err));
+
+  setInterval(() => {
+    withJobLock('booking-lifecycle-notifications', BOOKING_NOTIF_STALE_SECS, dispatchBookingLifecycleNotificationsJob)
+      .then((result) => result !== null && console.log('[booking-notifications] interval run:', result))
+      .catch((err) => console.warn('[booking-notifications] interval run failed:', err?.message || err));
+  }, SIX_HOURS_MS);
+
+  // Weekly report notifications: run once at startup, then every 24 hours.
+  withJobLock('weekly-report-notifications', WEEKLY_REPORT_STALE_SECS, dispatchWeeklyReportNotificationsJob)
+    .then((result) => result !== null && console.log('[weekly-report-notifications] startup run:', result))
+    .catch((err) => console.warn('[weekly-report-notifications] startup run failed:', err?.message || err));
+
+  setInterval(() => {
+    withJobLock('weekly-report-notifications', WEEKLY_REPORT_STALE_SECS, dispatchWeeklyReportNotificationsJob)
+      .then((result) => result !== null && console.log('[weekly-report-notifications] interval run:', result))
+      .catch((err) => console.warn('[weekly-report-notifications] interval run failed:', err?.message || err));
+  }, ONE_DAY_MS);
 });

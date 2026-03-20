@@ -33,6 +33,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Plus, Edit, Trash2, Bed, Scissors, Stethoscope, Loader2 } from "lucide-react";
 import { useState, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { servicesApi, DBService } from "@/services/servicesApi";
 import { authHelper } from "@/helpers/authHelper";
 import { useAdminProperty } from "@/hooks/useAdminProperty";
@@ -51,9 +52,15 @@ const categoryIconMap: Record<string, keyof typeof iconMap> = {
 };
 
 const AdminServices = () => {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [services, setServices] = useState<DBService[]>([]);
   const [loading, setLoading] = useState(true);
-  const { selectedPropertyId: propertyId, loading: propLoading } = useAdminProperty();
+  const {
+    selectedPropertyId: propertyId,
+    setSelectedPropertyId,
+    properties,
+    loading: propLoading,
+  } = useAdminProperty();
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
@@ -96,6 +103,20 @@ const AdminServices = () => {
 
     return () => { cancelled = true; };
   }, [propertyId, propLoading]);
+
+  useEffect(() => {
+    const requestedPropertyId = searchParams.get("propertyId");
+    if (!requestedPropertyId || propLoading) return;
+    if (!properties.some((p) => p.id === requestedPropertyId)) return;
+
+    if (requestedPropertyId !== propertyId) {
+      setSelectedPropertyId(requestedPropertyId);
+    }
+
+    const next = new URLSearchParams(searchParams);
+    next.delete("propertyId");
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams, propLoading, properties, propertyId, setSelectedPropertyId]);
 
   const fetchServices = async (propId: string) => {
     try {

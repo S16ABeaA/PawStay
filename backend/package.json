@@ -5,6 +5,7 @@
   "main": "index.js",
   "type": "commonjs",
   "dependencies": {
+    "@google/generative-ai": "^0.24.1",
     "@supabase/supabase-js": "^2.95.3",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.6",
@@ -19,7 +20,8 @@
     "dev": "nodemon --watch '*.ts' --exec ts-node server.ts",
     "start": "node dist/server.js",
     "build": "tsc",
-    "serve": "node dist/server.js"
+    "serve": "node dist/server.js",
+    "test:ai-schemas": "ts-node ai/schemas/schemaValidation.smoke.ts"
   },
   "devDependencies": {
     "@types/cookie-parser": "^1.4.10",
