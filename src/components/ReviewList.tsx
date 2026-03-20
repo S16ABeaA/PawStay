@@ -3,6 +3,7 @@ import { Star } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { reviewsApi, Review } from "@/services/reviewsApi";
 import { PetLoader } from "@/components/ui/PetLoader";
+import BookingIdText from "@/components/BookingIdText";
 
 interface ReviewListProps {
   propertyId: string;
@@ -104,7 +105,7 @@ export default function ReviewList({ propertyId }: ReviewListProps) {
 
                 {review.comment && (
                   <p className="text-sm text-foreground leading-relaxed">
-                    {review.comment}
+                    <BookingIdText text={review.comment} />
                   </p>
                 )}
 
@@ -115,7 +116,7 @@ export default function ReviewList({ propertyId }: ReviewListProps) {
                       Owner Reply
                     </p>
                     <p className="text-sm text-muted-foreground">
-                      {review.reply}
+                      <BookingIdText text={review.reply} />
                     </p>
                   </div>
                 )}

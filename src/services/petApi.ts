@@ -28,4 +28,8 @@ export const petApi = {
 
   /** Delete (soft-delete) a pet */
   delete: (id: string) => authHelper.delete(`${API_BASE_URL}/api/pets/${id}`),
+
+  /** Analyze latest service history records with OCR-based insights */
+  getServiceHistoryInsights: (id: string, limit: number = 5) =>
+    authHelper.get(`${API_BASE_URL}/api/pets/${id}/service-history/insights?limit=${Math.max(3, Math.min(5, Math.floor(limit || 5)))}`),
 };

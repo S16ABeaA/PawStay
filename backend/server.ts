@@ -27,6 +27,7 @@ import {
   dispatchBookingLifecycleNotificationsJob,
   dispatchWeeklyReportNotificationsJob,
 } from './services/notificationJobs';
+import { dispatchPetCareNotificationsJob } from './services/petCareNotificationJobs';
 import { ensureStorageBucket } from './utils/storageMedia';
  
 dotenv.config({ path: '../.env' });
@@ -161,5 +162,15 @@ app.listen(PORT, () => {
     dispatchWeeklyReportNotificationsJob()
       .then((result) => console.log('[weekly-report-notifications] interval run:', result))
       .catch((err) => console.warn('[weekly-report-notifications] interval run failed:', err?.message || err));
+  }, 24 * 60 * 60 * 1000);
+
+  dispatchPetCareNotificationsJob()
+    .then((result) => console.log('[pet-care-notifications] startup run:', result))
+    .catch((err) => console.warn('[pet-care-notifications] startup run failed:', err?.message || err));
+
+  setInterval(() => {
+    dispatchPetCareNotificationsJob()
+      .then((result) => console.log('[pet-care-notifications] interval run:', result))
+      .catch((err) => console.warn('[pet-care-notifications] interval run failed:', err?.message || err));
   }, 24 * 60 * 60 * 1000);
 });

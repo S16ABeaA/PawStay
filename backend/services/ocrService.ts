@@ -1,4 +1,5 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import mammoth from "mammoth";
 
 const DEFAULT_LANGUAGE = "eng";
 
@@ -45,12 +46,13 @@ const cleanGeminiOcrText = (value: string): string => {
   return noPrefix;
 };
 
-export const extractTextFromImageBuffer = async (
-  imageBuffer: Buffer,
+const runGeminiOcr = async (
+  buffer: Buffer,
+  mimeType: string,
   language?: string,
 ): Promise<{ text: string; language: string }> => {
-  if (!imageBuffer || imageBuffer.length === 0) {
-    throw new Error("Image content is empty");
+  if (!buffer || buffer.length === 0) {
+    throw new Error("Document content is empty");
   }
 
   const apiKey = process.env.GEMINI_API_KEY;
@@ -74,8 +76,8 @@ export const extractTextFromImageBuffer = async (
     `${OCR_PROMPT}\n${languageHint}`.trim(),
     {
       inlineData: {
-        data: imageBuffer.toString("base64"),
-        mimeType: "image/jpeg",
+        data: buffer.toString("base64"),
+        mimeType,
       },
     },
   ]);
@@ -85,6 +87,13 @@ export const extractTextFromImageBuffer = async (
   return { text, language: normalizedLanguage };
 };
 
+export const extractTextFromImageBuffer = async (
+  imageBuffer: Buffer,
+  language?: string,
+): Promise<{ text: string; language: string }> => {
+  return runGeminiOcr(imageBuffer, "image/jpeg", language);
+};
+
 export const extractTextFromBase64Image = async (
   imageBase64: string,
   language?: string,
@@ -92,38 +101,66 @@ export const extractTextFromBase64Image = async (
   const imageBuffer = decodeBase64Image(imageBase64);
   const mimeType = getMimeTypeFromDataUrl(imageBase64);
 
-  if (!imageBuffer?.length) {
-    throw new Error("Image content is empty");
+  return runGeminiOcr(imageBuffer, mimeType, language);
+};
+
+export const decodeBase64Document = (
+  value: string,
+): { buffer: Buffer; mimeType: string } => {
+  const input = String(value || "").trim();
+  if (!input) {
+    throw new Error("document_base64 is required");
   }
 
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
-    throw new Error("GEMINI_API_KEY not configured");
+  const dataUrlMatch = input.match(/^data:([^;]+);base64,(.+)$/i);
+  if (dataUrlMatch) {
+    return {
+      mimeType: dataUrlMatch[1].toLowerCase(),
+      buffer: Buffer.from(dataUrlMatch[2], "base64"),
+    };
   }
 
-  const normalizedLanguage = normalizeLanguage(language);
-  const modelName =
-    process.env.GEMINI_OCR_MODEL || process.env.GEMINI_VISION_MODEL || process.env.GEMINI_MODEL || "gemini-1.5-flash";
+  return {
+    mimeType: "application/octet-stream",
+    buffer: Buffer.from(input, "base64"),
+  };
+};
 
-  const client = new GoogleGenerativeAI(apiKey);
-  const model = client.getGenerativeModel({ model: modelName });
+export const extractTextFromDocumentBuffer = async (
+  fileBuffer: Buffer,
+  mimeType: string,
+  language?: string,
+): Promise<{ text: string; language: string }> => {
+  const safeMimeType = String(mimeType || "application/octet-stream").toLowerCase();
 
-  const languageHint =
-    normalizedLanguage && normalizedLanguage !== DEFAULT_LANGUAGE
-      ? `Primary expected language code: ${normalizedLanguage}.`
-      : "";
+  if (safeMimeType === "text/plain") {
+    // Parse plain text files directly to avoid unnecessary OCR latency.
+    const text = String(fileBuffer.toString("utf8") || "").trim();
+    if (text) {
+      return { text, language: normalizeLanguage(language) };
+    }
+  }
 
-  const response = await model.generateContent([
-    `${OCR_PROMPT}\n${languageHint}`.trim(),
-    {
-      inlineData: {
-        data: imageBuffer.toString("base64"),
-        mimeType,
-      },
-    },
-  ]);
+  if (safeMimeType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document") {
+    try {
+      const extracted = await mammoth.extractRawText({ buffer: fileBuffer });
+      const text = String(extracted.value || "").trim();
+      if (text) {
+        return { text, language: normalizeLanguage(language) };
+      }
+    } catch {
+      // Fallback to OCR model path if parser fails.
+    }
+  }
 
-  const rawText = response.response.text();
-  const text = cleanGeminiOcrText(rawText);
-  return { text, language: normalizedLanguage };
+  return runGeminiOcr(fileBuffer, safeMimeType, language);
+};
+
+export const extractTextFromBase64Document = async (
+  documentBase64: string,
+  language?: string,
+): Promise<{ text: string; language: string; mimeType: string }> => {
+  const { buffer, mimeType } = decodeBase64Document(documentBase64);
+  const ocr = await runGeminiOcr(buffer, mimeType, language);
+  return { ...ocr, mimeType };
 };

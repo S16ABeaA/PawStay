@@ -2,7 +2,7 @@ import { Request, Response } from "express";
 import { petPlatformAgent } from "../ai/agent";
 import { petAnalysisService } from "../ai/petAnalysisService";
 import { petHealthCheckService } from "../ai/petHealthCheckService";
-import { extractTextFromBase64Image, extractTextFromImageBuffer } from "../services/ocrService";
+import { extractTextFromBase64Image, extractTextFromDocumentBuffer, extractTextFromImageBuffer } from "../services/ocrService";
 
 interface ChatRequestBody {
   message?: string;
@@ -42,6 +42,24 @@ interface AnalyzePetRequestBody {
     };
   };
 }
+
+const DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+
+const getLowerName = (name: string | undefined): string => String(name || "").trim().toLowerCase();
+
+const getUploadKind = (file?: Express.Multer.File): "image" | "pdf" | "txt" | "docx" | "unsupported" => {
+  if (!file) return "unsupported";
+
+  const mime = String(file.mimetype || "").toLowerCase();
+  const name = getLowerName(file.originalname);
+
+  if (mime.startsWith("image/")) return "image";
+  if (mime === "application/pdf" || name.endsWith(".pdf")) return "pdf";
+  if (mime === "text/plain" || name.endsWith(".txt")) return "txt";
+  if (mime === DOCX_MIME || name.endsWith(".docx")) return "docx";
+
+  return "unsupported";
+};
 
 export const aiController = {
   /**
@@ -101,7 +119,23 @@ export const aiController = {
       const language = String(body.language || "eng").trim() || "eng";
 
       if (uploadedFile?.buffer?.length) {
-        const result = await extractTextFromImageBuffer(uploadedFile.buffer, language);
+        const uploadKind = getUploadKind(uploadedFile);
+        if (uploadKind === "unsupported") {
+          return res.status(400).json({
+            error: "Unsupported file type. Allowed: images, PDF, TXT, DOCX",
+          });
+        }
+
+        const mimeType = String(uploadedFile.mimetype || "application/octet-stream").toLowerCase();
+        const normalizedMime = uploadKind === "txt"
+          ? "text/plain"
+          : uploadKind === "docx"
+            ? DOCX_MIME
+            : mimeType;
+
+        const result = uploadKind === "image"
+          ? await extractTextFromImageBuffer(uploadedFile.buffer, language)
+          : await extractTextFromDocumentBuffer(uploadedFile.buffer, normalizedMime, language);
         return res.json({
           text: result.text,
           language: result.language,

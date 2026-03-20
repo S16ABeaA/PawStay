@@ -1,6 +1,7 @@
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useRef, useCallback, useEffect, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { aiChatApi } from "@/services/aiChatApi";
+import { resolveLocationForSearch } from "@/lib/aiAutofill";
 
 const PET_TERMS = [
   "dog",
@@ -34,6 +35,40 @@ const DOG_TERMS = ["dog", "canine", "hound", "terrier", "retriever", "bulldog", 
 const CAT_TERMS = ["cat", "feline", "persian", "siamese", "maine coon", "ragdoll", "sphynx", "bengal", "british shorthair"];
 const PIG_TERMS = ["pig", "piglet", "mini pig", "potbellied", "pot-bellied", "hog"];
 const SMALL_PET_TERMS = ["rabbit", "hamster", "guinea pig", "bird", "parrot", "axolotl"];
+const BOOKING_ID_REGEX = /(Booking\s*ID[:\s]*)([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/gi;
+
+const renderBookingLinkedText = (text: string): ReactNode => {
+  const raw = String(text || "");
+  const parts: ReactNode[] = [];
+  let lastIndex = 0;
+  let idx = 0;
+  const regex = new RegExp(BOOKING_ID_REGEX.source, "gi");
+  let match: RegExpExecArray | null;
+
+  while ((match = regex.exec(raw)) !== null) {
+    if (match.index > lastIndex) {
+      parts.push(raw.slice(lastIndex, match.index));
+    }
+    const bookingId = String(match[1] || "");
+    parts.push(
+      <a
+        key={`booking-link-${bookingId}-${idx}`}
+        href={`/my-bookings?bookingId=${encodeURIComponent(bookingId)}`}
+        style={{ color: "#4F46E5", textDecoration: "underline", fontWeight: 600 }}
+      >
+        Booking ID: {bookingId}
+      </a>,
+    );
+    idx += 1;
+    lastIndex = match.index + match[0].length;
+  }
+
+  if (lastIndex < raw.length) {
+    parts.push(raw.slice(lastIndex));
+  }
+
+  return parts.length ? <>{parts}</> : raw;
+};
 
 type SpeciesKind = "dog" | "cat" | "pig" | "animal";
 
@@ -206,7 +241,7 @@ function HealthCheckCard({ healthCheck, visible }: { healthCheck: AnalyzerResult
           {healthCheck.status} · {healthCheck.confidence}%
         </span>
       </div>
-      <p style={{ margin: "0 0 12px", fontSize: 13, color: "#6B6080", lineHeight: 1.55, fontWeight: 500 }}>{healthCheck.summary}</p>
+      <p style={{ margin: "0 0 12px", fontSize: 13, color: "#6B6080", lineHeight: 1.55, fontWeight: 500 }}>{renderBookingLinkedText(healthCheck.summary)}</p>
 
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
         {healthCheck.estimated_age && (
@@ -282,7 +317,7 @@ function CareCard({ item, index, visible, itemId }: { item: CareItem; index: num
             <span style={{ fontSize: 13, fontWeight: 600, color: "#1A1035" }}>{item.category}</span>
             <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 20, background: priorityStyle.bg, color: priorityStyle.text, border: `1px solid ${priorityStyle.border}` }}>{item.priority.toUpperCase()}</span>
           </div>
-          <p style={{ margin: 0, fontSize: 12.5, color: "#6B6080", lineHeight: 1.5 }}>{item.summary}</p>
+          <p style={{ margin: 0, fontSize: 12.5, color: "#6B6080", lineHeight: 1.5 }}>{renderBookingLinkedText(item.summary)}</p>
         </div>
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#C4B8E8" strokeWidth="2.5" style={{ flexShrink: 0, transition: "transform 0.25s", transform: open ? "rotate(180deg)" : "none" }}>
           <polyline points="6 9 12 15 18 9"/>
@@ -290,7 +325,7 @@ function CareCard({ item, index, visible, itemId }: { item: CareItem; index: num
       </button>
       {open && (
         <div id={itemId} style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid #F5F3FF" }}>
-          <p style={{ margin: 0, fontSize: 12.5, color: "#5A4F72", lineHeight: 1.65 }}>{item.detail}</p>
+          <p style={{ margin: 0, fontSize: 12.5, color: "#5A4F72", lineHeight: 1.65 }}>{renderBookingLinkedText(item.detail)}</p>
         </div>
       )}
     </div>
@@ -309,10 +344,32 @@ function CTAButtons({ actions, visible }: { actions: NextAction[]; visible: bool
     save_pet: "Save to My Pets",
   };
 
-  const onAction = (intent: string) => {
-    if (intent === "find_vet") navigate("/veterinary");
-    else if (intent === "find_groomer") navigate("/grooming");
-    else if (intent === "find_boarding") navigate("/hotels");
+  const onAction = async (intent: string) => {
+    if (intent === "find_vet" || intent === "find_groomer") {
+      let resolved: { location: string; source: "geolocation" | "profile" | "none"; geoPending: boolean } = {
+        location: "",
+        source: "none",
+        geoPending: true,
+      };
+
+      try {
+        resolved = await resolveLocationForSearch();
+      } catch {
+        // fallback to geoPending route params
+      }
+
+      const params = new URLSearchParams();
+      params.set("date", new Date().toISOString().slice(0, 10));
+      if (resolved.location) params.set("location", resolved.location);
+      if (resolved.geoPending) params.set("geoPending", "1");
+      params.set("src", "pet-analyzer");
+      params.set("t", String(Date.now()));
+
+      navigate(`${intent === "find_vet" ? "/veterinary" : "/grooming"}?${params.toString()}`);
+      return;
+    }
+
+    if (intent === "find_boarding") navigate("/hotels");
     else if (intent === "view_details") navigate("/my-pets");
     else if (intent === "save_pet") navigate("/my-pets");
   };
