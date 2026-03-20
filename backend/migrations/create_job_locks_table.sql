@@ -12,3 +12,5 @@ create table if not exists job_locks (
   instance_id text        not null,
   token       uuid        not null
 );
+
+alter table job_locks enable row level security;
