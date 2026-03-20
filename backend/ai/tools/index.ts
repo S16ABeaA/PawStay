@@ -3,6 +3,7 @@ import { createBookingTool } from "./createBooking";
 import { getProviderRevenueTool } from "./getProviderRevenue";
 import { getUserBookingsTool } from "./getUserBookings";
 import { searchServicesTool } from "./discovery/searchServices"
+import { getPropertyServicesTool } from "./discovery/getPropertyServices";
 import { getReviewCountTool } from "./reviews/getReviewCount";
 import { getPetProfileTool } from "./pets/getPetProfile";
 import { getPetsTool } from "./pets/getPets";
@@ -15,6 +16,7 @@ import { getBookingSummaryTool } from "./getBookingSummary";
 
 export const defaultTools = [
   searchServicesTool,
+  getPropertyServicesTool,
   createBookingTool,
   getUserBookingsTool,
   cancelBookingTool,

@@ -5,6 +5,7 @@ export type GeminiParameterSchema = Record<string, unknown>;
 
 export const SUPPORTED_TOOL_NAMES: readonly ToolName[] = [
   "search_services",
+  "get_property_services",
   "get_review_count",
   "read_image_text",
   "get_pets",
@@ -25,6 +26,7 @@ export const SUPPORTED_TOOLS = new Set<string>(SUPPORTED_TOOL_NAMES);
 export const TOOL_INPUT_SCHEMA_TEXT: Record<ToolName, string> = {
   search_services:
     "{ location?: string, service_type?: string, checkin?: string, checkout?: string, timeSlot?: string, petType?: string|string[], dogSize?: string|string[], propertyType?: string, serviceCategory?: string, minPrice?: number, maxPrice?: number, rating?: number, amenities?: string|string[], keyword?: string, lat?: number, lng?: number, radiusKm?: number }",
+  get_property_services: "{ service_type: 'hotel'|'vet'|'grooming'|'all', location?: string, keyword?: string }",
   get_review_count: "{ propertyId: string }",
   read_image_text: "{ image_base64: string, language?: string }",
   get_pets: "{}",
@@ -65,6 +67,25 @@ export const GEMINI_TOOL_SCHEMAS: Record<ToolName, GeminiParameterSchema> = {
       lng: { type: SchemaType.NUMBER, description: "Longitude for geo search" },
       radiusKm: { type: SchemaType.NUMBER, description: "Search radius in kilometers" },
     },
+  },
+  get_property_services: {
+    type: SchemaType.OBJECT,
+    properties: {
+      service_type: {
+        type: SchemaType.STRING,
+        description: "Required service category. Must be one of: hotel, vet, grooming, all",
+        enum: ["hotel", "vet", "grooming", "all"],
+      },
+      location: {
+        type: SchemaType.STRING,
+        description: "Optional city or area",
+      },
+      keyword: {
+        type: SchemaType.STRING,
+        description: "Optional keyword filter",
+      },
+    },
+    required: ["service_type"],
   },
   get_review_count: {
     type: SchemaType.OBJECT,
@@ -241,6 +262,12 @@ export const sanitizeToolArgs = (
           lng: args.lng !== undefined ? Number(args.lng) : undefined,
           radiusKm: args.radiusKm !== undefined ? Number(args.radiusKm) : undefined,
         };
+    case "get_property_services":
+      return {
+        service_type: asString(args.service_type),
+        location: asString(args.location),
+        keyword: asString(args.keyword),
+      };
     case "get_review_count":
       return {
         propertyId: asString(args.propertyId) || asString(args.property_id),
@@ -318,6 +345,18 @@ export const validateToolArgs = (
   switch (tool) {
     case "search_services":
       return { ok: true };
+    case "get_property_services": {
+      if (!requiredString("service_type")) {
+        errors.push("service_type is required");
+        break;
+      }
+
+      const value = String(args.service_type).toLowerCase();
+      if (!["hotel", "vet", "grooming", "all"].includes(value)) {
+        errors.push("service_type must be one of: hotel, vet, grooming, all");
+      }
+      break;
+    }
     case "get_review_count":
       if (!requiredString("propertyId")) errors.push("propertyId is required");
       break;
