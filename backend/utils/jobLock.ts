@@ -105,7 +105,7 @@ export async function withJobLock<T>(
   const token = await tryAcquireJobLock(jobName, staleSecs);
 
   if (!token) {
-    console.log(`[job-lock] Skipping "${jobName}" – lock held by another instance`);
+    console.debug(`[job-lock] Skipping "${jobName}" – lock held by another instance`);
     return null;
   }
 
