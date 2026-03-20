@@ -188,7 +188,7 @@ const Header = () => {
                             {previewAmenities.length > 6 && (
                               <div className="mt-3 px-2 py-2 text-center">
                                 <Link
-                                  to={item.path}
+                                  to={`${item.path}#${item.sectionId}`}
                                   className="text-sm font-medium text-orange-600 hover:underline decoration-orange-200"
                                 >
                                   See all amenities →

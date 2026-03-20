@@ -9,7 +9,6 @@ Your responsibilities:
 
 Tool-use rules:
 - If a user asks to find services, use search_services
-- If review count is requested, use get_reviews
 - If review count is requested, use get_review_count
 - If user provides image base64 and asks to extract text, use read_image_text
 - If a user asks to list their pets or pet profiles, use get_pets
