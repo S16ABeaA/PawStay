@@ -87,9 +87,9 @@ const PetLoader: React.FC<PetLoaderProps> = ({ onComplete, className, text, data
     let stepCount = 0;
 
     const animate = () => {
-      x += 4.5;
-      bgX -= 0.55;
-      fgX -= 1.4;
+      x += 2.5;
+      bgX -= 0.3;
+      fgX -= 0.8;
 
       if (x > window.innerWidth + 200) {
         x = -600;
@@ -265,7 +265,7 @@ const PetLoader: React.FC<PetLoaderProps> = ({ onComplete, className, text, data
 
       <div className="pointer-events-none absolute left-0 top-[55%] -mt-[120px] h-[150px] w-full overflow-visible">
         <div ref={walkersRef} className="absolute bottom-0 left-0 flex items-end gap-12 px-10">
-          {/* <svg width="75" height="85" viewBox="0 0 100 100" className="relative z-10 block overflow-visible">
+          <svg width="75" height="85" viewBox="0 0 100 100" className="relative z-10 block overflow-visible">
             <ellipse cx="50" cy="88" rx="20" ry="2.5" fill="#94a3b8" className="mech-shadow" />
             <g className="mech-body">
               <path d="M 38 60 L 36 85" stroke="#334155" strokeWidth="6" strokeLinecap="round" className="mech-leg-2" style={{ transformOrigin: '38px 60px' }} />
@@ -288,7 +288,7 @@ const PetLoader: React.FC<PetLoaderProps> = ({ onComplete, className, text, data
               <path d="M 44 60 L 44 85" stroke="#475569" strokeWidth="6" strokeLinecap="round" className="mech-leg-1" style={{ transformOrigin: '44px 60px' }} />
               <path d="M 64 60 L 64 85" stroke="#475569" strokeWidth="6" strokeLinecap="round" className="mech-leg-2" style={{ transformOrigin: '64px 60px' }} />
             </g>
-          </svg> */}
+          </svg>
 
           <svg width="95" height="95" viewBox="0 0 100 100" className="relative z-20 block overflow-visible">
             <ellipse cx="55" cy="88" rx="26" ry="3.5" fill="#94a3b8" className="mech-shadow" />

@@ -4,8 +4,7 @@ import Footer from "@/components/Footer";
 import HotelCard from "@/components/HotelCard";
 import { Button } from "@/components/ui/button";
 import { Heart, ArrowRight, Home, Scissors, Stethoscope } from "lucide-react";
-import RandomFullPagePetLoader from "@/components/ui/RandomFullPagePetLoader";
-import { useBlockingPageLoad } from "@/hooks/useBlockingPageLoad";
+import { PetLoader } from "@/components/ui/PetLoader";
 import { favoritesApi } from "../services/favoritesApi";
 import { useState, useEffect } from "react";
 
@@ -71,7 +70,6 @@ const Favorites = () => {
   };
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [isPageBlocking, notifyLoaderFinished] = useBlockingPageLoad(loading, 800);
 
   useEffect(() => {
     const fetchFavorites = async () => {
@@ -92,8 +90,12 @@ const Favorites = () => {
     fetchFavorites();
   }, []);
 
-  if (isPageBlocking) {
-    return <RandomFullPagePetLoader dataLoaded={!loading} onComplete={notifyLoaderFinished} />;
+  if (loading) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-background">
+        <PetLoader text="Loading favorites..." />
+      </div>
+    );
   }
 
   if (error) {

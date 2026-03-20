@@ -8,8 +8,7 @@ import {
   ArrowLeft, Share2, Check,
   Phone, Mail, Clock
 } from "lucide-react";
-import RandomFullPagePetLoader from "@/components/ui/RandomFullPagePetLoader";
-import { useBlockingPageLoad } from "@/hooks/useBlockingPageLoad";
+import { PetLoader } from "@/components/ui/PetLoader";
 import { useState, useEffect } from "react";
 import { favoritesApi } from "../services/favoritesApi";
 import { fetchPropertyById, fetchPropertyReviews } from "../services/propertyApi";
@@ -22,7 +21,6 @@ const HotelDetail = () => {
   const [isLiked, setIsLiked] = useState(false);
   const [selectedRoom, setSelectedRoom] = useState<any>(null);
   const [reviews, setReviews] = useState<any[]>([]);
-  const [isPageBlocking, notifyLoaderFinished] = useBlockingPageLoad(loading, 800);
 
   const isAuthenticated =
     typeof window !== "undefined" &&
@@ -96,8 +94,16 @@ const HotelDetail = () => {
   };
 
   // ── Loading state ──
-  if (isPageBlocking) {
-    return <RandomFullPagePetLoader dataLoaded={!loading} onComplete={notifyLoaderFinished} />;
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background">
+        <Header />
+        <div className="flex flex-col items-center justify-center py-32">
+          <PetLoader text="Loading hotel details..." />
+        </div>
+        <Footer />
+      </div>
+    );
   }
 
   // ── Not found ──

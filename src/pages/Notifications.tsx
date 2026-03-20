@@ -16,8 +16,6 @@ import {
   Loader2,
 } from "lucide-react";
 import { PetLoader } from "@/components/ui/PetLoader";
-import RandomFullPagePetLoader from "@/components/ui/RandomFullPagePetLoader";
-import { useBlockingPageLoad } from "@/hooks/useBlockingPageLoad";
 import {
   notificationsApi,
   type Notification,
@@ -49,28 +47,6 @@ const TYPE_LABELS: Record<string, string> = {
   system: "System",
   info: "Info",
 };
-
-function resolveNotificationLink(notification: Notification): string | null {
-  const baseLink = notification.link;
-
-  if (notification.reference_type === "booking" && notification.reference_id) {
-    if (baseLink?.startsWith("/admin/")) {
-      return `/admin/bookings?bookingId=${notification.reference_id}`;
-    }
-    if (baseLink?.startsWith("/superadmin")) {
-      return baseLink;
-    }
-    return `/my-bookings?bookingId=${notification.reference_id}`;
-  }
-
-  if (notification.reference_type === "property" && notification.reference_id) {
-    if (baseLink?.startsWith("/admin/")) {
-      return `/admin/services?propertyId=${notification.reference_id}`;
-    }
-  }
-
-  return baseLink;
-}
 
 function formatDate(dateStr: string): string {
   return new Date(dateStr).toLocaleDateString("en-US", {
@@ -105,7 +81,6 @@ const Notifications = () => {
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [tab, setTab] = useState("all");
-  const [isPageBlocking, notifyLoaderFinished] = useBlockingPageLoad(loading && notifications.length === 0, 800);
 
   const LIMIT = 20;
 
@@ -210,9 +185,8 @@ const Notifications = () => {
     if (!notification.is_read) {
       await handleMarkRead(notification.id);
     }
-    const target = resolveNotificationLink(notification);
-    if (target) {
-      navigate(target);
+    if (notification.link) {
+      navigate(notification.link);
     }
   };
 
@@ -222,10 +196,6 @@ const Notifications = () => {
       : notifications;
 
   const unreadCount = notifications.filter((n) => !n.is_read).length;
-
-  if (isPageBlocking) {
-    return <RandomFullPagePetLoader dataLoaded={!loading} onComplete={notifyLoaderFinished} />;
-  }
 
   return (
     <div className="min-h-screen bg-background">

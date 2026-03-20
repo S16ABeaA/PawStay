@@ -11,8 +11,6 @@ import {
   Star, Search, MapPin
 } from "lucide-react";
 import { PetLoader } from "@/components/ui/PetLoader";
-import RandomFullPagePetLoader from "@/components/ui/RandomFullPagePetLoader";
-import { useBlockingPageLoad } from "@/hooks/useBlockingPageLoad";
 import { useState, useEffect, useMemo, useRef } from "react";
 import { fetchProperties } from "@/services/propertyApi";
 import { LocationInput } from "@/components/LocationInput";
@@ -98,10 +96,9 @@ const SearchResults = () => {
     keyword: defaultKeyword,
   });
   const [properties, setProperties] = useState<any[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [dateError, setDateError] = useState<string | null>(null);
-  const [isPageBlocking, notifyLoaderFinished] = useBlockingPageLoad(isLoading && properties.length === 0 && !loadError, 800);
 
   
   const today = new Date();
@@ -531,10 +528,6 @@ function haversineDistance(
     );
   }, [coords]);
 
-  if (isPageBlocking) {
-    return <RandomFullPagePetLoader dataLoaded={!isLoading} onComplete={notifyLoaderFinished} />;
-  }
-
 
   return (
     <div className="min-h-screen bg-background">
@@ -838,7 +831,7 @@ function haversineDistance(
                   <label className="text-sm font-semibold text-foreground mb-3 block">Amenities</label>
                   <div className="space-y-3">
                     {amenitiesLoading ? (
-                      <PetLoader text="Loading amenities..." className="py-6 min-h-[140px]" />
+                      <div className="text-sm text-muted-foreground">Loading amenities...</div>
                     ) : amenities.length === 0 ? (
                       <div className="text-sm text-muted-foreground">No amenities available.</div>
                     ) : (

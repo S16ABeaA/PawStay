@@ -20,33 +20,9 @@ const NOTIFICATION_ICONS: Record<string, string> = {
   property_approved: "🏠",
   property_rejected: "🚫",
   review_received: "⭐",
-  new_ticket: "🎫",
-  ticket_reply: "💬",
   system: "🔔",
   info: "ℹ️",
 };
-
-function resolveNotificationLink(notification: Notification): string | null {
-  const baseLink = notification.link;
-
-  if (notification.reference_type === "booking" && notification.reference_id) {
-    if (baseLink?.startsWith("/admin/")) {
-      return `/admin/bookings?bookingId=${notification.reference_id}`;
-    }
-    if (baseLink?.startsWith("/superadmin")) {
-      return baseLink;
-    }
-    return `/my-bookings?bookingId=${notification.reference_id}`;
-  }
-
-  if (notification.reference_type === "property" && notification.reference_id) {
-    if (baseLink?.startsWith("/admin/")) {
-      return `/admin/services?propertyId=${notification.reference_id}`;
-    }
-  }
-
-  return baseLink;
-}
 
 function timeAgo(dateStr: string): string {
   const now = new Date();
@@ -157,10 +133,9 @@ const NotificationBell = () => {
         /* silent */
       }
     }
-    const target = resolveNotificationLink(notification);
-    if (target) {
+    if (notification.link) {
       setOpen(false);
-      navigate(target);
+      navigate(notification.link);
     }
   };
 

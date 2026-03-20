@@ -45,18 +45,7 @@ export const getPet = async (req: Request, res: Response) => {
     const userId = (req as any).user?.id;
     if (!userId) return res.status(401).json({ error: "Unauthorized" });
 
-    const rawId = String(req.params.id ?? "").trim();
-
-    const isUUID = (s: string) => /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(s);
-
-    let pet = null as any;
-    if (isUUID(rawId)) {
-      pet = await petModel.getById(rawId, userId);
-    } else {
-      // Fallback: treat the param as a pet name and try to resolve by owner+name
-      pet = await petModel.getByOwnerAndName(userId, rawId);
-    }
-
+    const pet = await petModel.getById(req.params.id as string, userId);
     if (!pet) return res.status(404).json({ error: "Pet not found." });
 
     return res.json({ pet });

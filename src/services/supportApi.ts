@@ -45,10 +45,6 @@ export interface TicketStats {
   total: number;
 }
 
-export interface TicketUnreadIndicatorsResponse {
-  indicators: Record<string, number>;
-}
-
 /* ─── API ─── */
 export const supportApi = {
   /** Get ticket stats (super-admin) */
@@ -65,10 +61,6 @@ export const supportApi = {
 
   /** Get ticket detail with messages */
   getTicket: (id: string): Promise<TicketDetail> => authHelper.get(`${BASE}/tickets/${id}`),
-
-  /** Per-ticket unread message indicators */
-  getUnreadIndicators: (): Promise<TicketUnreadIndicatorsResponse> =>
-    authHelper.get(`${BASE}/tickets/unread-indicators`),
 
   /** Create a new ticket */
   createTicket: (data: {

@@ -24,7 +24,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { Slider } from "@/components/ui/slider";
-import { fetchRandomProperties, fetchRecommendedProperties } from "@/services/randPropertyApi";
+import { fetchRandomProperties } from "@/services/randPropertyApi";
 import { PetLoaderGate } from "./ui/PetLoader";
 
 const BATCH_SIZE = 6;
@@ -83,21 +83,8 @@ const FeaturedHotels = () => {
   // Sort state
   const [sortBy, setSortBy] = useState<SortOption>("default");
 
-  const loadBatch = async (existingIds: Set<string> = new Set(), useRecommended = false) => {
-    let properties: any[] = [];
-
-    if (useRecommended) {
-      try {
-        properties = await fetchRecommendedProperties(BATCH_SIZE * 2);
-      } catch {
-        properties = [];
-      }
-    }
-
-    if (!Array.isArray(properties) || properties.length === 0) {
-      properties = await fetchRandomProperties();
-    }
-
+  const loadBatch = async (existingIds: Set<string> = new Set()) => {
+    const properties = await fetchRandomProperties();
     const mapped = Array.isArray(properties)
       ? properties.map(mapPropertyToHotel)
       : [];
@@ -109,7 +96,7 @@ const FeaturedHotels = () => {
       try {
         setIsLoading(true);
         setError(null);
-        const batch = await loadBatch(new Set(), true);
+        const batch = await loadBatch();
         const initial = batch.slice(0, BATCH_SIZE);
         setHotels(initial);
         if (batch.length === 0 || initial.length < BATCH_SIZE) {
@@ -130,7 +117,7 @@ const FeaturedHotels = () => {
     try {
       setIsLoadingMore(true);
       const existingIds = new Set(hotels.map((h) => String(h.id)));
-      const newBatch = await loadBatch(existingIds, true);
+      const newBatch = await loadBatch(existingIds);
       if (newBatch.length === 0) {
         setHasMore(false);
         return;

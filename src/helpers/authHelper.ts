@@ -2,21 +2,7 @@ export const authHelper = {
   fetchWithAuth: async (url: string, options: RequestInit = {}) => {
     console.log("Fetching with auth:", url, options); // Debug log to see the request details
     const res = await fetch(url, { ...options, credentials: "include", cache: "no-store" });
-    const contentType = res.headers.get("content-type") || "";
-    const isJson = contentType.includes("application/json");
-
-    let data: any;
-    if (isJson) {
-      data = await res.json();
-    } else {
-      const text = await res.text();
-      data = {
-        error: res.ok ? "Unexpected non-JSON response" : "Request failed",
-        details: text?.slice(0, 500) || "No response body",
-        status: res.status,
-      };
-    }
-
+    const data = await res.json();
     if (!res.ok) throw data;
     return data;
   },

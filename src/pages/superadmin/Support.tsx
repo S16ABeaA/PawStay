@@ -30,7 +30,6 @@ import {
   ArrowRight,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { useSearchParams } from "react-router-dom";
 import { supportApi, type SupportTicket, type TicketDetail, type TicketStats } from "@/services/supportApi";
 import { useToast } from "@/hooks/use-toast";
 
@@ -89,13 +88,11 @@ const userInitials = (name: string) => {
 
 const SuperAdminSupport = () => {
   const { toast } = useToast();
-  const [searchParams, setSearchParams] = useSearchParams();
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   /* ─── state ─── */
   const [stats, setStats] = useState<TicketStats | null>(null);
   const [tickets, setTickets] = useState<SupportTicket[]>([]);
-  const [ticketUnreadMap, setTicketUnreadMap] = useState<Record<string, number>>({});
   const [selectedTicket, setSelectedTicket] = useState<TicketDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -109,14 +106,12 @@ const SuperAdminSupport = () => {
   const loadData = async (isRefresh = false) => {
     try {
       if (isRefresh) setRefreshing(true); else setLoading(true);
-      const [statsData, ticketsData, unread] = await Promise.all([
+      const [statsData, ticketsData] = await Promise.all([
         supportApi.getStats(),
         supportApi.getTickets({ status: statusFilter !== "all" ? statusFilter : undefined, search: searchQuery || undefined }),
-        supportApi.getUnreadIndicators(),
       ]);
       setStats(statsData);
       setTickets(ticketsData);
-      setTicketUnreadMap(unread.indicators || {});
     } catch {
       toast({ title: "Error", description: "Failed to load support data", variant: "destructive" });
     } finally {
@@ -138,8 +133,6 @@ const SuperAdminSupport = () => {
       setDetailLoading(true);
       const detail = await supportApi.getTicket(id);
       setSelectedTicket(detail);
-      setTicketUnreadMap((prev) => ({ ...prev, [id]: 0 }));
-      setSearchParams({ ticket: id });
     } catch {
       toast({ title: "Error", description: "Could not load ticket", variant: "destructive" });
     } finally {
@@ -148,16 +141,8 @@ const SuperAdminSupport = () => {
   };
 
   useEffect(() => {
-    if (tickets.length === 0 || selectedTicket) return;
-
-    const ticketIdFromQuery = searchParams.get("ticket");
-    if (ticketIdFromQuery && tickets.some((t) => t.id === ticketIdFromQuery)) {
-      openTicket(ticketIdFromQuery);
-      return;
-    }
-
-    openTicket(tickets[0].id);
-  }, [tickets, selectedTicket, searchParams]);
+    if (tickets.length > 0 && !selectedTicket) openTicket(tickets[0].id);
+  }, [tickets]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -386,12 +371,6 @@ const SuperAdminSupport = () => {
                               <MessageSquare className="h-3 w-3" />
                               {ticket.message_count}
                             </span>
-                            {ticketUnreadMap[ticket.id] > 0 && (
-                              <span className="inline-flex items-center gap-1 text-[10px] text-[#ffa31a] font-medium">
-                                <span className="w-2 h-2 rounded-full bg-[#ffa31a] sa-pulse-dot" />
-                                New
-                              </span>
-                            )}
                           </div>
                         </div>
                         {/* Arrow */}

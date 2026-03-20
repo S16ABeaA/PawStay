@@ -785,7 +785,6 @@ const AdminCalendar = () => {
                 <SelectItem value="all">All Statuses</SelectItem>
                 <SelectItem value="pending">Pending</SelectItem>
                 <SelectItem value="confirmed">Confirmed</SelectItem>
-                <SelectItem value="completed">Completed</SelectItem>
                 <SelectItem value="cancelled">Cancelled</SelectItem>
               </SelectContent>
             </Select>
@@ -943,8 +942,6 @@ const AdminCalendar = () => {
                   backgroundColor:
                     selectedEvent.extendedProps.status === "confirmed"
                       ? "rgb(16 185 129 / 0.1)"
-                      : selectedEvent.extendedProps.status === "completed"
-                      ? "rgb(59 130 246 / 0.1)"
                       : selectedEvent.extendedProps.status === "cancelled"
                       ? "rgb(239 68 68 / 0.1)"
                       : "rgb(245 158 11 / 0.1)",
@@ -954,8 +951,6 @@ const AdminCalendar = () => {
                   variant={
                     selectedEvent.extendedProps.status === "confirmed"
                       ? "default"
-                      : selectedEvent.extendedProps.status === "completed"
-                      ? "outline"
                       : selectedEvent.extendedProps.status === "cancelled"
                       ? "destructive"
                       : "secondary"
@@ -1046,17 +1041,6 @@ const AdminCalendar = () => {
                   <Button size="sm" onClick={() => handleConfirmEvent(selectedEvent.id)}>
                     <CheckCircle2 className="h-4 w-4 mr-1" />
                     Confirm
-                  </Button>
-                )}
-
-                {selectedEvent.extendedProps.status === "confirmed" && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => handleUpdateStatus(selectedEvent.id, "completed", "Booking Completed")}
-                  >
-                    <CheckCircle2 className="h-4 w-4 mr-1" />
-                    Mark Complete
                   </Button>
                 )}
 

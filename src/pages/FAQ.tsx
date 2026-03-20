@@ -220,7 +220,7 @@ const FAQ = () => {
             </p>
 
             <Button
-              onClick={() => navigate("/help-center?new=1")}
+              onClick={() => navigate("/help-center")}
               className="bg-orange-500 hover:bg-orange-600 text-white rounded-full px-8 py-3 gap-2"
             >
               <MessageCircle className="h-4 w-4" />

@@ -14,8 +14,6 @@ export interface AdminProperty {
   status?: string;
 }
 
-const isPropertySelectable = (property: AdminProperty) => property.status === "approved";
-
 interface AdminPropertyContextValue {
   properties: AdminProperty[];
   selectedPropertyId: string | null;
@@ -51,12 +49,10 @@ export function AdminPropertyProvider({ children }: { children: ReactNode }) {
 
       // If the previously selected property is no longer in the list, reset to first
       const stored = localStorage.getItem(STORAGE_KEY);
-      const selectableProps = props.filter(isPropertySelectable);
-
-      if (selectableProps.length > 0) {
-        const valid = selectableProps.some((p) => p.id === stored);
+      if (props.length > 0) {
+        const valid = props.some((p) => p.id === stored);
         if (!valid) {
-          const first = selectableProps[0].id;
+          const first = props[0].id;
           localStorage.setItem(STORAGE_KEY, first);
           setSelectedPropertyIdState(first);
         }

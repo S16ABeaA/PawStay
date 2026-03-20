@@ -8,8 +8,7 @@ import {
   ArrowLeft, Share2, Check,
   Phone, Mail, Clock, Shield, Award, Users
 } from "lucide-react";
-import RandomFullPagePetLoader from "@/components/ui/RandomFullPagePetLoader";
-import { useBlockingPageLoad } from "@/hooks/useBlockingPageLoad";
+import { PetLoader } from "@/components/ui/PetLoader";
 import { useState, useEffect } from "react";
 import { favoritesApi } from "../services/favoritesApi";
 import { fetchPropertyById, fetchPropertyReviews } from "../services/propertyApi";
@@ -23,7 +22,6 @@ const VeterinaryDetail = () => {
   const [isLiked, setIsLiked] = useState(false);
   const [selectedService, setSelectedService] = useState<any>(null);
   const [reviews, setReviews] = useState<any[]>([]);
-  const [isPageBlocking, notifyLoaderFinished] = useBlockingPageLoad(loading, 800);
 
   const isAuthenticated =
     typeof window !== "undefined" &&
@@ -96,8 +94,16 @@ const VeterinaryDetail = () => {
   };
 
   // ── Loading state ──
-  if (isPageBlocking) {
-    return <RandomFullPagePetLoader dataLoaded={!loading} onComplete={notifyLoaderFinished} />;
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background">
+        <Header />
+        <div className="flex flex-col items-center justify-center py-32">
+          <PetLoader text="Loading clinic details..." />
+        </div>
+        <Footer />
+      </div>
+    );
   }
 
   // ── Not found ──
@@ -366,7 +372,11 @@ const VeterinaryDetail = () => {
                 )}
               </div>
 
-
+              {/* Reviews */}
+              <div className="mb-8">
+                <h2 className="font-semibold text-xl mb-4">Patient Reviews</h2>
+                <ReviewList propertyId={property.id} />
+              </div>
             </div>
 
             {/* Booking Card */}

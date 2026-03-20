@@ -13,9 +13,6 @@ router.get("/tickets/stats", requireSuperAdmin, supportController.getTicketStats
 // List tickets (user sees own, super-admin sees all)
 router.get("/tickets", supportController.getTickets);
 
-// Per-ticket unread chat indicators for badges/dots
-router.get("/tickets/unread-indicators", supportController.getUnreadIndicators);
-
 // Get ticket detail with messages
 router.get("/tickets/:id", supportController.getTicketDetail);
 

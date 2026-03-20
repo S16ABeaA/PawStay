@@ -29,29 +29,8 @@ import { useEffect, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { authHelper } from "@/helpers/authHelper";
 import { useAdminProperty } from "@/hooks/useAdminProperty";
-import { bookingApi } from "@/services/bookingApi";
 
 const initialBookings: any[] = [];
-
-const parseDocumentUrls = (raw?: string | null): string[] => {
-  if (!raw) return [];
-  const value = String(raw).trim();
-  if (!value) return [];
-  if (value.startsWith("[")) {
-    try {
-      const parsed = JSON.parse(value);
-      if (Array.isArray(parsed)) {
-        return parsed.filter((item) => typeof item === "string" && item.length > 0);
-      }
-    } catch {
-      // fall back to single URL
-    }
-  }
-  return [value];
-};
-
-const isImageUrl = (url: string): boolean =>
-  /^data:image\//i.test(url) || /\.(png|jpe?g|gif|webp|bmp|svg)(\?|$)/i.test(url);
 
 const AdminBookings = () => {
   const [bookings, setBookings] = useState(initialBookings);
@@ -61,7 +40,6 @@ const AdminBookings = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [serviceFilter, setServiceFilter] = useState("all");
-  const [paymentFilter, setPaymentFilter] = useState("all");
   const { toast } = useToast();
   const { selectedPropertyId, loading: propLoading } = useAdminProperty();
   const [loadingBookings, setLoadingBookings] = useState(false);
@@ -69,7 +47,7 @@ const AdminBookings = () => {
 
   const handleConfirm = async (id: string) => {
     try {
-      await bookingApi.updateBookingStatus(id, 'confirmed');
+      await authHelper.post(`${API_BASE_URL}/api/bookings/${id}/status`, { status: 'confirmed' });
       setBookings((prev) => prev.map(b => b.id === id ? { ...b, status: 'confirmed' } : b));
       toast({ title: 'Booking Confirmed', description: `Booking ${id} has been confirmed.` });
     } catch (err: any) {
@@ -80,35 +58,12 @@ const AdminBookings = () => {
 
   const handleCancel = async (id: string) => {
     try {
-      await bookingApi.updateBookingStatus(id, 'cancelled');
+      await authHelper.post(`${API_BASE_URL}/api/bookings/${id}/status`, { status: 'cancelled' });
       setBookings((prev) => prev.map(b => b.id === id ? { ...b, status: 'cancelled' } : b));
       toast({ title: 'Booking Cancelled', description: `Booking ${id} has been cancelled.`, variant: 'destructive' });
     } catch (err: any) {
       console.error('Cancel failed', err);
       toast({ title: 'Error', description: err?.message || 'Failed to cancel booking', variant: 'destructive' });
-    }
-  };
-
-  const handleComplete = async (id: string) => {
-    try {
-      await bookingApi.updateBookingStatus(id, 'completed');
-      setBookings((prev) => prev.map(b => b.id === id ? { ...b, status: 'completed' } : b));
-      toast({ title: 'Booking Completed', description: `Booking ${id} marked as completed.` });
-    } catch (err: any) {
-      console.error('Complete failed', err);
-      toast({ title: 'Error', description: err?.message || 'Failed to mark booking as completed', variant: 'destructive' });
-    }
-  };
-
-  const handleMarkPaid = async (id: string) => {
-    try {
-      await bookingApi.updatePaymentStatus(id, "paid");
-      setBookings((prev) => prev.map(b => b.id === id ? { ...b, paymentStatus: "paid" } : b));
-      setSelectedBooking((prev: any) => (prev?.id === id ? { ...prev, paymentStatus: "paid" } : prev));
-      toast({ title: "Payment Updated", description: `Booking ${id} marked as paid.` });
-    } catch (err: any) {
-      console.error("Mark paid failed", err);
-      toast({ title: "Error", description: err?.message || "Failed to mark payment as paid", variant: "destructive" });
     }
   };
 
@@ -144,10 +99,7 @@ const AdminBookings = () => {
       b.id.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesStatus = statusFilter === "all" || b.status === statusFilter;
     const matchesService = serviceFilter === "all" || b.service.toLowerCase() === serviceFilter;
-    const matchesPayment =
-      paymentFilter === "all" ||
-      (paymentFilter === "paid" ? b.paymentStatus === "paid" : b.paymentStatus !== "paid");
-    return matchesSearch && matchesStatus && matchesService && matchesPayment;
+    return matchesSearch && matchesStatus && matchesService;
   });
 
   useEffect(() => {
@@ -174,7 +126,6 @@ const AdminBookings = () => {
           checkOut: b.checkout || '-',
           status: b.status,
           amount: b.total_price ? `₱${Number(b.total_price).toFixed(2)}` : '-',
-          paymentStatus: b.payment_status || "unpaid",
           paymentMethod: b.payment_method || null,
           referenceNumber: b.reference_number || null,
           paymentScreenshotUrl: b.payment_screenshot_url || null,
@@ -213,7 +164,6 @@ const AdminBookings = () => {
           <SelectContent>
             <SelectItem value="all">All Status</SelectItem>
             <SelectItem value="confirmed">Confirmed</SelectItem>
-            <SelectItem value="completed">Completed</SelectItem>
             <SelectItem value="pending">Pending</SelectItem>
             <SelectItem value="cancelled">Cancelled</SelectItem>
           </SelectContent>
@@ -227,16 +177,6 @@ const AdminBookings = () => {
             <SelectItem value="boarding">Boarding</SelectItem>
             <SelectItem value="grooming">Grooming</SelectItem>
             <SelectItem value="daycare">Daycare</SelectItem>
-          </SelectContent>
-        </Select>
-        <Select value={paymentFilter} onValueChange={setPaymentFilter}>
-          <SelectTrigger className="w-full md:w-40">
-            <SelectValue placeholder="Payment" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Payments</SelectItem>
-            <SelectItem value="paid">Paid</SelectItem>
-            <SelectItem value="unpaid">Unpaid</SelectItem>
           </SelectContent>
         </Select>
         <Button variant="outline" className="gap-2" onClick={handleExport}>
@@ -293,8 +233,6 @@ const AdminBookings = () => {
                     variant={
                       booking.status === "confirmed"
                         ? "default"
-                        : booking.status === "completed"
-                        ? "outline"
                         : booking.status === "pending"
                         ? "secondary"
                         : "destructive"
@@ -318,20 +256,10 @@ const AdminBookings = () => {
                         </Button>
                       </>
                     )}
-                    {(["confirmed", "checked_in"] as string[]).includes(booking.status) && (
-                      <>
-                        {booking.paymentStatus !== "paid" && (
-                          <Button variant="ghost" size="icon" className="h-8 w-8 text-emerald-600" title="Mark Paid" onClick={() => handleMarkPaid(booking.id)}>
-                            <CreditCard className="h-4 w-4" />
-                          </Button>
-                        )}
-                        <Button variant="ghost" size="icon" className="h-8 w-8 text-success" title="Mark Complete" onClick={() => handleComplete(booking.id)}>
-                          <CheckCircle className="h-4 w-4" />
-                        </Button>
-                        <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" title="Cancel" onClick={() => handleCancel(booking.id)}>
-                          <XCircle className="h-4 w-4" />
-                        </Button>
-                      </>
+                    {booking.status === "confirmed" && (
+                      <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" title="Cancel" onClick={() => handleCancel(booking.id)}>
+                        <XCircle className="h-4 w-4" />
+                      </Button>
                     )}
                   </div>
                 </TableCell>
@@ -395,7 +323,7 @@ const AdminBookings = () => {
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Status</p>
-                  <Badge variant={selectedBooking.status === "confirmed" ? "default" : selectedBooking.status === "completed" ? "outline" : selectedBooking.status === "pending" ? "secondary" : "destructive"}>
+                  <Badge variant={selectedBooking.status === "confirmed" ? "default" : selectedBooking.status === "pending" ? "secondary" : "destructive"}>
                     {selectedBooking.status}
                   </Badge>
                 </div>
@@ -412,12 +340,6 @@ const AdminBookings = () => {
                     <div>
                       <p className="text-sm text-muted-foreground">Payment Method</p>
                       <p className="font-medium capitalize">{selectedBooking.paymentMethod}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">Payment Status</p>
-                      <Badge variant={selectedBooking.paymentStatus === "paid" ? "default" : "secondary"} className="mt-1 capitalize">
-                        {selectedBooking.paymentStatus || "unpaid"}
-                      </Badge>
                     </div>
                     {selectedBooking.referenceNumber && (
                       <div>
@@ -452,78 +374,40 @@ const AdminBookings = () => {
                     <FileText className="h-4 w-4 text-primary" />
                     Pet Documents
                   </h4>
-                  {(() => {
-                    const vaccineDocs = parseDocumentUrls(selectedBooking.vaccineRecordUrl);
-                    const medDocs = parseDocumentUrls(selectedBooking.medCertUrl);
-                    return (
                   <div className="flex flex-wrap gap-4">
-                    {vaccineDocs.length > 0 && (
+                    {selectedBooking.vaccineRecordUrl && (
                       <div>
                         <p className="text-sm text-muted-foreground mb-2">Vaccine Record</p>
-                        <div className="flex flex-wrap gap-3">
-                          {vaccineDocs.map((url, idx) => (
-                            <div key={`admin-vaccine-${idx}`}>
-                              {isImageUrl(url) ? (
-                                <div
-                                  className="cursor-pointer inline-block border border-border rounded-lg overflow-hidden hover:ring-2 hover:ring-primary/50 transition-all"
-                                  onClick={() => setImagePreview(url)}
-                                >
-                                  <img
-                                    src={url}
-                                    alt={`Vaccine record ${idx + 1}`}
-                                    className="w-40 h-40 object-cover"
-                                  />
-                                </div>
-                              ) : (
-                                <button
-                                  type="button"
-                                  className="w-40 h-40 border border-border rounded-lg bg-muted/30 text-xs px-3 py-2 text-muted-foreground hover:bg-muted/50"
-                                  onClick={() => window.open(url, "_blank", "noopener,noreferrer")}
-                                >
-                                  Open vaccine document {idx + 1}
-                                </button>
-                              )}
-                            </div>
-                          ))}
+                        <div
+                          className="cursor-pointer inline-block border border-border rounded-lg overflow-hidden hover:ring-2 hover:ring-primary/50 transition-all"
+                          onClick={() => setImagePreview(selectedBooking.vaccineRecordUrl)}
+                        >
+                          <img
+                            src={selectedBooking.vaccineRecordUrl}
+                            alt="Vaccine record"
+                            className="w-40 h-40 object-cover"
+                          />
                         </div>
-                        <p className="text-xs text-muted-foreground mt-1">Click an image to enlarge or open files in a new tab.</p>
+                        <p className="text-xs text-muted-foreground mt-1">Click to enlarge</p>
                       </div>
                     )}
-                    {medDocs.length > 0 && (
+                    {selectedBooking.medCertUrl && (
                       <div>
                         <p className="text-sm text-muted-foreground mb-2">Medical Certificate</p>
-                        <div className="flex flex-wrap gap-3">
-                          {medDocs.map((url, idx) => (
-                            <div key={`admin-med-${idx}`}>
-                              {isImageUrl(url) ? (
-                                <div
-                                  className="cursor-pointer inline-block border border-border rounded-lg overflow-hidden hover:ring-2 hover:ring-primary/50 transition-all"
-                                  onClick={() => setImagePreview(url)}
-                                >
-                                  <img
-                                    src={url}
-                                    alt={`Medical certificate ${idx + 1}`}
-                                    className="w-40 h-40 object-cover"
-                                  />
-                                </div>
-                              ) : (
-                                <button
-                                  type="button"
-                                  className="w-40 h-40 border border-border rounded-lg bg-muted/30 text-xs px-3 py-2 text-muted-foreground hover:bg-muted/50"
-                                  onClick={() => window.open(url, "_blank", "noopener,noreferrer")}
-                                >
-                                  Open medical document {idx + 1}
-                                </button>
-                              )}
-                            </div>
-                          ))}
+                        <div
+                          className="cursor-pointer inline-block border border-border rounded-lg overflow-hidden hover:ring-2 hover:ring-primary/50 transition-all"
+                          onClick={() => setImagePreview(selectedBooking.medCertUrl)}
+                        >
+                          <img
+                            src={selectedBooking.medCertUrl}
+                            alt="Medical certificate"
+                            className="w-40 h-40 object-cover"
+                          />
                         </div>
-                        <p className="text-xs text-muted-foreground mt-1">Click an image to enlarge or open files in a new tab.</p>
+                        <p className="text-xs text-muted-foreground mt-1">Click to enlarge</p>
                       </div>
                     )}
                   </div>
-                    );
-                  })()}
                 </div>
               )}
 
@@ -539,20 +423,10 @@ const AdminBookings = () => {
                     </Button>
                   </>
                 )}
-                {(["confirmed", "checked_in"] as string[]).includes(selectedBooking.status) && (
-                  <>
-                    {selectedBooking.paymentStatus !== "paid" && (
-                      <Button variant="outline" onClick={() => { handleMarkPaid(selectedBooking.id); }}>
-                        Mark Payment as Paid
-                      </Button>
-                    )}
-                    <Button onClick={() => { handleComplete(selectedBooking.id); setViewDialogOpen(false); }}>
-                      Mark Complete
-                    </Button>
-                    <Button variant="destructive" onClick={() => { handleCancel(selectedBooking.id); setViewDialogOpen(false); }}>
-                      Cancel Booking
-                    </Button>
-                  </>
+                {selectedBooking.status === "confirmed" && (
+                  <Button variant="destructive" onClick={() => { handleCancel(selectedBooking.id); setViewDialogOpen(false); }}>
+                    Cancel Booking
+                  </Button>
                 )}
                 <Button variant="outline" onClick={() => setViewDialogOpen(false)}>Close</Button>
               </div>

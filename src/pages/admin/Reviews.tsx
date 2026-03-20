@@ -12,11 +12,10 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Star, MessageSquare, ThumbsUp, Flag, Send, Loader2 } from "lucide-react";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { reviewsApi, OwnerReview } from "@/services/reviewsApi";
 import { useAdminProperty } from "@/hooks/useAdminProperty";
-import { useSearchParams } from "react-router-dom";
 
 const AdminReviews = () => {
   const [reviews, setReviews] = useState<OwnerReview[]>([]);
@@ -25,11 +24,8 @@ const AdminReviews = () => {
   const [selectedReview, setSelectedReview] = useState<OwnerReview | null>(null);
   const [replyText, setReplyText] = useState("");
   const [replying, setReplying] = useState(false);
-  const [highlightedReviewId, setHighlightedReviewId] = useState<string | null>(null);
   const { toast } = useToast();
   const { selectedPropertyId, loading: propLoading } = useAdminProperty();
-  const [searchParams] = useSearchParams();
-  const reviewRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   const averageRating = reviews.length ? (reviews.reduce((acc, r) => acc + Number(r.rating || 0), 0) / reviews.length).toFixed(1) : "0.0";
   const pendingReplies = reviews.filter((r) => !r.replied).length;
@@ -61,20 +57,6 @@ const AdminReviews = () => {
 
     return () => { cancelled = true; };
   }, [selectedPropertyId, propLoading]);
-
-  useEffect(() => {
-    const targetReviewId = searchParams.get("review");
-    if (!targetReviewId || reviews.length === 0) return;
-
-    const target = reviewRefs.current[targetReviewId];
-    if (!target) return;
-
-    target.scrollIntoView({ behavior: "smooth", block: "center" });
-    setHighlightedReviewId(targetReviewId);
-
-    const timeout = setTimeout(() => setHighlightedReviewId(null), 2600);
-    return () => clearTimeout(timeout);
-  }, [reviews, searchParams]);
 
   const handleReply = (review: OwnerReview) => {
     setSelectedReview(review);
@@ -116,17 +98,7 @@ const AdminReviews = () => {
   };
 
   const ReviewCard = ({ review }: { review: OwnerReview }) => (
-    <Card
-      key={review.id}
-      ref={(node) => {
-        reviewRefs.current[review.id] = node;
-      }}
-      className={
-        highlightedReviewId === review.id
-          ? "ring-2 ring-primary/40 border-primary/50 transition-all duration-300"
-          : undefined
-      }
-    >
+    <Card key={review.id}>
       <CardContent className="p-5">
         <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
           <div className="flex-1">

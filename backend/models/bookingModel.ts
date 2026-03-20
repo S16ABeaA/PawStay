@@ -299,55 +299,8 @@ export const bookingModel = {
     return slotCounts;
   },
 
-  /**
-   * Update a booking's status (admin action).
-   * When autoMarkPaidOnConfirm is true, confirming a booking also marks
-   * unpaid bookings as paid and stamps paid_at.
-   * When autoMarkCashPaidOnComplete is true, completing a cash booking also
-   * marks unpaid bookings as paid and stamps paid_at.
-   */
-  async updateStatus(
-    bookingId: string,
-    status: string,
-    options?: { autoMarkPaidOnConfirm?: boolean; autoMarkCashPaidOnComplete?: boolean }
-  ): Promise<BookingRow> {
-    if (status === "confirmed" && options?.autoMarkPaidOnConfirm) {
-      const { data: promoted, error: promotedError } = await supabaseAdmin
-        .from("bookings")
-        .update({
-          status,
-          payment_status: "paid",
-          paid_at: new Date().toISOString(),
-        })
-        .eq("id", bookingId)
-        .eq("is_deleted", false)
-        .or("payment_status.is.null,payment_status.eq.unpaid")
-        .select()
-        .single();
-
-      if (!promotedError && promoted) return promoted;
-      if (promotedError && (promotedError as any)?.code !== "PGRST116") throw promotedError;
-    }
-
-    if (status === "completed" && options?.autoMarkCashPaidOnComplete) {
-      const { data: completedPaid, error: completedPaidError } = await supabaseAdmin
-        .from("bookings")
-        .update({
-          status,
-          payment_status: "paid",
-          paid_at: new Date().toISOString(),
-        })
-        .eq("id", bookingId)
-        .eq("is_deleted", false)
-        .eq("payment_method", "cash")
-        .or("payment_status.is.null,payment_status.eq.unpaid")
-        .select()
-        .single();
-
-      if (!completedPaidError && completedPaid) return completedPaid;
-      if (completedPaidError && (completedPaidError as any)?.code !== "PGRST116") throw completedPaidError;
-    }
-
+  /** Update a booking's status (admin action) */
+  async updateStatus(bookingId: string, status: string): Promise<BookingRow> {
     const { data, error } = await supabaseAdmin
       .from("bookings")
       .update({ status })

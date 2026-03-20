@@ -24,7 +24,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from 'recharts';
 import { bookingApi } from "@/services/bookingApi";
 import { useToast } from "@/hooks/use-toast";
-import { useSearchParams } from "react-router-dom";
 
 // Custom tooltip for monthly receivables chart
 const ReceivablesTooltip = ({ active, payload, label }: any) => {
@@ -82,7 +81,6 @@ const ReceivablesTooltip = ({ active, payload, label }: any) => {
 
 const SuperAdminRevenue = () => {
   const { toast } = useToast();
-  const [searchParams] = useSearchParams();
   const [totalRevenue, setTotalRevenue] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [serviceTypeBreakdown, setServiceTypeBreakdown] = useState<Array<{ serviceType: string; revenue: number; count: number }>>([]);
@@ -326,47 +324,10 @@ const SuperAdminRevenue = () => {
     }
   };
 
-  const handleMarkSettlementPaid = async (settlementId: string) => {
-    if (!selectedProperty?.propertyId) return;
-    try {
-      await bookingApi.updateSettlementStatus(settlementId, "completed");
-      toast({ title: "Settlement marked as paid", description: "Receivables and monthly revenue data are being refreshed." });
-
-      await Promise.all([
-        fetchPayables(),
-        fetchPropertySettlements(selectedProperty.propertyId),
-      ]);
-
-      try {
-        const recvRes = await bookingApi.getMonthlyReceivables({ months: 12 });
-        setMonthlyRecv(recvRes?.series || []);
-        setRecvTotals(recvRes?.totals || null);
-      } catch (_) {}
-    } catch (err: any) {
-      console.error("Failed to mark settlement as paid:", err);
-      toast({
-        title: "Update failed",
-        description: err?.error || err?.message || "Unable to update settlement status.",
-        variant: "destructive",
-      });
-    }
-  };
-
   useEffect(() => {
     const t = setTimeout(() => fetchPayables(), recvSearch ? 400 : 0);
     return () => clearTimeout(t);
   }, [recvStatusFilter, recvSortBy, recvSearch]);
-
-  useEffect(() => {
-    const targetPropertyId = searchParams.get("propertyId");
-    if (!targetPropertyId || recvProperties.length === 0) return;
-
-    const found = recvProperties.find((p: any) => p.propertyId === targetPropertyId);
-    if (!found) return;
-
-    setSelectedProperty(found);
-    fetchPropertySettlements(found.propertyId);
-  }, [searchParams, recvProperties]);
 
   // Format currency for display
   const formatCurrency = (amount: number) => {
@@ -876,10 +837,10 @@ const SuperAdminRevenue = () => {
                           <SelectContent className="bg-[#292929] border-white/10 text-white">
                             <SelectItem value="cash" className="text-white">Cash</SelectItem>
                             <SelectItem value="gcash" className="text-white">GCash</SelectItem>
-                            <SelectItem value="paymaya" className="text-white">PayMaya</SelectItem>
                             <SelectItem value="bank_transfer" className="text-white">Bank Transfer</SelectItem>
                             <SelectItem value="card" className="text-white">Card</SelectItem>
                             <SelectItem value="check" className="text-white">Check</SelectItem>
+                            <SelectItem value="offset" className="text-white">Offset</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
@@ -941,15 +902,6 @@ const SuperAdminRevenue = () => {
                             <span className="text-white font-bold tabular-nums">{formatCurrency(s.amount)}</span>
                             <span className="text-xs text-[#808080] capitalize">{String(s.settlement_method || '').replace('_', ' ')}</span>
                             {s.reference_no && <span className="text-xs text-[#808080] font-mono">#{s.reference_no}</span>}
-                            {s.status === 'pending' && (
-                              <Button
-                                size="sm"
-                                className="h-7 px-2 text-xs bg-emerald-600 hover:bg-emerald-700 text-white"
-                                onClick={() => handleMarkSettlementPaid(s.id)}
-                              >
-                                Mark Paid
-                              </Button>
-                            )}
                           </div>
                           <div className="text-right flex-shrink-0">
                             <p className="text-xs text-[#808080]">{formatDate(s.settled_at)}</p>

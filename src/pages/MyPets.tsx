@@ -1,7 +1,5 @@
  import { useState, useEffect } from "react";
 import { PetLoader } from "@/components/ui/PetLoader";
-import RandomFullPagePetLoader from "@/components/ui/RandomFullPagePetLoader";
-import { useBlockingPageLoad } from "@/hooks/useBlockingPageLoad";
  import { Link } from "react-router-dom";
  import Header from "@/components/Header";
  import Footer from "@/components/Footer";
@@ -88,26 +86,6 @@ interface Pet {
    }
  };
 
-const parseDocumentUrls = (raw?: string | null): string[] => {
-  if (!raw) return [];
-  const value = String(raw).trim();
-  if (!value) return [];
-  if (value.startsWith("[")) {
-    try {
-      const parsed = JSON.parse(value);
-      if (Array.isArray(parsed)) {
-        return parsed.filter((u) => typeof u === "string" && u.length > 0);
-      }
-    } catch {
-      // Fall back to treating as a single URL
-    }
-  }
-  return [value];
-};
-
-const isImageUrl = (url: string): boolean =>
-  /^data:image\//i.test(url) || /\.(png|jpe?g|gif|webp|bmp|svg)(\?|$)/i.test(url);
-
  const MyPets = () => {
    const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
    const [editingPet, setEditingPet] = useState<Pet | null>(null);
@@ -123,12 +101,9 @@ const isImageUrl = (url: string): boolean =>
    const [loading, setLoading] = useState(true);
    const [serviceDetailOpen, setServiceDetailOpen] = useState(false);
    const [selectedService, setSelectedService] = useState<ServiceHistory | null>(null);
-   const [allHistoryOpen, setAllHistoryOpen] = useState(false);
-   const [selectedPetForHistory, setSelectedPetForHistory] = useState<Pet | null>(null);
    const [bookingDetail, setBookingDetail] = useState<any>(null);
    const [bookingLoading, setBookingLoading] = useState(false);
    const [imagePreview, setImagePreview] = useState<string | null>(null);
-  const [isPageBlocking, notifyLoaderFinished] = useBlockingPageLoad(loading, 800);
 
    const handleServiceClick = async (service: ServiceHistory) => {
      setSelectedService(service);
@@ -147,11 +122,6 @@ const isImageUrl = (url: string): boolean =>
        }
      }
    };
-
-  const handleViewAllHistory = (pet: Pet) => {
-    setSelectedPetForHistory(pet);
-    setAllHistoryOpen(true);
-  };
 
    const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>, isEdit: boolean = false) => {
      const file = e.target.files?.[0];
@@ -267,10 +237,6 @@ const isImageUrl = (url: string): boolean =>
      }
    };
  
-  if (isPageBlocking) {
-    return <RandomFullPagePetLoader dataLoaded={!loading} onComplete={notifyLoaderFinished} />;
-  }
-
    return (
      <div className="min-h-screen bg-background">
        <Header />
@@ -525,7 +491,15 @@ const isImageUrl = (url: string): boolean =>
            </div>
  
            {/* Pets List */}
-           {pets.length === 0 ? (
+           {loading ? (
+             <Card>
+               <CardContent className="py-12">
+                 <div className="flex flex-col items-center justify-center text-center">
+                   <p className="text-muted-foreground">Loading your pets...</p>
+                 </div>
+               </CardContent>
+             </Card>
+           ) : pets.length === 0 ? (
              <Card>
                <CardContent className="py-12">
                  <div className="flex flex-col items-center justify-center text-center">
@@ -601,7 +575,7 @@ const isImageUrl = (url: string): boolean =>
                        </p>
                      ) : (
                        <div className="space-y-3">
-                         {(pet.serviceHistory ?? []).slice(0, 3).map((service) => {
+                         {(pet.serviceHistory ?? []).map((service) => {
                            const { icon, className: iconClass } = getServiceTypeIcon(service.type);
                            return (
                              <div
@@ -624,18 +598,6 @@ const isImageUrl = (url: string): boolean =>
                              </div>
                            );
                          })}
-
-                         {(pet.serviceHistory?.length ?? 0) > 3 && (
-                           <div className="pt-1 flex justify-center">
-                             <Button
-                               variant="outline"
-                               size="sm"
-                               onClick={() => handleViewAllHistory(pet)}
-                             >
-                               View All ({pet.serviceHistory?.length})
-                             </Button>
-                           </div>
-                         )}
                        </div>
                      )}
                    </CardContent>
@@ -644,57 +606,6 @@ const isImageUrl = (url: string): boolean =>
              </div>
            )}
          </div>
-
-         {/* All Service History Dialog */}
-         <Dialog open={allHistoryOpen} onOpenChange={setAllHistoryOpen}>
-           <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-             <DialogHeader>
-               <DialogTitle>
-                 {selectedPetForHistory ? `${selectedPetForHistory.name}'s Service History` : "Service History"}
-               </DialogTitle>
-               <DialogDescription>
-                 Showing all recorded services. Click an item to view full details.
-               </DialogDescription>
-             </DialogHeader>
-
-             {!selectedPetForHistory || !selectedPetForHistory.serviceHistory || selectedPetForHistory.serviceHistory.length === 0 ? (
-               <p className="text-sm text-muted-foreground py-6 text-center">No service history yet</p>
-             ) : (
-               <div className="space-y-3">
-                 {(selectedPetForHistory.serviceHistory ?? []).map((service) => {
-                   const { icon, className: iconClass } = getServiceTypeIcon(service.type);
-                   return (
-                     <div
-                       key={service.id}
-                       className="flex items-center gap-3 p-3 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors cursor-pointer"
-                       onClick={() => {
-                         setAllHistoryOpen(false);
-                         handleServiceClick(service);
-                       }}
-                     >
-                       <div className={`h-10 w-10 rounded-full flex items-center justify-center ${iconClass}`}>
-                         {icon}
-                       </div>
-                       <div className="flex-1 min-w-0">
-                         <p className="text-sm font-medium truncate">{service.serviceName}</p>
-                         {service.notes && (
-                           <p className="text-xs text-muted-foreground truncate">{service.notes}</p>
-                         )}
-                       </div>
-                       <Badge variant="outline" className="shrink-0">
-                         {getDaysAgo(service.date)}
-                       </Badge>
-                     </div>
-                   );
-                 })}
-               </div>
-             )}
-
-             <div className="flex justify-center pt-2">
-               <Button variant="outline" onClick={() => setAllHistoryOpen(false)}>Close</Button>
-             </div>
-           </DialogContent>
-         </Dialog>
 
          {/* Service Detail Dialog */}
          <Dialog open={serviceDetailOpen} onOpenChange={setServiceDetailOpen}>
@@ -863,75 +774,43 @@ const isImageUrl = (url: string): boolean =>
                          )}
 
                          {/* Pet Documents */}
-                         {(parseDocumentUrls(bookingDetail.vaccine_record_url).length > 0 || parseDocumentUrls(bookingDetail.med_cert_url).length > 0) && (
+                         {(bookingDetail.vaccine_record_url || bookingDetail.med_cert_url) && (
                            <div className="border-t pt-4">
                              <h4 className="font-semibold text-sm mb-3 flex items-center gap-2">
                                <FileText className="h-4 w-4 text-primary" />
                                Pet Documents
                              </h4>
                              <div className="flex flex-wrap gap-4">
-                               {parseDocumentUrls(bookingDetail.vaccine_record_url).length > 0 && (
+                               {bookingDetail.vaccine_record_url && (
                                  <div>
                                    <p className="text-sm text-muted-foreground mb-2">Vaccine Record</p>
-                                   <div className="flex flex-wrap gap-3">
-                                     {parseDocumentUrls(bookingDetail.vaccine_record_url).map((url, idx) => (
-                                       <div key={`vaccine-${idx}`}>
-                                         {isImageUrl(url) ? (
-                                           <div
-                                             className="cursor-pointer inline-block border border-border rounded-lg overflow-hidden hover:ring-2 hover:ring-primary/50 transition-all"
-                                             onClick={() => setImagePreview(url)}
-                                           >
-                                             <img
-                                               src={url}
-                                               alt={`Vaccine record ${idx + 1}`}
-                                               className="w-40 h-40 object-cover"
-                                             />
-                                           </div>
-                                         ) : (
-                                           <button
-                                             type="button"
-                                             className="w-40 h-40 border border-border rounded-lg bg-muted/30 text-xs px-3 py-2 text-muted-foreground hover:bg-muted/50"
-                                             onClick={() => window.open(url, "_blank", "noopener,noreferrer")}
-                                           >
-                                             Open vaccine document {idx + 1}
-                                           </button>
-                                         )}
-                                       </div>
-                                     ))}
+                                   <div
+                                     className="cursor-pointer inline-block border border-border rounded-lg overflow-hidden hover:ring-2 hover:ring-primary/50 transition-all"
+                                     onClick={() => setImagePreview(bookingDetail.vaccine_record_url)}
+                                   >
+                                     <img
+                                       src={bookingDetail.vaccine_record_url}
+                                       alt="Vaccine record"
+                                       className="w-40 h-40 object-cover"
+                                     />
                                    </div>
-                                   <p className="text-xs text-muted-foreground mt-1">Click an image to enlarge or open files in a new tab.</p>
+                                   <p className="text-xs text-muted-foreground mt-1">Click to enlarge</p>
                                  </div>
                                )}
-                               {parseDocumentUrls(bookingDetail.med_cert_url).length > 0 && (
+                               {bookingDetail.med_cert_url && (
                                  <div>
                                    <p className="text-sm text-muted-foreground mb-2">Medical Certificate</p>
-                                   <div className="flex flex-wrap gap-3">
-                                     {parseDocumentUrls(bookingDetail.med_cert_url).map((url, idx) => (
-                                       <div key={`med-${idx}`}>
-                                         {isImageUrl(url) ? (
-                                           <div
-                                             className="cursor-pointer inline-block border border-border rounded-lg overflow-hidden hover:ring-2 hover:ring-primary/50 transition-all"
-                                             onClick={() => setImagePreview(url)}
-                                           >
-                                             <img
-                                               src={url}
-                                               alt={`Medical certificate ${idx + 1}`}
-                                               className="w-40 h-40 object-cover"
-                                             />
-                                           </div>
-                                         ) : (
-                                           <button
-                                             type="button"
-                                             className="w-40 h-40 border border-border rounded-lg bg-muted/30 text-xs px-3 py-2 text-muted-foreground hover:bg-muted/50"
-                                             onClick={() => window.open(url, "_blank", "noopener,noreferrer")}
-                                           >
-                                             Open medical document {idx + 1}
-                                           </button>
-                                         )}
-                                       </div>
-                                     ))}
+                                   <div
+                                     className="cursor-pointer inline-block border border-border rounded-lg overflow-hidden hover:ring-2 hover:ring-primary/50 transition-all"
+                                     onClick={() => setImagePreview(bookingDetail.med_cert_url)}
+                                   >
+                                     <img
+                                       src={bookingDetail.med_cert_url}
+                                       alt="Medical certificate"
+                                       className="w-40 h-40 object-cover"
+                                     />
                                    </div>
-                                   <p className="text-xs text-muted-foreground mt-1">Click an image to enlarge or open files in a new tab.</p>
+                                   <p className="text-xs text-muted-foreground mt-1">Click to enlarge</p>
                                  </div>
                                )}
                              </div>

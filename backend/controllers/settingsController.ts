@@ -10,7 +10,6 @@ async function getOwnerProperty(ownerId: string, propertyId?: string | null) {
       .select("id")
       .eq("id", propertyId)
       .eq("owner_id", ownerId)
-      .eq("status", "approved")
       .eq("is_deleted", false)
       .maybeSingle();
 
@@ -24,7 +23,6 @@ async function getOwnerProperty(ownerId: string, propertyId?: string | null) {
     .from("properties")
     .select("id")
     .eq("owner_id", ownerId)
-    .eq("status", "approved")
     .eq("is_deleted", false)
     .order("created_at", { ascending: true })
     .limit(1)
