@@ -255,7 +255,7 @@ export const supportController = {
 
       if (mErr) throw mErr;
 
-      // Notify super_admin staff about the new ticket
+      // Notify super admins only about the new ticket
       try {
         const superAdminIds = await getSuperAdminIds();
         const userProfile = await supabaseAdmin
@@ -284,7 +284,7 @@ export const supportController = {
             )
         );
       } catch (notifErr) {
-        console.warn("Failed to notify users about new ticket:", notifErr);
+        console.warn("Failed to notify admins about new ticket:", notifErr);
         // Don't fail the request if notification creation fails
       }
 
