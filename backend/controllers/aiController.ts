@@ -101,7 +101,7 @@ export const aiController = {
       const language = String(body.language || "eng").trim() || "eng";
 
       if (uploadedFile?.buffer?.length) {
-        const result = await extractTextFromImageBuffer(uploadedFile.buffer, language);
+        const result = await extractTextFromImageBuffer(uploadedFile.buffer, language, uploadedFile.mimetype || undefined);
         return res.json({
           text: result.text,
           language: result.language,
