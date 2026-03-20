@@ -29,26 +29,6 @@ const getSuperAdminIds = async (): Promise<string[]> => {
   }
 };
 
-const getAllActiveUsers = async (): Promise<Array<{ id: string; role: string }>> => {
-  try {
-    const { data: users, error } = await supabaseAdmin
-      .from("profiles")
-      .select("id, role")
-      .eq("is_deleted", false);
-
-    if (error) throw error;
-    return (users ?? []).map((u: any) => ({ id: u.id, role: u.role || "user" }));
-  } catch (err) {
-    console.warn("Failed to get active users:", err);
-    return [];
-  }
-};
-
-const getTicketLinkByRole = (role: string, ticketId: string): string => {
-  if (role === "super_admin") return `/superadmin/support?ticket=${ticketId}`;
-  return `/help-center?ticket=${ticketId}`;
-};
-
 /* ─── controller ─── */
 export const supportController = {
   /* ============================================
@@ -275,9 +255,9 @@ export const supportController = {
 
       if (mErr) throw mErr;
 
-      // Notify all active users about the new ticket (role-aware links)
+      // Notify super_admin staff about the new ticket
       try {
-        const allUsers = await getAllActiveUsers();
+        const superAdminIds = await getSuperAdminIds();
         const userProfile = await supabaseAdmin
           .from("profiles")
           .select("first_name, last_name")
@@ -288,19 +268,21 @@ export const supportController = {
           ? `${userProfile.data.first_name || ""} ${userProfile.data.last_name || ""}`.trim()
           : "A user";
 
-        for (const recipient of allUsers) {
-          if (recipient.id === user.id) continue;
-
-          await notificationModel.create({
-            user_id: recipient.id,
-            type: "new_ticket",
-            title: "New Support Ticket",
-            message: `${userName} has submitted a new support ticket: "${subject}"`,
-            link: getTicketLinkByRole(recipient.role, ticket.id),
-            reference_id: ticket.id,
-            reference_type: "support_ticket",
-          });
-        }
+        await Promise.all(
+          superAdminIds
+            .filter((adminId) => adminId !== user.id)
+            .map((adminId) =>
+              notificationModel.create({
+                user_id: adminId,
+                type: "new_ticket",
+                title: "New Support Ticket",
+                message: `${userName} has submitted a new support ticket: "${subject}"`,
+                link: `/superadmin/support?ticket=${ticket.id}`,
+                reference_id: ticket.id,
+                reference_type: "support_ticket",
+              })
+            )
+        );
       } catch (notifErr) {
         console.warn("Failed to notify users about new ticket:", notifErr);
         // Don't fail the request if notification creation fails
@@ -375,7 +357,8 @@ export const supportController = {
           .eq("id", id);
       }
 
-      // Notify all active users except sender about new ticket messages.
+      // Notify ticket participants about new ticket messages.
+      // If sender is staff: notify ticket owner. If sender is user: notify super_admin staff.
       try {
         const senderProfile = await supabaseAdmin
           .from("profiles")
@@ -387,21 +370,39 @@ export const supportController = {
           ? `${senderProfile.data.first_name || ""} ${senderProfile.data.last_name || ""}`.trim()
           : "A user";
 
-        const allUsers = await getAllActiveUsers();
         const preview = msg.message.length > 60 ? `${msg.message.substring(0, 60)}...` : msg.message;
 
-        for (const recipient of allUsers) {
-          if (recipient.id === user.id) continue;
-
-          await notificationModel.create({
-            user_id: recipient.id,
-            type: "ticket_reply",
-            title: "New Ticket Message",
-            message: `${senderName} sent a new message: "${preview}"`,
-            link: getTicketLinkByRole(recipient.role, ticket.id),
-            reference_id: ticket.id,
-            reference_type: "support_ticket",
-          });
+        if (isStaff) {
+          // Staff replied: notify the ticket owner (if they are not the sender)
+          if (ticket.user_id !== user.id) {
+            await notificationModel.create({
+              user_id: ticket.user_id,
+              type: "ticket_reply",
+              title: "New Ticket Message",
+              message: `${senderName} sent a new message: "${preview}"`,
+              link: `/help-center?ticket=${ticket.id}`,
+              reference_id: ticket.id,
+              reference_type: "support_ticket",
+            });
+          }
+        } else {
+          // User replied: notify all super_admin staff
+          const superAdminIds = await getSuperAdminIds();
+          await Promise.all(
+            superAdminIds
+              .filter((adminId) => adminId !== user.id)
+              .map((adminId) =>
+                notificationModel.create({
+                  user_id: adminId,
+                  type: "ticket_reply",
+                  title: "New Ticket Message",
+                  message: `${senderName} sent a new message: "${preview}"`,
+                  link: `/superadmin/support?ticket=${ticket.id}`,
+                  reference_id: ticket.id,
+                  reference_type: "support_ticket",
+                })
+              )
+          );
         }
       } catch (notifErr) {
         console.warn("Failed to create ticket reply notification:", notifErr);
