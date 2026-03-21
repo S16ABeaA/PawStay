@@ -164,13 +164,13 @@ app.listen(PORT, () => {
       .catch((err) => console.warn('[weekly-report-notifications] interval run failed:', err?.message || err));
   }, 24 * 60 * 60 * 1000);
 
-  dispatchPetCareNotificationsJob()
-    .then((result) => console.log('[pet-care-notifications] startup run:', result))
-    .catch((err) => console.warn('[pet-care-notifications] startup run failed:', err?.message || err));
+    // dispatchPetCareNotificationsJob()
+  //   .then((result) => console.log('[pet-care-notifications] startup run:', result))
+  //   .catch((err) => console.warn('[pet-care-notifications] startup run failed:', err?.message || err));
 
-  setInterval(() => {
-    dispatchPetCareNotificationsJob()
-      .then((result) => console.log('[pet-care-notifications] interval run:', result))
-      .catch((err) => console.warn('[pet-care-notifications] interval run failed:', err?.message || err));
-  }, 24 * 60 * 60 * 1000);
+  // setInterval(() => {
+  //   dispatchPetCareNotificationsJob()
+  //     .then((result) => console.log('[pet-care-notifications] interval run:', result))
+  //     .catch((err) => console.warn('[pet-care-notifications] interval run failed:', err?.message || err));
+  // }, 24 * 60 * 60 * 1000);
 });
