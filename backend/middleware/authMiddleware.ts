@@ -130,7 +130,7 @@ export const clearAuthCookies = (res: Response) => {
 //Middleware to restrict a route to admin (proprietor) users only.
 export const requireAdmin = (req: Request, res: Response, next: NextFunction) => {
   const user = (req as any).user;
-  if (!user || (user.role !== "proprietor")) {
+  if (!user || !["proprietor", "admin", "super_admin"].includes(user.role)) {
     return res.status(403).json({ error: "Forbidden: admin access required." });
   }
   next();
