@@ -5,6 +5,7 @@ const API_BASE_URL = import.meta.env.VITE_BACKEND_URL || "";
 export interface CreateBookingPayload {
   property_id: string;
   pet_id?: string | null;
+  create_new_pet?: boolean;
   service_id?: string | null;
   checkin: string;
   checkout?: string | null;

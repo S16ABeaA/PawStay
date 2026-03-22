@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/popover";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { notificationsApi, type Notification } from "@/services/notificationsApi";
+import BookingIdText from "@/components/BookingIdText";
 
 const NOTIFICATION_ICONS: Record<string, string> = {
   booking_confirmed: "🎉",
@@ -46,6 +47,13 @@ function resolveNotificationLink(notification: Notification): string | null {
   }
 
   return baseLink;
+}
+
+function shouldShowBookNowCta(notification: Notification): boolean {
+  const target = resolveNotificationLink(notification) || "";
+  if (!target) return false;
+  if (/^\/(veterinary|grooming)(\?|$)/i.test(target)) return true;
+  return /book now/i.test(String(notification.message || ""));
 }
 
 function timeAgo(dateStr: string): string {
@@ -246,11 +254,25 @@ const NotificationBell = () => {
                       )}
                     </div>
                     <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
-                      {notification.message}
+                      <BookingIdText text={notification.message} />
                     </p>
                     <p className="text-[11px] text-muted-foreground/70 mt-1">
                       {timeAgo(notification.created_at)}
                     </p>
+                    {shouldShowBookNowCta(notification) && (
+                      <div className="mt-1.5">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleNotificationClick(notification);
+                          }}
+                          className="inline-flex items-center rounded-full border border-rose-200 bg-rose-50 px-2.5 py-1 text-[11px] font-medium text-rose-700 hover:bg-rose-100"
+                        >
+                          Book now
+                        </button>
+                      </div>
+                    )}
                   </div>
 
                   {/* Actions */}

@@ -6,7 +6,7 @@ import { fetchProperties } from "@/services/propertyApi";
 import { fetchAmenities } from "@/services/amenitiesApi";
 import { Star, ArrowRight, SlidersHorizontal, ArrowUpDown, Grid3X3, List } from "lucide-react";
 import { PetLoaderGate } from "@/components/ui/PetLoader";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -20,6 +20,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Slider } from "@/components/ui/slider";
 import { Checkbox } from "@/components/ui/checkbox";
+import { reverseGeocode } from "@/services/reverseGeocode";
 
 const timeSlots = [
   "09:00", "10:00", "11:00", "13:00", "14:00", "15:00", "16:00", "17:00",
@@ -27,6 +28,9 @@ const timeSlots = [
 
 const Veterinary = () => {
   const resultsRef = useRef<HTMLDivElement>(null);
+  const locationInputRef = useRef<HTMLInputElement>(null);
+  const appointmentDateRef = useRef<HTMLInputElement>(null);
+  const routerLocation = useLocation();
   const [clinics, setClinics] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [priceRange, setPriceRange] = useState([0, 3000]);
@@ -40,6 +44,7 @@ const Veterinary = () => {
   const [appointmentDate, setAppointmentDate] = useState("");
   const [timeSlot, setTimeSlot] = useState<string>("");
   const [dateError, setDateError] = useState<string | null>(null);
+  const [isResolvingGeo, setIsResolvingGeo] = useState(false);
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const PAGE_SIZE = 9;
   const [displayCount, setDisplayCount] = useState(PAGE_SIZE);
@@ -101,21 +106,27 @@ const Veterinary = () => {
     }, 120);
   };
 
-  const loadClinics = async () => {
+  const loadClinics = async (
+    amenitiesOverride?: string[],
+    overrides?: { location?: string; appointmentDate?: string },
+  ) => {
     setLoading(true);
     try {
+      const effectiveAmenities = amenitiesOverride ?? selectedAmenities;
+      const effectiveLocation = overrides?.location ?? location;
+      const effectiveDate = overrides?.appointmentDate ?? appointmentDate;
       // Pass explicit filters to the API
       const data = await fetchProperties({
         propertyType: "veterinary",
         serviceCategory: "Veterinary",
-        location: location.trim() || undefined,
+        location: effectiveLocation.trim() || undefined,
         minPrice: priceRange[0] > 0 ? priceRange[0] : undefined,
         maxPrice: priceRange[1],
-        amenities: selectedAmenities.length > 0 ? selectedAmenities : undefined,
+        amenities: effectiveAmenities.length > 0 ? effectiveAmenities : undefined,
         rating: minRating ?? undefined,
         petType: petTypes.length > 0 ? petTypes.map(p => p.toLowerCase()) : undefined,
         dogSize: petTypes.includes("Dog") && dogSizes.length > 0 ? dogSizes : undefined,
-        checkIn: appointmentDate || undefined,
+        checkIn: effectiveDate || undefined,
         timeSlot: timeSlot || undefined,
       });
       setClinics(data || []);
@@ -128,10 +139,69 @@ const Veterinary = () => {
     }
   };
 
-  // Run on initial mount
+  // Run on initial mount, apply `amenities` query param if present
   useEffect(() => {
-    loadClinics();
-  }, []);
+    const params = new URLSearchParams(routerLocation.search);
+    const locationParam = params.get("location") || "";
+    const dateParam = params.get("date") || "";
+    const geoPending = params.get("geoPending") === "1";
+
+    if (locationParam) setLocation(locationParam);
+    if (dateParam) {
+      setAppointmentDate(dateParam);
+      validateDates(dateParam);
+    }
+
+    if (geoPending && navigator.geolocation) {
+      setIsResolvingGeo(true);
+      navigator.geolocation.getCurrentPosition(
+        async (position) => {
+          try {
+            const city = await reverseGeocode(position.coords.latitude, position.coords.longitude);
+            if (city) {
+              setLocation(city);
+              loadClinics(undefined, { location: city, appointmentDate: dateParam });
+            }
+          } catch {
+            // silent fallback to prefilled profile location
+          } finally {
+            setIsResolvingGeo(false);
+          }
+        },
+        () => setIsResolvingGeo(false),
+        { enableHighAccuracy: true, timeout: 7000, maximumAge: 60000 },
+      );
+    }
+
+    if (locationParam || dateParam || geoPending) {
+      window.setTimeout(() => {
+        if (!locationParam) {
+          locationInputRef.current?.focus();
+          return;
+        }
+
+        if (!dateParam) {
+          appointmentDateRef.current?.focus();
+          return;
+        }
+
+        if (!timeSlot) {
+          const timeSelect = document.querySelector("select") as HTMLSelectElement | null;
+          timeSelect?.focus();
+        }
+      }, 50);
+    }
+
+    const amenitiesParam = params.get("amenities");
+    if (amenitiesParam) {
+      const list = Array.from(new Set(amenitiesParam.split(",").map(a => a.trim()).filter(Boolean)));
+      setSelectedAmenities(list);
+      loadClinics(list, { location: locationParam, appointmentDate: dateParam });
+      return;
+    }
+
+    loadClinics(undefined, { location: locationParam, appointmentDate: dateParam });
+  }, [routerLocation.search]);
 
   // Load amenities dynamically
   useEffect(() => {
@@ -139,6 +209,21 @@ const Veterinary = () => {
       .then((data) => setAmenitiesList(data || []))
       .catch((err) => console.error("Failed to load amenities:", err));
   }, []);
+
+  useEffect(() => {
+    if (routerLocation.hash !== "#clinics") return;
+
+    const timer = window.setTimeout(() => {
+      const el = resultsRef.current ?? document.getElementById("clinics");
+      if (!el) return;
+      const header = document.querySelector("header");
+      const offset = (header?.clientHeight ?? 0) + 8;
+      const y = el.getBoundingClientRect().top + window.scrollY - offset;
+      window.scrollTo({ top: y, behavior: "smooth" });
+    }, 120);
+
+    return () => window.clearTimeout(timer);
+  }, [routerLocation.hash]);
 
   return (
     <div className="min-h-screen bg-background">
@@ -290,9 +375,10 @@ const Veterinary = () => {
                 <div className="pb-6 border-b border-border/50">
                   <label className="text-sm font-semibold text-foreground mb-3 block">Location</label>
                   <Input 
+                    ref={locationInputRef}
                     value={location} 
                     onChange={(e) => setLocation(e.target.value)} 
-                    placeholder="e.g. Makati" 
+                    placeholder={isResolvingGeo ? "Resolving your current location..." : "e.g. Makati"}
                     onKeyDown={(e) => e.key === 'Enter' && loadClinics()}
                   />
                 </div>
@@ -304,6 +390,7 @@ const Veterinary = () => {
                     <div>
                       <label className="text-xs text-muted-foreground mb-1 block">Appointment Date</label>
                       <Input
+                        ref={appointmentDateRef}
                         type="date"
                         value={appointmentDate}
                         min={todayISO}
@@ -421,7 +508,7 @@ const Veterinary = () => {
             </aside>
 
             {/* Results */}
-            <div className="flex-1" ref={resultsRef}>
+            <div id="clinics" className="flex-1" ref={resultsRef}>
               <div className="flex items-center justify-between mb-6">
                 <div />
                 <div className="flex items-center gap-2 ml-auto">

@@ -27,6 +27,7 @@ import {
   dispatchBookingLifecycleNotificationsJob,
   dispatchWeeklyReportNotificationsJob,
 } from './services/notificationJobs';
+import { dispatchPetCareNotificationsJob } from './services/petCareNotificationJobs';
 import { ensureStorageBucket } from './utils/storageMedia';
 import { withJobLock } from './utils/jobLock';
  
@@ -177,5 +178,15 @@ app.listen(PORT, () => {
     withJobLock('weekly-report-notifications', WEEKLY_REPORT_STALE_SECS, dispatchWeeklyReportNotificationsJob)
       .then((result) => result !== null && console.log('[weekly-report-notifications] interval run:', result))
       .catch((err) => console.warn('[weekly-report-notifications] interval run failed:', err?.message || err));
-  }, ONE_DAY_MS);
+  }, 24 * 60 * 60 * 1000);
+
+    // dispatchPetCareNotificationsJob()
+  //   .then((result) => console.log('[pet-care-notifications] startup run:', result))
+  //   .catch((err) => console.warn('[pet-care-notifications] startup run failed:', err?.message || err));
+
+  // setInterval(() => {
+  //   dispatchPetCareNotificationsJob()
+  //     .then((result) => console.log('[pet-care-notifications] interval run:', result))
+  //     .catch((err) => console.warn('[pet-care-notifications] interval run failed:', err?.message || err));
+  // }, 24 * 60 * 60 * 1000);
 });

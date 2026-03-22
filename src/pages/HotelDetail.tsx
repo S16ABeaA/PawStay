@@ -13,6 +13,7 @@ import { useBlockingPageLoad } from "@/hooks/useBlockingPageLoad";
 import { useState, useEffect } from "react";
 import { favoritesApi } from "../services/favoritesApi";
 import { fetchPropertyById, fetchPropertyReviews } from "../services/propertyApi";
+import BookingIdText from "@/components/BookingIdText";
 
 const HotelDetail = () => {
   const { id } = useParams();
@@ -367,11 +368,11 @@ const HotelDetail = () => {
                           {review.pet_name && (
                             <p className="text-xs text-muted-foreground mb-2">🐾 Pet: {review.pet_name}</p>
                           )}
-                          <p className="text-sm text-muted-foreground leading-relaxed">{review.comment}</p>
+                          <p className="text-sm text-muted-foreground leading-relaxed"><BookingIdText text={review.comment} /></p>
                           {review.reply && (
                             <div className="mt-3 pl-4 border-l-2 border-primary/30">
                               <p className="text-xs font-semibold text-primary mb-1">Owner's Reply</p>
-                              <p className="text-xs text-muted-foreground">{review.reply}</p>
+                              <p className="text-xs text-muted-foreground"><BookingIdText text={review.reply} /></p>
                             </div>
                           )}
                         </div>

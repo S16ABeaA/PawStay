@@ -17,6 +17,7 @@ import { useToast } from "@/hooks/use-toast";
 import { reviewsApi, OwnerReview } from "@/services/reviewsApi";
 import { useAdminProperty } from "@/hooks/useAdminProperty";
 import { useSearchParams } from "react-router-dom";
+import BookingIdText from "@/components/BookingIdText";
 
 const AdminReviews = () => {
   const [reviews, setReviews] = useState<OwnerReview[]>([]);
@@ -159,12 +160,12 @@ const AdminReviews = () => {
               )}
             </div>
 
-            <p className="text-sm text-muted-foreground">{review.text}</p>
+            <p className="text-sm text-muted-foreground"><BookingIdText text={review.text} /></p>
 
             {review.replied && review.reply && (
               <div className="mt-3 p-3 rounded-lg bg-secondary/50 border-l-2 border-primary">
                 <p className="text-xs font-medium text-primary mb-1">Your Reply:</p>
-                <p className="text-sm text-muted-foreground">{review.reply}</p>
+                <p className="text-sm text-muted-foreground"><BookingIdText text={review.reply} /></p>
               </div>
             )}
           </div>
@@ -275,7 +276,7 @@ const AdminReviews = () => {
                   </div>
                   <span className="text-xs text-muted-foreground">{selectedReview.date}</span>
                 </div>
-                <p className="text-sm text-muted-foreground">{selectedReview.text}</p>
+                <p className="text-sm text-muted-foreground"><BookingIdText text={selectedReview.text} /></p>
               </div>
               <Textarea
                 placeholder="Write your reply..."

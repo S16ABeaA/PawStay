@@ -1,5 +1,6 @@
 export type ToolName =
   | "search_services"
+  | "get_property_services"
   | "get_review_count"
   | "read_image_text"
   | "get_pets"

@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { CheckCircle2, XCircle, Loader2, X } from "lucide-react";
 import { authHelper } from "@/helpers/authHelper";
 import { Link } from "react-router-dom";
+import BookingIdText from "@/components/BookingIdText";
 
 interface PropertyNotification {
   id: string;
@@ -123,7 +124,7 @@ export const PropertyStatusNotification = () => {
                     <div>
                       <h3 className={`font-semibold ${titleColor}`}>{notification.title}</h3>
                       <p className={`text-sm ${textColor} mt-1 line-clamp-2`}>
-                        {notification.message}
+                        <BookingIdText text={notification.message} />
                       </p>
                     </div>
                     <button

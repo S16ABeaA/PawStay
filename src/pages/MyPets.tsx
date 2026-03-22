@@ -36,6 +36,11 @@ import { useBlockingPageLoad } from "@/hooks/useBlockingPageLoad";
 } from "lucide-react";
 import { petApi } from "@/services/petApi";
 import { bookingApi } from "@/services/bookingApi";
+import {
+  AI_AUTOFILL_MIN_CONFIDENCE,
+  consumePetAutofillPayload,
+} from "@/lib/aiAutofill";
+import BookingIdText from "@/components/BookingIdText";
 
 interface ServiceHistory {
   id: string;
@@ -120,6 +125,8 @@ const isImageUrl = (url: string): boolean =>
      weight: "",
      notes: "",
    });
+   const [autoFilledFields, setAutoFilledFields] = useState<Record<string, { source: string; confidence: number }>>({});
+   const [autoFillNotes, setAutoFillNotes] = useState<Record<string, string>>({});
    const [loading, setLoading] = useState(true);
    const [serviceDetailOpen, setServiceDetailOpen] = useState(false);
    const [selectedService, setSelectedService] = useState<ServiceHistory | null>(null);
@@ -192,6 +199,67 @@ const isImageUrl = (url: string): boolean =>
      };
      fetchPets();
    }, []);
+
+   useEffect(() => {
+     const payload = consumePetAutofillPayload();
+     if (!payload) return;
+
+     if (payload.imageDataUrl && !newPetPhoto) {
+       setNewPetPhoto(payload.imageDataUrl);
+     }
+
+     const nextNotes: Record<string, string> = {};
+     const nextAuto: Record<string, { source: string; confidence: number }> = {};
+
+     setNewPet((prev) => {
+       const next = { ...prev };
+
+       if (payload.breed?.value) {
+         if (!prev.breed && payload.breed.confidence >= AI_AUTOFILL_MIN_CONFIDENCE) {
+           next.breed = payload.breed.value;
+           nextAuto.breed = { source: payload.breed.source, confidence: payload.breed.confidence };
+         } else if (payload.breed.confidence < AI_AUTOFILL_MIN_CONFIDENCE) {
+           nextNotes.breed = "Breed wasn't autofilled due to low confidence.";
+         }
+       } else if (payload.notes?.breed) {
+         nextNotes.breed = payload.notes.breed;
+       }
+
+       if (payload.weightKg?.value) {
+         if (!prev.weight && payload.weightKg.confidence >= AI_AUTOFILL_MIN_CONFIDENCE) {
+           next.weight = payload.weightKg.value;
+           nextAuto.weight = { source: payload.weightKg.source, confidence: payload.weightKg.confidence };
+         } else if (payload.weightKg.confidence < AI_AUTOFILL_MIN_CONFIDENCE) {
+           nextNotes.weight = "Weight wasn't autofilled due to low confidence.";
+         }
+       } else if (payload.notes?.weight) {
+         nextNotes.weight = payload.notes.weight;
+       }
+
+       if (payload.ageYears?.value) {
+         if (!prev.birthday && payload.ageYears.confidence >= AI_AUTOFILL_MIN_CONFIDENCE) {
+           const age = Number(payload.ageYears.value);
+           if (Number.isFinite(age) && age > 0) {
+             const estimatedDob = new Date();
+             estimatedDob.setFullYear(estimatedDob.getFullYear() - Math.floor(age));
+             const iso = estimatedDob.toISOString().slice(0, 10);
+             next.birthday = iso;
+             nextAuto.birthday = { source: payload.ageYears.source, confidence: payload.ageYears.confidence };
+           }
+         } else if (payload.ageYears.confidence < AI_AUTOFILL_MIN_CONFIDENCE) {
+           nextNotes.birthday = "Age wasn't confident enough, so birthday wasn't autofilled.";
+         }
+       } else if (payload.notes?.age) {
+         nextNotes.birthday = payload.notes.age;
+       }
+
+       return next;
+     });
+
+     setAutoFilledFields(nextAuto);
+     setAutoFillNotes(nextNotes);
+     setIsAddDialogOpen(true);
+   }, []);
  
    const getDaysAgo = (date: string | Date) => {
      const d = typeof date === "string" ? new Date(date) : date;
@@ -225,6 +293,8 @@ const isImageUrl = (url: string): boolean =>
        setIsAddDialogOpen(false);
        setNewPet({ name: "", species: "", breed: "", birthday: "", weight: "", notes: "" });
        setNewPetPhoto("");
+       setAutoFilledFields({});
+       setAutoFillNotes({});
      } catch (err) {
        console.error("Failed to add pet:", err);
        alert("Failed to add pet. Please try again.");
@@ -324,6 +394,11 @@ const isImageUrl = (url: string): boolean =>
                            onChange={(e) => handlePhotoUpload(e, false)}
                          />
                        </label>
+                       {newPetPhoto && (
+                         <span className="absolute -bottom-7 left-1/2 -translate-x-1/2 text-[10px] px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 whitespace-nowrap">
+                           auto-filled image
+                         </span>
+                       )}
                      </div>
                    </div>
                    <div className="space-y-2">
@@ -353,36 +428,69 @@ const isImageUrl = (url: string): boolean =>
                        </Select>
                      </div>
                      <div className="space-y-2">
-                       <Label htmlFor="breed">Breed <span className="text-red-500">*</span></Label>
+                       <Label htmlFor="breed" className="flex items-center gap-2">
+                         <span>Breed <span className="text-red-500">*</span></span>
+                         {autoFilledFields.breed && (
+                           <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                             auto-filled ({Math.round(autoFilledFields.breed.confidence * 100)}%)
+                           </span>
+                         )}
+                       </Label>
                        <Input
                          id="breed"
                          placeholder="e.g., Golden Retriever"
                          value={newPet.breed}
                          onChange={(e) => setNewPet({ ...newPet, breed: e.target.value })}
+                         className={autoFilledFields.breed ? "border-emerald-300 bg-emerald-50/40" : undefined}
                          required
                        />
+                       {autoFillNotes.breed && (
+                         <p className="text-[11px] text-amber-700">{autoFillNotes.breed}</p>
+                       )}
                      </div>
                    </div>
                    <div className="space-y-2">
-                     <Label htmlFor="birthday">Birthday <span className="text-red-500">*</span></Label>
+                     <Label htmlFor="birthday" className="flex items-center gap-2">
+                       <span>Birthday <span className="text-red-500">*</span></span>
+                       {autoFilledFields.birthday && (
+                         <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                           auto-filled from age ({Math.round(autoFilledFields.birthday.confidence * 100)}%)
+                         </span>
+                       )}
+                     </Label>
                      <Input
                        id="birthday"
                        type="date"
                        value={newPet.birthday}
                        onChange={(e) => setNewPet({ ...newPet, birthday: e.target.value })}
+                       className={autoFilledFields.birthday ? "border-emerald-300 bg-emerald-50/40" : undefined}
                        required
                      />
+                     {autoFillNotes.birthday && (
+                       <p className="text-[11px] text-amber-700">{autoFillNotes.birthday}</p>
+                     )}
                    </div>
                    <div className="space-y-2">
-                     <Label htmlFor="weight">Weight (kg) <span className="text-red-500">*</span></Label>
+                     <Label htmlFor="weight" className="flex items-center gap-2">
+                       <span>Weight (kg) <span className="text-red-500">*</span></span>
+                       {autoFilledFields.weight && (
+                         <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                           auto-filled ({Math.round(autoFilledFields.weight.confidence * 100)}%)
+                         </span>
+                       )}
+                     </Label>
                      <Input
                        id="weight"
                        type="number"
                        placeholder="e.g., 15"
                        value={newPet.weight}
                        onChange={(e) => setNewPet({ ...newPet, weight: e.target.value })}
+                       className={autoFilledFields.weight ? "border-emerald-300 bg-emerald-50/40" : undefined}
                        required
                      />
+                     {autoFillNotes.weight && (
+                       <p className="text-[11px] text-amber-700">{autoFillNotes.weight}</p>
+                     )}
                    </div>
                    <div className="space-y-2">
                      <Label htmlFor="notes">Notes (optional)</Label>
@@ -395,7 +503,14 @@ const isImageUrl = (url: string): boolean =>
                    </div>
                  </div>
                  <div className="flex gap-2 justify-end">
-                   <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setIsAddDialogOpen(false);
+                      setAutoFilledFields({});
+                      setAutoFillNotes({});
+                    }}
+                  >
                      Cancel
                    </Button>
                    <Button variant="hero" onClick={handleAddPet}>
@@ -586,9 +701,10 @@ const isImageUrl = (url: string): boolean =>
                      </div>
                      {pet.notes && (
                        <p className="text-sm text-muted-foreground mt-4 bg-muted/50 p-3 rounded-lg">
-                         {pet.notes}
+                         <BookingIdText text={pet.notes} />
                        </p>
                      )}
+
                    </CardHeader>
                    <CardContent>
                      <h4 className="text-sm font-semibold mb-3 flex items-center gap-2">
@@ -615,7 +731,7 @@ const isImageUrl = (url: string): boolean =>
                                <div className="flex-1 min-w-0">
                                  <p className="text-sm font-medium truncate">{service.serviceName}</p>
                                  {service.notes && (
-                                   <p className="text-xs text-muted-foreground truncate">{service.notes}</p>
+                                   <p className="text-xs text-muted-foreground truncate"><BookingIdText text={service.notes} /></p>
                                  )}
                                </div>
                                <Badge variant="outline" className="shrink-0">
@@ -678,7 +794,7 @@ const isImageUrl = (url: string): boolean =>
                        <div className="flex-1 min-w-0">
                          <p className="text-sm font-medium truncate">{service.serviceName}</p>
                          {service.notes && (
-                           <p className="text-xs text-muted-foreground truncate">{service.notes}</p>
+                           <p className="text-xs text-muted-foreground truncate"><BookingIdText text={service.notes} /></p>
                          )}
                        </div>
                        <Badge variant="outline" className="shrink-0">
@@ -733,7 +849,7 @@ const isImageUrl = (url: string): boolean =>
                    {selectedService.notes && (
                      <div className="col-span-2">
                        <p className="text-sm text-muted-foreground">Notes</p>
-                       <p className="font-medium text-sm bg-muted/50 p-3 rounded-lg mt-1">{selectedService.notes}</p>
+                       <p className="font-medium text-sm bg-muted/50 p-3 rounded-lg mt-1"><BookingIdText text={selectedService.notes} /></p>
                      </div>
                    )}
                  </div>
@@ -749,6 +865,14 @@ const isImageUrl = (url: string): boolean =>
                            <FileText className="h-4 w-4 text-primary" />
                            Booking Information
                          </h4>
+                        <div className="-mt-2">
+                          <a
+                            href={`/my-bookings?bookingId=${encodeURIComponent(selectedService.bookingId || "")}`}
+                            className="text-xs text-primary underline"
+                          >
+                            Open full booking details
+                          </a>
+                        </div>
                          <div className="grid grid-cols-2 gap-4">
                            {bookingDetail.property_name && (
                              <div>
@@ -813,7 +937,7 @@ const isImageUrl = (url: string): boolean =>
                            {bookingDetail.special_requirements && (
                              <div className="col-span-2">
                                <p className="text-sm text-muted-foreground">Special Requirements</p>
-                               <p className="text-sm bg-muted/50 p-3 rounded-lg mt-1">{bookingDetail.special_requirements}</p>
+                               <p className="text-sm bg-muted/50 p-3 rounded-lg mt-1"><BookingIdText text={bookingDetail.special_requirements} /></p>
                              </div>
                            )}
                          </div>

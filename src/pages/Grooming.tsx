@@ -9,9 +9,10 @@ import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Slider } from "@/components/ui/slider";
 import { Badge } from "@/components/ui/badge";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { fetchProperties } from "@/services/propertyApi";
 import { fetchAmenities } from "@/services/amenitiesApi";
+import { reverseGeocode } from "@/services/reverseGeocode";
 
 const timeSlots = [
   "09:00", "10:00", "11:00", "13:00", "14:00", "15:00", "16:00", "17:00",
@@ -19,6 +20,9 @@ const timeSlots = [
 
 const Grooming = () => {
   const resultsRef = useRef<HTMLDivElement>(null);
+  const locationInputRef = useRef<HTMLInputElement>(null);
+  const appointmentDateRef = useRef<HTMLInputElement>(null);
+  const routerLocation = useLocation();
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const PAGE_SIZE = 9;
   const [displayCount, setDisplayCount] = useState(PAGE_SIZE);
@@ -37,6 +41,7 @@ const Grooming = () => {
   const [appointmentDate, setAppointmentDate] = useState("");
   const [timeSlot, setTimeSlot] = useState<string>("");
   const [dateError, setDateError] = useState<string | null>(null);
+  const [isResolvingGeo, setIsResolvingGeo] = useState(false);
 
   const today = new Date();
   const todayISO = today.toISOString().split("T")[0];
@@ -85,20 +90,26 @@ const Grooming = () => {
     }, 120);
   };
 
-  const loadGrooming = async () => {
+  const loadGrooming = async (
+    amenitiesOverride?: string[],
+    overrides?: { location?: string; appointmentDate?: string },
+  ) => {
     setLoading(true);
     try {
+      const effectiveAmenities = amenitiesOverride ?? selectedAmenities;
+      const effectiveLocation = overrides?.location ?? location;
+      const effectiveDate = overrides?.appointmentDate ?? appointmentDate;
       const data = await fetchProperties({
         propertyType: "grooming",
         serviceCategory: "Grooming",
-        location: location.trim() || undefined,
+        location: effectiveLocation.trim() || undefined,
         minPrice: priceRange[0] > 0 ? priceRange[0] : undefined,
         maxPrice: priceRange[1],
-        amenities: selectedAmenities.length > 0 ? selectedAmenities : undefined,
+        amenities: effectiveAmenities.length > 0 ? effectiveAmenities : undefined,
         rating: minRating ?? undefined,
         petType: petTypes.length > 0 ? petTypes.map(p => p.toLowerCase()) : undefined,
         dogSize: petTypes.includes("Dog") && dogSizes.length > 0 ? dogSizes : undefined,
-        checkIn: appointmentDate || undefined,
+        checkIn: effectiveDate || undefined,
         timeSlot: timeSlot || undefined,
       });
       setShops(data || []);
@@ -111,10 +122,69 @@ const Grooming = () => {
     }
   };
 
-  // Load initial data
+  // Load initial data, applying `amenities` query param if present
   useEffect(() => {
-    loadGrooming();
-  }, []);
+    const params = new URLSearchParams(routerLocation.search);
+    const locationParam = params.get("location") || "";
+    const dateParam = params.get("date") || "";
+    const geoPending = params.get("geoPending") === "1";
+
+    if (locationParam) setLocation(locationParam);
+    if (dateParam) {
+      setAppointmentDate(dateParam);
+      validateDates(dateParam);
+    }
+
+    if (geoPending && navigator.geolocation) {
+      setIsResolvingGeo(true);
+      navigator.geolocation.getCurrentPosition(
+        async (position) => {
+          try {
+            const city = await reverseGeocode(position.coords.latitude, position.coords.longitude);
+            if (city) {
+              setLocation(city);
+              loadGrooming(undefined, { location: city, appointmentDate: dateParam });
+            }
+          } catch {
+            // silent fallback to prefilled profile location
+          } finally {
+            setIsResolvingGeo(false);
+          }
+        },
+        () => setIsResolvingGeo(false),
+        { enableHighAccuracy: true, timeout: 7000, maximumAge: 60000 },
+      );
+    }
+
+    if (locationParam || dateParam || geoPending) {
+      window.setTimeout(() => {
+        if (!locationParam) {
+          locationInputRef.current?.focus();
+          return;
+        }
+
+        if (!dateParam) {
+          appointmentDateRef.current?.focus();
+          return;
+        }
+
+        if (!timeSlot) {
+          const timeSelect = document.querySelector("select") as HTMLSelectElement | null;
+          timeSelect?.focus();
+        }
+      }, 50);
+    }
+
+    const amenitiesParam = params.get("amenities");
+    if (amenitiesParam) {
+      const list = Array.from(new Set(amenitiesParam.split(",").map(a => a.trim()).filter(Boolean)));
+      setSelectedAmenities(list);
+      loadGrooming(list, { location: locationParam, appointmentDate: dateParam });
+      return;
+    }
+
+    loadGrooming(undefined, { location: locationParam, appointmentDate: dateParam });
+  }, [routerLocation.search]);
 
   // Load amenities dynamically
   useEffect(() => {
@@ -122,6 +192,21 @@ const Grooming = () => {
       .then((data) => setAmenitiesList(data || []))
       .catch((err) => console.error("Failed to load amenities:", err));
   }, []);
+
+  useEffect(() => {
+    if (routerLocation.hash !== "#salons") return;
+
+    const timer = window.setTimeout(() => {
+      const el = resultsRef.current ?? document.getElementById("salons");
+      if (!el) return;
+      const header = document.querySelector("header");
+      const offset = (header?.clientHeight ?? 0) + 8;
+      const y = el.getBoundingClientRect().top + window.scrollY - offset;
+      window.scrollTo({ top: y, behavior: "smooth" });
+    }, 120);
+
+    return () => window.clearTimeout(timer);
+  }, [routerLocation.hash]);
 
   return (
     <div className="min-h-screen bg-background">
@@ -289,10 +374,13 @@ const Grooming = () => {
                   <div className="relative">
                     <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <Input 
-                      placeholder="e.g. Taguig" 
+                      ref={locationInputRef}
+                      placeholder={isResolvingGeo ? "Resolving your current location..." : "e.g. Taguig"}
                       className="pl-10" 
                       value={location}
                       onChange={(e) => setLocation(e.target.value)}
+                      title={isResolvingGeo ? "Resolving your current location" : undefined}
+                      aria-busy={isResolvingGeo}
                       onKeyDown={(e) => e.key === 'Enter' && loadGrooming()}
                     />
                   </div>
@@ -305,6 +393,7 @@ const Grooming = () => {
                     <div>
                       <label className="text-xs text-muted-foreground mb-1 block">Appointment Date</label>
                       <Input
+                        ref={appointmentDateRef}
                         type="date"
                         value={appointmentDate}
                         min={todayISO}
@@ -429,7 +518,7 @@ const Grooming = () => {
             </aside>
 
             {/* Main Content */}
-            <div className="flex-1" ref={resultsRef}>
+            <div id="salons" className="flex-1" ref={resultsRef}>
               {/* Controls */}
               <div className="flex items-center justify-between mb-6">
                 <Button 

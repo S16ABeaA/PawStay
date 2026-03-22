@@ -1,10 +1,40 @@
 import { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Menu, X, PawPrint, User, Heart, Bell, HelpCircle } from "lucide-react";
+import { Menu, X, User, Heart, Bell, HelpCircle } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { authApi } from "@/services/authApi";
 import NotificationBell from "@/components/NotificationBell";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { cn } from "@/lib/utils";
+import { fetchAmenities } from "@/services/amenitiesApi";
+
+const SERVICE_NAV_ITEMS = [
+  {
+    key: "hotel",
+    label: "Pet Hotels",
+    path: "/hotels",
+    sectionId: "hotels",
+    apiServiceType: "hotel",
+    description: "Comfortable overnight stays for your pets",
+  },
+  {
+    key: "grooming",
+    label: "Grooming",
+    path: "/grooming",
+    sectionId: "salons",
+    apiServiceType: "grooming",
+    description: "Professional grooming and spa services",
+  },
+  {
+    key: "vet",
+    label: "Veterinary",
+    path: "/veterinary",
+    sectionId: "clinics",
+    apiServiceType: "veterinary",
+    description: "Expert veterinary care and consultations",
+  },
+] as const;
 
 const Header = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -16,6 +46,10 @@ const Header = () => {
     lastName: "",
     avatarUrl: "",
   });
+  const [amenitiesByService, setAmenitiesByService] = useState<Record<string, string[]>>({});
+
+  const serviceParam = new URLSearchParams(location.search).get("service")?.toLowerCase();
+  const normalizedServiceParam = serviceParam === "veterinary" ? "vet" : serviceParam;
 
   useEffect(() => {
     const isSignedIn = typeof window !== "undefined" && localStorage.getItem("pawstay.authenticated") === "true";
@@ -33,6 +67,55 @@ const Header = () => {
       }).catch(() => {/* silent */});
     }
   }, [location.pathname]);
+
+  useEffect(() => {
+    let isActive = true;
+
+    const loadAmenities = async () => {
+      const settled = await Promise.allSettled(
+        SERVICE_NAV_ITEMS.map(async (item) => {
+          const data = await fetchAmenities(item.apiServiceType);
+          const names = (Array.isArray(data) ? data : [])
+            .map((amenity: any) => amenity?.amenity)
+            .filter((name: any): name is string => typeof name === "string" && name.trim().length > 0);
+          return [item.key, names] as const;
+        }),
+      );
+
+      if (!isActive) return;
+
+      const next: Record<string, string[]> = {};
+      settled.forEach((result, index) => {
+        if (result.status === "fulfilled") {
+          const [key, names] = result.value;
+          next[key] = names;
+          return;
+        }
+
+        next[SERVICE_NAV_ITEMS[index].key] = [];
+      });
+
+      setAmenitiesByService(next);
+    };
+
+    loadAmenities();
+
+    return () => {
+      isActive = false;
+    };
+  }, []);
+
+  const isServiceActive = (item: (typeof SERVICE_NAV_ITEMS)[number]) => {
+    const onServiceRoute = location.pathname === item.path || location.pathname.startsWith(`${item.path}/`);
+    const matchesQueryFilter = normalizedServiceParam === item.key;
+    return onServiceRoute || matchesQueryFilter;
+  };
+
+  const getAmenityFilterLink = (item: (typeof SERVICE_NAV_ITEMS)[number], amenity: string) => {
+    const params = new URLSearchParams();
+    params.set("amenities", amenity);
+    return `${item.path}?${params.toString()}#${item.sectionId}`;
+  };
 
   // Listen for avatar updates from Profile
   useEffect(() => {
@@ -59,21 +142,102 @@ const Header = () => {
 
         {/* Desktop Navigation */}
         <nav className="hidden md:flex items-center gap-8">
-          <Link to="/hotels" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
-            Pet Hotels
+          {SERVICE_NAV_ITEMS.map((item) => {
+            const isActive = isServiceActive(item);
+            const previewAmenities = amenitiesByService[item.key] ?? [];
+            return (
+              <Tooltip key={item.key}>
+                <TooltipTrigger asChild>
+                  <Link
+                    to={`${item.path}?service=${item.key}`}
+                    className={cn(
+                      "relative text-sm font-medium transition-colors hover:text-orange-400",
+                      isActive ? "text-orange-600" : "text-muted-foreground",
+                    )}
+                    aria-current={isActive ? "page" : undefined}
+                  >
+                    <span className={cn(isActive && "font-semibold")}>{item.label}</span>
+                    <span
+                      className={cn(
+                        "absolute left-0 -bottom-1 h-0.5 w-full rounded-full transition-opacity",
+                        isActive ? "bg-orange-500 opacity-100" : "bg-orange-500 opacity-0",
+                      )}
+                    />
+                  </Link>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" className="max-w-[300px] p-0">
+                  <div className="relative">
+                    <div className="absolute -top-2 left-1/2 -translate-x-1/2 w-3 h-3 bg-card rotate-45 border border-border shadow-sm" />
+                    <div className="bg-card rounded-lg p-4 shadow-md border border-border overflow-hidden">
+                      <p className="text-sm font-medium text-foreground">{item.description}</p>
+                      <div className="border-t border-border/50 my-2" />
+                      <div className="mt-1">
+                        {previewAmenities.length > 0 ? (
+                          <>
+                            <div className="max-h-64 overflow-auto space-y-1">
+                              {previewAmenities.slice(0, 6).map((amenity) => (
+                                <Link
+                                  key={`${item.key}-${amenity}`}
+                                  to={getAmenityFilterLink(item, amenity)}
+                                  className="flex items-center justify-start w-full rounded px-2 py-2 text-sm text-foreground hover:bg-orange-50 transition-colors"
+                                >
+                                  <span className="flex-1">{amenity}</span>
+                                </Link>
+                              ))}
+                            </div>
+                            {previewAmenities.length > 6 && (
+                              <div className="mt-3 px-2 py-2 text-center">
+                                <Link
+                                  to={`${item.path}#${item.sectionId}`}
+                                  className="text-sm font-medium text-orange-600 hover:underline decoration-orange-200"
+                                >
+                                  See all amenities →
+                                </Link>
+                              </div>
+                            )}
+                          </>
+                        ) : (
+                          <p className="text-xs text-muted-foreground">No amenities available yet</p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </TooltipContent>
+              </Tooltip>
+            );
+          })}
+          <Link
+            to="/about"
+            className={cn(
+              "relative text-sm font-medium transition-colors hover:text-orange-400",
+              location.pathname === "/about" ? "text-orange-600" : "text-muted-foreground"
+            )}
+            aria-current={location.pathname === "/about" ? "page" : undefined}
+          >
+            <span className={cn(location.pathname === "/about" && "font-semibold")}>About</span>
+            <span
+              className={cn(
+                "absolute left-0 -bottom-1 h-0.5 w-full rounded-full transition-opacity",
+                location.pathname === "/about" ? "bg-orange-500 opacity-100" : "bg-orange-500 opacity-0"
+              )}
+            />
           </Link>
-          <Link to="/grooming" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
-            Grooming
-          </Link>
-          <Link to="/veterinary" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
-            Veterinary
-          </Link>
-          <Link to="/about" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
-            About
-          </Link>
-          <Link to="/faq" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1">
+          <Link
+            to="/faq"
+            className={cn(
+              "relative text-sm font-medium transition-colors flex items-center gap-1 hover:text-orange-400",
+              location.pathname === "/faq" ? "text-orange-600" : "text-muted-foreground"
+            )}
+            aria-current={location.pathname === "/faq" ? "page" : undefined}
+          >
             <HelpCircle className="h-4 w-4" />
-            Help
+            <span className={cn(location.pathname === "/faq" && "font-semibold")}>Help</span>
+            <span
+              className={cn(
+                "absolute left-0 -bottom-1 h-0.5 w-full rounded-full transition-opacity",
+                location.pathname === "/faq" ? "bg-orange-500 opacity-100" : "bg-orange-500 opacity-0"
+              )}
+            />
           </Link>
         </nav>
         <div className="hidden md:flex items-center gap-4">
@@ -136,12 +300,25 @@ const Header = () => {
       {isMenuOpen && (
         <div className="md:hidden border-t border-border bg-background animate-slide-up">
           <nav className="container py-4 flex flex-col gap-3">
-            <Link to="/hotels" className="py-2 text-sm font-medium text-foreground" onClick={() => setIsMenuOpen(false)}>Pet Hotels</Link>
-            <Link to="/grooming" className="py-2 text-sm font-medium text-foreground" onClick={() => setIsMenuOpen(false)}>Grooming</Link>
-            <Link to="/veterinary" className="py-2 text-sm font-medium text-foreground" onClick={() => setIsMenuOpen(false)}>Veterinary</Link>
+            {SERVICE_NAV_ITEMS.map((item) => {
+              const isActive = isServiceActive(item);
+              return (
+                <Link
+                  key={item.key}
+                  to={`${item.path}?service=${item.key}`}
+                  className={cn(
+                    "py-2 text-sm font-medium",
+                    isActive ? "text-primary" : "text-foreground",
+                  )}
+                  onClick={() => setIsMenuOpen(false)}
+                >
+                  {item.label}
+                </Link>
+              );
+            })}
             <Link to="/about" className="py-2 text-sm font-medium text-foreground" onClick={() => setIsMenuOpen(false)}>About</Link>
             <Link to="/faq" className="py-2 text-sm font-medium text-foreground flex items-center gap-1" onClick={() => setIsMenuOpen(false)}>
-              <HelpCircle className="h-4 w-4" /> Help Center
+              <HelpCircle className="h-4 w-4" /> <span className="underline underline-offset-4 decoration-orange-500">Help</span>
             </Link>
             <hr className="border-border my-2" />
             {isLoggedIn && (

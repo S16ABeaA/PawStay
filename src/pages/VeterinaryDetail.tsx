@@ -14,6 +14,7 @@ import { useState, useEffect } from "react";
 import { favoritesApi } from "../services/favoritesApi";
 import { fetchPropertyById, fetchPropertyReviews } from "../services/propertyApi";
 import ReviewList from "@/components/ReviewList";
+import BookingIdText from "@/components/BookingIdText";
 
 const VeterinaryDetail = () => {
   const { id } = useParams();
@@ -352,11 +353,11 @@ const VeterinaryDetail = () => {
                           {review.pet_name && (
                             <p className="text-xs text-muted-foreground mb-2">🐾 Pet: {review.pet_name}</p>
                           )}
-                          <p className="text-sm text-muted-foreground leading-relaxed">{review.comment}</p>
+                          <p className="text-sm text-muted-foreground leading-relaxed"><BookingIdText text={review.comment} /></p>
                           {review.reply && (
                             <div className="mt-3 pl-4 border-l-2 border-success/30">
                               <p className="text-xs font-semibold text-success mb-1">Owner's Reply</p>
-                              <p className="text-xs text-muted-foreground">{review.reply}</p>
+                              <p className="text-xs text-muted-foreground"><BookingIdText text={review.reply} /></p>
                             </div>
                           )}
                         </div>
