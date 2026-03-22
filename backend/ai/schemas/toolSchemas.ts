@@ -34,7 +34,7 @@ export const TOOL_INPUT_SCHEMA_TEXT: Record<ToolName, string> = {
   get_pet_service_history: "{ pet_id?: string, pet_name?: string }",
   predict_next_booking: "{ pet_id?: string, pet_name?: string, include_breed_recommendations?: boolean, include_health_recommendations?: boolean, include_booking_pattern?: boolean }",
   create_booking: "{ user_id: string, service_id: string, date: string, time: string }",
-  get_user_bookings: "{ user_id: string }",
+  get_user_bookings: "{}",
   cancel_booking: "{ booking_id: string }",
   check_availability: "{ property_id: string, date: string, time_slots?: string[] }",
   get_cancellation_policy: "{ property_id?: string, property_name?: string }",
@@ -175,10 +175,7 @@ export const GEMINI_TOOL_SCHEMAS: Record<ToolName, GeminiParameterSchema> = {
   },
   get_user_bookings: {
     type: SchemaType.OBJECT,
-    properties: {
-      user_id: { type: SchemaType.STRING, description: "User ID" },
-    },
-    required: ["user_id"],
+    properties: {},
   },
   cancel_booking: {
     type: SchemaType.OBJECT,
@@ -304,7 +301,7 @@ export const sanitizeToolArgs = (
         time: asString(args.time),
       };
     case "get_user_bookings":
-      return { user_id: asString(args.user_id) };
+      return {};
     case "cancel_booking":
       return { booking_id: asString(args.booking_id) };
     case "check_availability":
@@ -395,7 +392,7 @@ export const validateToolArgs = (
       break;
     }
     case "get_user_bookings":
-      if (!requiredString("user_id")) errors.push("user_id is required");
+      // no required arguments — operates on the authenticated user's bookings
       break;
     case "cancel_booking":
       if (!requiredString("booking_id")) errors.push("booking_id is required");

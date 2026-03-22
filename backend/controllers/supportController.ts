@@ -287,7 +287,7 @@ export const supportController = {
           });
         }
       } catch (notifErr) {
-        console.warn("Failed to notify users about new ticket:", notifErr);
+        console.warn("Failed to notify admins about new ticket:", notifErr);
         // Don't fail the request if notification creation fails
       }
 
