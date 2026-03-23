@@ -22,6 +22,7 @@ import analyticsRoutes from './routes/analyticsRoute';
 import dashboardRoute from './routes/dashboardRoute';
 import settlementRoutes from './routes/settlementRoute';
 import aiRoutes from './routes/aiRoute';
+import chatRoutes from './routes/chat';
 import { dispatchSettlementRemindersJob } from './controllers/settlementController';
 import {
   dispatchBookingLifecycleNotificationsJob,
@@ -114,6 +115,7 @@ app.use('/api/support', supportRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/settlements', settlementRoutes);
 app.use('/api/ai', aiRoutes);
+app.use('/api/chat', chatRoutes);
 
 // Simple health/root route
 app.get('/', (_req, res) => {

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { aiChatApi } from "@/services/aiChatApi";
 import type { PetHealthCheckResponse } from "@/services/aiChatApi";
@@ -100,6 +100,7 @@ const SMALL_PET_TERMS = ["rabbit", "hamster", "guinea pig", "bird", "parrot", "a
 const OTHER_ANIMAL_TERMS = [...PIG_TERMS, ...SMALL_PET_TERMS];
 type SpeciesKind = "dog" | "cat" | "pig" | "animal";
 const BOOKING_ID_REGEX = /(Booking\s*ID[:\s]*)([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/gi;
+const CHAT_SESSION_STORAGE_KEY = "pawstay_ai_chat_session_id";
 
 const normalizePipeTableMarkdown = (input: string): string => {
   const text = String(input || "");
@@ -199,6 +200,7 @@ export const AiChatPanel = ({ className, variant = "floating" }: AiChatPanelProp
   const [commandPets, setCommandPets] = useState<Array<{ id: string; name: string }>>([]);
   const [isExpanded, setIsExpanded] = useState(false);
   const [showQuickActions, setShowQuickActions] = useState(true);
+  const [quickActionsToggledByUser, setQuickActionsToggledByUser] = useState(false);
   const [pendingImage, setPendingImage] = useState<PendingImageContext | null>(null);
   const [imageQuestionMode, setImageQuestionMode] = useState(false);
   const [expandedImage, setExpandedImage] = useState<string | null>(null);
@@ -208,7 +210,26 @@ export const AiChatPanel = ({ className, variant = "floating" }: AiChatPanelProp
   const rowCounterRef = useRef(0);
   const previewUrlsRef = useRef<string[]>([]);
 
-  const sessionId = useMemo(() => `ui-${Date.now()}`, []);
+  const [sessionId, setSessionId] = useState<string | undefined>(() => {
+    try {
+      return localStorage.getItem(CHAT_SESSION_STORAGE_KEY) || undefined;
+    } catch {
+      return undefined;
+    }
+  });
+
+  const persistSessionId = (nextSessionId?: string) => {
+    setSessionId(nextSessionId);
+    try {
+      if (nextSessionId) {
+        localStorage.setItem(CHAT_SESSION_STORAGE_KEY, nextSessionId);
+      } else {
+        localStorage.removeItem(CHAT_SESSION_STORAGE_KEY);
+      }
+    } catch {
+      // Ignore localStorage errors silently
+    }
+  };
 
   const makeRow = (row: Omit<ChatRow, "id">): ChatRow => {
     rowCounterRef.current += 1;
@@ -236,10 +257,10 @@ export const AiChatPanel = ({ className, variant = "floating" }: AiChatPanelProp
   }, []);
 
   useEffect(() => {
-    if (rows.length > 0 && showQuickActions) {
+    if (rows.length > 0 && showQuickActions && !quickActionsToggledByUser) {
       setShowQuickActions(false);
     }
-  }, [rows.length, showQuickActions]);
+  }, [rows.length, showQuickActions, quickActionsToggledByUser]);
 
   useEffect(() => {
     let cancelled = false;
@@ -589,6 +610,31 @@ export const AiChatPanel = ({ className, variant = "floating" }: AiChatPanelProp
     try {
       setLoading(true);
 
+      const chatWithSession = async (text: string) => {
+        const currentSessionId = sessionId;
+        try {
+          const response = await aiChatApi.chat({ message: text, sessionId: currentSessionId });
+          if (response.sessionId && response.sessionId !== currentSessionId) {
+            persistSessionId(response.sessionId);
+          }
+          return response;
+        } catch (error: any) {
+          const errorMessage = String(error?.message || "").toLowerCase();
+          const isInvalidSession = errorMessage.includes("invalid session_id") || errorMessage.includes("session does not belong");
+
+          if (currentSessionId && isInvalidSession) {
+            persistSessionId(undefined);
+            const retried = await aiChatApi.chat({ message: text });
+            if (retried.sessionId) {
+              persistSessionId(retried.sessionId);
+            }
+            return retried;
+          }
+
+          throw error;
+        }
+      };
+
       const normalizedMessage = userMessage.toLowerCase();
       const wantsServiceHistoryScan = /(scan|analy[sz]e|review).*(service history|health record|medical record|vaccine)/i.test(normalizedMessage)
         || /(vaccine|medical).*(scan|analy[sz]e|review)/i.test(normalizedMessage);
@@ -702,12 +748,12 @@ export const AiChatPanel = ({ className, variant = "floating" }: AiChatPanelProp
           "Answer the user question directly and mention uncertainty when details are not visible.",
         ].join("\n");
 
-        const response = await aiChatApi.chat({ message: contextualMessage, sessionId });
+        const response = await chatWithSession(contextualMessage);
         setRows((prev) => [...prev, makeRow({ role: "assistant", content: response.message })]);
         return;
       }
 
-      const response = await aiChatApi.chat({ message: userMessage, sessionId });
+      const response = await chatWithSession(userMessage);
 
       // Show tool activity bubbles if the agent called any tools
       if (response.toolActivity && response.toolActivity.length > 0) {
@@ -1325,7 +1371,10 @@ export const AiChatPanel = ({ className, variant = "floating" }: AiChatPanelProp
           </p>
           <button
             type="button"
-            onClick={() => setShowQuickActions((prev) => !prev)}
+            onClick={() => {
+              setQuickActionsToggledByUser(true);
+              setShowQuickActions((prev) => !prev);
+            }}
             className="inline-flex items-center gap-1 text-[11px] font-medium text-rose-700 hover:text-rose-800"
             aria-expanded={showQuickActions}
           >

@@ -6,6 +6,7 @@ export interface AiChatRequest {
 }
 
 export interface AiChatResponse {
+  sessionId?: string;
   message: string;
   usedTools: Array<{
     tool: string;
@@ -110,11 +111,14 @@ export interface PetHealthCheckResponse {
 
 export const aiChatApi = {
   async chat(payload: AiChatRequest): Promise<AiChatResponse> {
-    const res = await fetch(`${API_BASE_URL}/api/ai/chat`, {
+    const res = await fetch(`${API_BASE_URL}/api/chat/message`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
-      body: JSON.stringify(payload),
+      body: JSON.stringify({
+        message: payload.message,
+        sessionId: payload.sessionId,
+      }),
     });
 
     if (!res.ok) {
@@ -128,7 +132,13 @@ export const aiChatApi = {
       throw new Error(detail);
     }
 
-    return res.json();
+    const body = await res.json();
+    return {
+      sessionId: body?.session_id,
+      message: body?.message ?? "",
+      usedTools: Array.isArray(body?.usedTools) ? body.usedTools : [],
+      toolActivity: Array.isArray(body?.toolActivity) ? body.toolActivity : [],
+    };
   },
 
   async readImageText(file: File, language = "eng"): Promise<OcrReadResponse> {

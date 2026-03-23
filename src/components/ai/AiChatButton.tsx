@@ -15,13 +15,18 @@ export const AiChatButton = () => {
   if (location.pathname === "/ai-chat") return null;
 
   return (
-    <div className="fixed bottom-5 right-5 z-50 flex flex-col items-end gap-3">
+    <div className="fixed bottom-5 right-5 z-50 flex items-end">
       {/* Expanded chat panel */}
-      {open && (
-        <div className="animate-in fade-in slide-in-from-bottom-4 duration-200">
-          <AiChatPanel />
-        </div>
-      )}
+      <div
+        className={`absolute bottom-[72px] right-0 transition-all duration-200 ${
+          open
+            ? "pointer-events-auto opacity-100 translate-y-0 animate-in fade-in slide-in-from-bottom-4"
+            : "pointer-events-none opacity-0 translate-y-2"
+        }`}
+        aria-hidden={!open}
+      >
+        <AiChatPanel />
+      </div>
 
       {/* Toggle button */}
       <button

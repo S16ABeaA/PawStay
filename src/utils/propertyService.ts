@@ -1,5 +1,6 @@
 import supabase from '@/config/supabaseClient'
 import { PropertySubmissionData } from '@/pages/user/ListProperty/types/submission_types/propertySubmissionData'
+import imageCompression from 'browser-image-compression'
 
 export interface PropertySubmissionResponse {
   success: boolean
@@ -25,6 +26,26 @@ export class PropertyService {
   )
 
   private static readonly SUBMIT_PROPERTY_PATH = '/api/submit-property'
+
+  private static async compressImage(file: File): Promise<File> {
+    if (!file.type.startsWith('image/')) return file
+
+    try {
+      const compressed = await imageCompression(file, {
+        maxSizeMB: 0.3,
+        maxWidthOrHeight: 1200,
+        useWebWorker: true,
+        fileType: 'image/jpeg',
+      })
+      console.log(
+        `[imageCompression] ${file.name}: ${(file.size / 1024).toFixed(0)}KB → ${(compressed.size / 1024).toFixed(0)}KB`
+      )
+      return compressed
+    } catch (err) {
+      console.warn('[imageCompression] compression failed, using original:', err)
+      return file
+    }
+  }
 
   static async submitProperty(data: PropertySubmissionData): Promise<PropertySubmissionResponse> {
     let attemptedUrls: string[] = []
@@ -99,11 +120,18 @@ export class PropertyService {
 
   static async uploadFile(file: File, bucket: string, path: string): Promise<string | null> {
     try {
+      const fileToUpload = await PropertyService.compressImage(file)
+
+      const uploadPath = file.type.startsWith('image/')
+        ? path.replace(/\.[^.]+$/, '.jpg')
+        : path
+
       const { data, error } = await supabase.storage
         .from(bucket)
-        .upload(path, file, {
+        .upload(uploadPath, fileToUpload, {
           cacheControl: '3600',
           upsert: false,
+          contentType: fileToUpload.type,
         })
 
       if (error) {

@@ -233,7 +233,7 @@ const ListProperty = () => {
           return;
         }
 
-        if (formData.checkInCutoff.trim() === "" || formData.pickupStart.trim() === "" || formData.pickupEnd.trim() === "") {
+        if (hasBoarding && (formData.checkInCutoff.trim() === "" || formData.pickupStart.trim() === "" || formData.pickupEnd.trim() === "")) {
           toast({
             title: "Please fill in the missing fields",
             description: "You need to fill in your boarding rules to continue.",

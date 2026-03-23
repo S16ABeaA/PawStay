@@ -15,7 +15,8 @@
     "helmet": "^7.2.0",
     "mammoth": "^1.9.0",
     "multer": "^2.1.1",
-    "pdfkit": "^0.15.2"
+    "pdfkit": "^0.15.2",
+    "sharp": "^0.34.5"
   },
   "scripts": {
     "predev": "node scripts/free-port.js 5001",

@@ -213,7 +213,7 @@ export const petHealthCheckService = {
     }
 
     const modelName =
-      process.env.GEMINI_VISION_MODEL || process.env.GEMINI_MODEL || "gemini-1.5-flash";
+      process.env.GEMINI_VISION_MODEL || process.env.GEMINI_MODEL || "gemini-3.1-flash-lite-preview";
     const speciesHint = toText(detectedSpecies);
 
     const client = new GoogleGenerativeAI(apiKey);
