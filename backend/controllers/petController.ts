@@ -19,6 +19,34 @@ const toDate = (value: unknown): Date | null => {
   return Number.isNaN(d.getTime()) ? null : d;
 };
 
+type DiagnosticHistoryEvent = {
+  date: string;
+  event_type: "vaccination" | "diagnosis" | "booking" | "grooming" | "vet_visit";
+  details: string;
+  source_record: string;
+  confidence: number | null;
+};
+
+const toIsoDateString = (value: unknown): string | null => {
+  const d = toDate(value);
+  return d ? d.toISOString().slice(0, 10) : null;
+};
+
+const pushDiagnosticEvent = (
+  events: DiagnosticHistoryEvent[],
+  event: Omit<DiagnosticHistoryEvent, "date"> & { date: string | null | undefined },
+) => {
+  const date = toIsoDateString(event.date);
+  if (!date) return;
+  events.push({
+    date,
+    event_type: event.event_type,
+    details: String(event.details || "").trim(),
+    source_record: String(event.source_record || "diagnostic").trim() || "diagnostic",
+    confidence: Number.isFinite(Number(event.confidence)) ? Number(event.confidence) : null,
+  });
+};
+
 const toStatus = (record: any): "All Good" | "Needs Attention" | "Urgent" => {
   const validation = String(record?.validation_status || record?.compiled_record?.validation?.status || "").toLowerCase();
   const flagged = Number(record?.compiled_record?.diagnostic_summary?.flagged_fields || 0);
@@ -755,6 +783,114 @@ export const getPetDiagnosticHistory = async (req: Request, res: Response) => {
   } catch (err: any) {
     console.error("getPetDiagnosticHistory error:", err);
     return res.status(500).json({ error: err.message || "Failed to fetch diagnostic history" });
+  }
+};
+
+/** GET /api/pets/:id/health-record/timeline
+ * compile_pet_health_timeline.record_diagnostic_history
+ * Combines booking, vaccine, and medical events into one chronological timeline.
+ */
+export const getCompiledPetHealthTimeline = async (req: Request, res: Response) => {
+  try {
+    const userId = (req as any).user?.id;
+    if (!userId) return res.status(401).json({ error: "Unauthorized" });
+
+    const petId = String(req.params.id || "").trim();
+    if (!petId) return res.status(400).json({ error: "Pet ID is required" });
+
+    const pet = await petHealthRecordModel.getPetByOwner(petId, userId);
+    if (!pet) return res.status(404).json({ error: "Pet not found" });
+
+    const [records, bookingResult] = await Promise.all([
+      petHealthRecordModel.listByPet(petId, userId, 100),
+      supabaseAdmin
+        .from("bookings")
+        .select("id, created_at, checkin, service_name, service_type, status")
+        .eq("pet_id", petId)
+        .eq("user_id", userId)
+        .eq("is_deleted", false)
+        .order("created_at", { ascending: true }),
+    ]);
+
+    if (bookingResult.error) throw bookingResult.error;
+
+    const events: DiagnosticHistoryEvent[] = [];
+
+    for (const booking of bookingResult.data ?? []) {
+      const serviceType = String((booking as any).service_type || "").trim();
+      const serviceName = String((booking as any).service_name || "").trim();
+      const status = String((booking as any).status || "").trim();
+      const eventType = /groom/i.test(`${serviceType} ${serviceName}`) ? "grooming" : "booking";
+      pushDiagnosticEvent(events, {
+        date: (booking as any).checkin || (booking as any).created_at,
+        event_type: eventType,
+        details: `${serviceName || "Service booking"}${serviceType ? ` (${serviceType})` : ""}${status ? ` - ${status}` : ""}`,
+        source_record: `booking:${(booking as any).id || "unknown"}`,
+        confidence: 100,
+      });
+    }
+
+    for (const record of records) {
+      const versionTag = `diagnostic:v${record.version}`;
+      const compiled = (record.compiled_record || {}) as any;
+      const extracted = (compiled?.pet_profile?.extracted || {}) as any;
+      const vaccines = Array.isArray(extracted?.vaccines) ? extracted.vaccines : [];
+      const medicalVisits = Array.isArray(extracted?.medical_visits) ? extracted.medical_visits : [];
+      const diagnosedConditions = Array.isArray(extracted?.diagnosed_conditions) ? extracted.diagnosed_conditions : [];
+
+      for (const vaccine of vaccines) {
+        pushDiagnosticEvent(events, {
+          date: vaccine?.date,
+          event_type: "vaccination",
+          details: `${String(vaccine?.name || "Vaccine")}${vaccine?.next_due_date ? ` (next due ${vaccine.next_due_date})` : ""}`,
+          source_record: versionTag,
+          confidence: Number(vaccine?.confidence),
+        });
+      }
+
+      for (const visit of medicalVisits) {
+        const details = String(visit?.details || "").trim() || "Medical visit";
+        pushDiagnosticEvent(events, {
+          date: visit?.date || record.created_at,
+          event_type: /groom/i.test(details) ? "grooming" : "vet_visit",
+          details,
+          source_record: versionTag,
+          confidence: Number(visit?.confidence),
+        });
+      }
+
+      for (const condition of diagnosedConditions) {
+        pushDiagnosticEvent(events, {
+          date: record.created_at,
+          event_type: "diagnosis",
+          details: String(condition || "Diagnosed condition"),
+          source_record: versionTag,
+          confidence: 80,
+        });
+      }
+    }
+
+    const dedupedMap = new Map<string, DiagnosticHistoryEvent>();
+    for (const event of events) {
+      const key = `${event.date}|${event.event_type}|${event.details.toLowerCase()}|${event.source_record}`;
+      if (!dedupedMap.has(key)) dedupedMap.set(key, event);
+    }
+
+    const recordDiagnosticHistory = Array.from(dedupedMap.values()).sort(
+      (a, b) => (toDate(a.date)?.getTime() || 0) - (toDate(b.date)?.getTime() || 0),
+    );
+
+    return res.json({
+      pet_id: petId,
+      compile_pet_health_timeline: {
+        generated_at: new Date().toISOString(),
+        record_diagnostic_history: recordDiagnosticHistory,
+        event_count: recordDiagnosticHistory.length,
+      },
+    });
+  } catch (err: any) {
+    console.error("getCompiledPetHealthTimeline error:", err);
+    return res.status(500).json({ error: err.message || "Failed to compile pet health timeline" });
   }
 };
 

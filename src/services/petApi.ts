@@ -32,4 +32,8 @@ export const petApi = {
   /** Analyze latest service history records with OCR-based insights */
   getServiceHistoryInsights: (id: string, limit: number = 5) =>
     authHelper.get(`${API_BASE_URL}/api/pets/${id}/service-history/insights?limit=${Math.max(3, Math.min(5, Math.floor(limit || 5)))}`),
+
+  /** Compile chronological diagnostic history from booking + vaccine + medical data */
+  getCompiledHealthTimeline: (id: string) =>
+    authHelper.get(`${API_BASE_URL}/api/pets/${id}/health-record/timeline`),
 };

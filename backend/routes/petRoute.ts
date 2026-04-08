@@ -7,6 +7,7 @@ import {
   updatePet,
   deletePet,
   getPetServiceHistoryInsights,
+  getCompiledPetHealthTimeline,
 } from "../controllers/petController";
 
 const router = Router();
@@ -16,6 +17,7 @@ router.use(authMiddleware);
 
 router.get("/", listPets);
 router.get("/:id/service-history/insights", getPetServiceHistoryInsights);
+router.get("/:id/health-record/timeline", getCompiledPetHealthTimeline);
 router.get("/:id", getPet);
 router.post("/", createPet);
 router.put("/:id", updatePet);
