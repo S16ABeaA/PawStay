@@ -11,33 +11,36 @@ interface StepIndicatorProps {
   currentStep: number;
   establishmentSubstep?: number;
   propertySetupCompleted?: number;
+  propertySetupTotal?: number;
   photosCompleted?: boolean;
   pricingCalendarCompleted?: number;
+  pricingCalendarTotal?: number;
 }
 
-const StepIndicator = ({ steps, currentStep, establishmentSubstep = 1, propertySetupCompleted = 0, photosCompleted = false, pricingCalendarCompleted = 0 }: StepIndicatorProps) => {
+const StepIndicator = ({
+  steps,
+  currentStep,
+  establishmentSubstep = 1,
+  propertySetupCompleted = 0,
+  propertySetupTotal = 5,
+  photosCompleted = false,
+  pricingCalendarCompleted = 0,
+  pricingCalendarTotal = 8,
+}: StepIndicatorProps) => {
   return (
-    <div className="flex items-start justify-evenly w-full max-w-4xl mx-auto mb-8 px-4">
+    <div className="grid grid-cols-3 gap-4 sm:flex sm:items-start sm:justify-evenly sm:gap-0 w-full max-w-4xl mx-auto mb-8 px-4">
       {steps.map((step, index) => {
         const isEstablishmentInfo = step.title === "Establishment Info";
         const isPropertySetup = step.title === "Property Setup";
         const isPhotos = step.title === "Photos";
         const isPricingCalendar = step.title === "Pricing and Calendar";
-        const establishmentFirstComplete = establishmentSubstep >= 2 || currentStep > 1;
-        const establishmentSecondComplete = currentStep > 1;
+        const establishmentFirstComplete = currentStep === 1 || establishmentSubstep >= 2 || currentStep > 1;
+        const establishmentSecondComplete = establishmentSubstep >= 2 || currentStep > 1;
         const establishmentComplete = currentStep > 1;
-        const propertySetupComplete = currentStep > 2 || (currentStep === 2 && propertySetupCompleted === 5);
-        const photosComplete = photosCompleted;
-        const pricingCalendarComplete = currentStep > 4 || (currentStep === 4 && pricingCalendarCompleted === 8);
-        const isStepComplete = isEstablishmentInfo
-          ? establishmentComplete
-          : isPropertySetup
-          ? propertySetupComplete
-          : isPhotos
-          ? photosComplete
-          : isPricingCalendar
-          ? pricingCalendarComplete
-          : currentStep > step.number;
+        const propertySetupComplete = currentStep > 2 || (currentStep === 2 && propertySetupCompleted >= propertySetupTotal);
+        const photosComplete = currentStep > 3;
+        const pricingCalendarComplete = currentStep > 4 || (currentStep === 4 && pricingCalendarCompleted >= pricingCalendarTotal);
+        const isStepComplete = currentStep > step.number;
         const isStepActive = isEstablishmentInfo
           ? currentStep === 1
           : isPropertySetup
@@ -107,7 +110,7 @@ const StepIndicator = ({ steps, currentStep, establishmentSubstep = 1, propertyS
               )}
               {isPropertySetup && index === 1 && (
                 <div className="hidden sm:flex items-center gap-1 mt-2">
-                  {Array.from({ length: 5 }, (_, i) => (
+                  {Array.from({ length: propertySetupTotal }, (_, i) => (
                     <span
                       key={i}
                       className={cn(
@@ -120,7 +123,7 @@ const StepIndicator = ({ steps, currentStep, establishmentSubstep = 1, propertyS
               )}
               {isPricingCalendar && index === 3 && (
                 <div className="hidden sm:flex items-center gap-1 mt-2">
-                  {Array.from({ length: 8 }, (_, i) => (
+                  {Array.from({ length: pricingCalendarTotal }, (_, i) => (
                     <span
                       key={i}
                       className={cn(
@@ -139,7 +142,7 @@ const StepIndicator = ({ steps, currentStep, establishmentSubstep = 1, propertyS
             {index < steps.length - 1 && (
               <div
                 className={cn(
-                  "flex-1 h-1 mx-2 rounded-full",
+                  "hidden sm:block flex-1 h-1 mx-2 rounded-full",
                   isStepComplete ? "bg-success" : "bg-secondary"
                 )}
               />

@@ -18,6 +18,15 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 
+type BookingLocationState = {
+  shop?: {
+    type?: "grooming" | "veterinary" | "hotel";
+    name?: string;
+    location?: string;
+    image?: string;
+  };
+};
+
 const Booking = () => {
   const [step, setStep] = useState(1);
   const [petType, setPetType] = useState("dog");
@@ -27,7 +36,7 @@ const Booking = () => {
   const { toast } = useToast();
   const navigate = useNavigate();
   const location = useLocation();
-  const shop = (location.state as any)?.shop;
+  const shop = (location.state as BookingLocationState | null)?.shop;
 
   const handleConfirm = () => {
     toast({

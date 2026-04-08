@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
@@ -28,20 +28,54 @@ import {
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
+import { authApi } from "../services/authApi";
+
 const Profile = () => {
   const { toast } = useToast();
   const navigate = useNavigate();
   
   // Simulated user data - in real app, this would come from auth context
-  const [user, setUser] = useState({
-    firstName: "John",
-    lastName: "Doe",
-    email: "john.doe@example.com",
-    phone: "+1 234 567 8900",
-    address: "123 Pet Street, San Francisco, CA",
-    avatar: "",
-    isAdmin: true, // Simulated admin role
-  });
+  // const [user, setUser] = useState({
+  //   firstName: "John",
+  //   lastName: "Doe",
+  //   email: "john.doe@example.com",
+  //   phone: "+1 234 567 8900",
+  //   address: "123 Pet Street, San Francisco, CA",
+  //   avatar: "",
+  //   isAdmin: true, // Simulated admin role
+  // });
+
+  const [user, setUser] = useState<any>(null);
+
+  useEffect(() => {
+    const fetchProfile = async () => {
+      try {
+        const profile = await authApi.getProfile();
+        console.log("[FRONTEND] Profile response:", profile);
+
+        if (!profile?.user) {
+          navigate("/signin");
+        }
+
+        setUser({
+          firstName: profile.user.first_name,
+          lastName: profile.user.last_name,
+          email: profile.user.email,
+          phone: profile.user.phone || "",
+          address: profile.user.address || "",
+          avatar: profile.user.avatar_url || "",
+          isAdmin: profile.user.role === "admin",
+          isSuperAdmin: profile.user.role === "super_admin",
+        });
+      } catch (err) {
+        console.error("Failed to fetch profile:", err);
+        toast({ title: "Error", description: "Failed to load profile. Please try again." });
+        navigate("/signin");
+      }
+    };
+
+    fetchProfile();
+  }, []);
 
   const [isEditing, setIsEditing] = useState(false);
 
@@ -73,18 +107,35 @@ const Profile = () => {
     });
   };
 
-  const handleLogout = () => {
-    toast({
-      title: "Signed Out",
-      description: "You have been signed out successfully.",
-    });
-    navigate("/");
+  const handleLogout =  async() => {
+    try{
+      await authApi.signOut();
+      localStorage.removeItem("pawstay.authenticated");
+      toast({
+        title: "Signed Out",
+        description: "You have been signed out successfully.",
+      });
+      setUser(null);
+      navigate("/signin");
+    }catch(err){
+      toast({ 
+        title: "Error", 
+        description: err.message || "Failed to sign out. Please try again." 
+      });
+      return;
+    }
   };
 
   const handleSwitchToAdmin = () => {
     navigate("/admin");
   };
-
+  if(!user){
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <p>Loading profile...</p>
+      </div>
+    );
+  }
   return (
     <div className="min-h-screen bg-background">
       <Header />
