@@ -50,7 +50,6 @@ const runGeminiOcr = async (
   buffer: Buffer,
   mimeType: string,
   language?: string,
-  mimeType?: string,
 ): Promise<{ text: string; language: string }> => {
   if (!buffer || buffer.length === 0) {
     throw new Error("Document content is empty");

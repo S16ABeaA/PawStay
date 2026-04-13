@@ -7,7 +7,7 @@ import { Switch } from "@/components/ui/switch";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
-import { Globe, Bell, Shield, Mail, Upload, X, Palette, Mail } from "lucide-react";
+import { Globe, Bell, Shield, Mail, Upload, X, Palette } from "lucide-react";
 import { bookingApi } from "@/services/bookingApi";
 
 const SuperAdminSettings = () => {
