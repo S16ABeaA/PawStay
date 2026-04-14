@@ -1,8 +1,9 @@
 import express from "express";
 import { reverseGeocode, searchLocation } from "../services/locationService";
+import { anonBrowseHourlyLimiter, anonSearchHourlyLimiter } from "../middleware/rateLimiters";
 const router = express.Router();
 
-router.get("/reverse", async (req, res) => {
+router.get("/reverse", anonBrowseHourlyLimiter, async (req, res) => {
   const { lat, lng } = req.query;
   try {
     const data = await reverseGeocode(lat, lng);
@@ -19,7 +20,7 @@ router.get("/reverse", async (req, res) => {
   }
 });
 
-router.get("/search", async (req, res) => {
+router.get("/search", anonSearchHourlyLimiter, async (req, res) => {
   const query = String(req.query.q || "").trim();
   if (!query) {
     return res.status(400).json({ message: "Missing query parameter 'q'" });

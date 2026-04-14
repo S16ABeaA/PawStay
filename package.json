@@ -58,6 +58,7 @@
     "dotenv": "^17.2.4",
     "embla-carousel-react": "^8.6.0",
     "express": "^5.2.1",
+    "express-rate-limit": "^8.3.2",
     "framer-motion": "^12.31.2",
     "input-otp": "^1.4.2",
     "leaflet": "^1.9.4",

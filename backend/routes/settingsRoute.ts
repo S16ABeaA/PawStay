@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { settingsController } from "../controllers/settingsController";
 import { authMiddleware } from "../middleware/authMiddleware";
+import { availabilityUpdateLimiter } from "../middleware/rateLimiters";
 
 const router = Router();
 
@@ -17,7 +18,7 @@ router.put("/business", settingsController.updateBusiness);
 router.put("/notifications", settingsController.updateNotifications);
 
 // PUT  /api/settings/availability  — update availability settings
-router.put("/availability", settingsController.updateAvailability);
+router.put("/availability", availabilityUpdateLimiter, settingsController.updateAvailability);
 
 // PUT  /api/settings/payment       — update payment settings
 router.put("/payment", settingsController.updatePayment);

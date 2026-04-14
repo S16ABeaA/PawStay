@@ -2,7 +2,6 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import helmet from 'helmet';
-import rateLimit from 'express-rate-limit';
 import cookieParser from 'cookie-parser';
 import { submitProperty } from './routes/submit-property';
 import { authMiddleware } from './middleware/authMiddleware';
@@ -30,6 +29,8 @@ import {
 import { dispatchPetCareNotificationsJob } from './services/petCareNotificationJobs';
 import { ensureStorageBucket } from './utils/storageMedia';
 import { withJobLock } from './utils/jobLock';
+import { authGuardLimiter, bulkOpsLimiter } from './middleware/rateLimiters';
+import { inputFirewall } from './middleware/inputValidation';
  
 dotenv.config({ path: '../.env' });
 dotenv.config();
@@ -74,13 +75,6 @@ const corsOptions: cors.CorsOptions = {
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
 };
 
-const apiLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 120,
-  standardHeaders: 'draft-7',
-  legacyHeaders: false,
-});
-
 app.disable('x-powered-by');
 app.use(helmet());
 app.use(cors(corsOptions));
@@ -88,6 +82,7 @@ app.options(/.*/, cors(corsOptions));
 app.use(cookieParser());
 app.use(express.json({ limit: '20mb' }));
 app.use(express.urlencoded({ extended: true, limit: '20mb' }));
+app.use(inputFirewall);
 
 // Prevent browsers from caching API responses so property-switching always gets fresh data
 app.use('/api', (_req, res, next) => {
@@ -99,23 +94,23 @@ app.use('/api', (_req, res, next) => {
 
 // Routes
 app.use('/api/auth', authRoute);
-app.use('/api/admin/properties', adminPropertyRoute);
-app.use('/api/admin/dashboard', dashboardRoute);
-app.post('/api/submit-property', apiLimiter, authMiddleware, submitProperty);
+app.use('/api/admin/properties', authGuardLimiter, adminPropertyRoute);
+app.use('/api/admin/dashboard', authGuardLimiter, dashboardRoute);
+app.post('/api/submit-property', authMiddleware, bulkOpsLimiter, submitProperty);
 app.use("/api/properties", searchRoutes);
 app.use("/api/amenities", amenitiesRoutes);
 app.use("/api/location", locationRoutes);
-app.use("/api/pets", petRoutes);
+app.use("/api/pets", authGuardLimiter, petRoutes);
 app.use("/api/bookings", bookingRoutes);
-app.use('/api/favorites', favoritesRoutes);
+app.use('/api/favorites', authGuardLimiter, favoritesRoutes);
 app.use('/api/reviews', reviewsRoutes);
-app.use("/api/settings", settingsRoutes);
+app.use("/api/settings", authGuardLimiter, settingsRoutes);
 app.use('/api/platform-settings', require('./routes/platformSettingsRoute').default);
-app.use('/api/notifications', notificationRoutes);
-app.use('/api/support', supportRoutes);
-app.use('/api/analytics', analyticsRoutes);
-app.use('/api/settlements', settlementRoutes);
-app.use('/api/ai', aiRoutes);
+app.use('/api/notifications', authGuardLimiter, notificationRoutes);
+app.use('/api/support', authGuardLimiter, supportRoutes);
+app.use('/api/analytics', authGuardLimiter, analyticsRoutes);
+app.use('/api/settlements', authGuardLimiter, settlementRoutes);
+app.use('/api/ai', authGuardLimiter, aiRoutes);
 
 // Simple health/root route
 app.get('/', (_req, res) => {

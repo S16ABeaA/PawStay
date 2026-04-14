@@ -30,7 +30,7 @@ import FAQ from "./pages/FAQ";
 import RequireAuth from "./components/RequireAuth";
 import RequireAdmin from "./components/RequireAdmin";
 import RequireSuperAdmin from "./components/RequireSuperAdmin";
-import { AdminPropertyProvider } from "./hooks/useAdminProperty";
+import { AdminPropertyProvider } from "@/components/admin/AdminPropertyProvider";
 import AiChat from "./pages/AiChat";
 import PetAnalyzerPage from "./pages/PetAnalyzerPage";
 import { AiChatButton } from "./components/ai/AiChatButton";
