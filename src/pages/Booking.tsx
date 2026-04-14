@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
@@ -23,7 +23,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import { petApi } from "@/services/petApi";
-import { bookingApi } from "@/services/bookingApi";
+import { bookingApi, CreateBookingPayload } from "@/services/bookingApi";
 import { authApi } from "@/services/authApi";
 
 type BookingLocationState = {
@@ -77,6 +77,8 @@ const calculateAgeStr = (birthday: string): string => {
   return `${years} year${years !== 1 ? "s" : ""}`;
 };
 
+const STRIPE_BOOKING_DRAFT_KEY = "pawstay.stripeBookingDraft";
+
 const Booking = () => {
   const [step, setStep] = useState(1);
   const [petType, setPetType] = useState("dog");
@@ -85,7 +87,10 @@ const Booking = () => {
   const [selectedService, setSelectedService] = useState<string>("");
   const [checkInDate, setCheckInDate] = useState<Date>();
   const [checkOutDate, setCheckOutDate] = useState<Date>();
-  const [paymentMethod, setPaymentMethod] = useState<"gcash" | "paymaya" | "cash" | "creditcard">("gcash");
+  const [paymentMethod, setPaymentMethod] = useState<"gcash" | "paymaya" | "cash" | "stripe">("gcash");
+  const [stripeProcessing, setStripeProcessing] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const stripeFinalizeStartedRef = useRef(false);
 
   // Step 2: Pet selection
   const [userPets, setUserPets] = useState<PetProfile[]>([]);
@@ -191,10 +196,13 @@ const Booking = () => {
   useEffect(() => {
     const accepted = mergedAcceptedMethods;
     if (accepted.length === 0) return; // no restrictions, keep default
-    const methodMap: Record<string, "gcash" | "paymaya" | "cash"> = {
+    const methodMap: Record<string, "gcash" | "paymaya" | "cash" | "stripe"> = {
       "GCash": "gcash",
       "PayMaya": "paymaya",
       "Cash": "cash",
+      "Card": "stripe",
+      "Credit Card": "stripe",
+      "Stripe": "stripe",
     };
     for (const m of accepted) {
       if (methodMap[m]) {
@@ -416,6 +424,184 @@ const Booking = () => {
     reader.readAsDataURL(file);
   };
 
+  const buildBookingPayload = useCallback((
+    overrides: Partial<CreateBookingPayload> = {}
+  ): CreateBookingPayload => {
+    const serviceType =
+      shop?.type === "hotel"
+        ? "boarding"
+        : shop?.type === "grooming"
+          ? "grooming"
+          : shop?.type === "veterinary"
+            ? "veterinary"
+            : undefined;
+
+    const checkinDate = isHotel(shop) && checkInDate
+      ? format(checkInDate, "yyyy-MM-dd")
+      : selectedDate
+        ? format(selectedDate, "yyyy-MM-dd")
+        : new Date().toISOString().split("T")[0];
+
+    const checkoutDate = isHotel(shop) && checkOutDate
+      ? format(checkOutDate, "yyyy-MM-dd")
+      : null;
+
+    const { subtotal, serviceFee, total } = calculatePrices();
+    const isNewPet = petSelectionMode === "new";
+
+    return {
+      property_id: shop?.propertyId || "",
+      pet_id: isNewPet ? null : selectedPetId,
+      create_new_pet: isNewPet,
+      checkin: checkinDate,
+      checkout: checkoutDate,
+      time_slot: selectedTime || null,
+      pet_name: petName,
+      pet_type: petType,
+      pet_breed: breed,
+      pet_age: age,
+      pet_weight: weight,
+      special_requirements: specialRequirements,
+      med_cert_url: medCertFiles.length <= 1 ? (medCertFiles[0] ?? null) : JSON.stringify(medCertFiles),
+      vaccine_record_url: vaccineRecordFiles.length <= 1 ? (vaccineRecordFiles[0] ?? null) : JSON.stringify(vaccineRecordFiles),
+      service_name: shop?.serviceName || shop?.name || "",
+      service_type: serviceType,
+      owner_name: `${firstName} ${lastName}`,
+      owner_email: email,
+      owner_phone: phone,
+      emergency_contact: emergencyContact,
+      subtotal,
+      service_fee: serviceFee,
+      total_price: total,
+      payment_method:
+        paymentMethod === "gcash"
+          ? "gcash"
+          : paymentMethod === "paymaya"
+            ? "paymaya"
+            : paymentMethod === "cash"
+              ? "cash"
+              : "card",
+      reference_number:
+        paymentMethod === "cash" || paymentMethod === "stripe" ? undefined : referenceNumber,
+      amount_paid: total.toFixed(2),
+      payment_screenshot_url:
+        paymentMethod === "gcash" || paymentMethod === "paymaya"
+          ? paymentScreenshot || undefined
+          : undefined,
+      new_pet_species: isNewPet ? (petType === "dog" ? "Dog" : petType === "cat" ? "Cat" : "Other") : undefined,
+      new_pet_birthday: isNewPet ? new Date().toISOString().split("T")[0] : undefined,
+      dog_size: dogSize,
+      ...overrides,
+    };
+  }, [
+    shop,
+    checkInDate,
+    selectedDate,
+    checkOutDate,
+    calculatePrices,
+    petSelectionMode,
+    selectedPetId,
+    selectedTime,
+    petName,
+    petType,
+    breed,
+    age,
+    weight,
+    specialRequirements,
+    medCertFiles,
+    vaccineRecordFiles,
+    firstName,
+    lastName,
+    email,
+    phone,
+    emergencyContact,
+    paymentMethod,
+    referenceNumber,
+    paymentScreenshot,
+    dogSize,
+  ]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const stripeStatus = params.get("stripe");
+    const sessionId = params.get("session_id");
+
+    if (stripeStatus === "cancelled") {
+      sessionStorage.removeItem(STRIPE_BOOKING_DRAFT_KEY);
+      toast({
+        title: "Payment Cancelled",
+        description: "Your Stripe payment was cancelled. You can choose another payment method.",
+      });
+      navigate("/booking", { replace: true, state: location.state });
+      return;
+    }
+
+    if (stripeStatus !== "success" || !sessionId || stripeFinalizeStartedRef.current) {
+      return;
+    }
+
+    stripeFinalizeStartedRef.current = true;
+
+    const finalizeStripeBooking = async () => {
+      setStripeProcessing(true);
+      setIsSubmitting(true);
+
+      try {
+        const draftRaw = sessionStorage.getItem(STRIPE_BOOKING_DRAFT_KEY);
+        if (!draftRaw) {
+          throw new Error("Missing pending booking data. Please restart your booking.");
+        }
+
+        const bookingDraft = JSON.parse(draftRaw) as CreateBookingPayload;
+        const verification = await bookingApi.verifyStripeCheckoutSession(sessionId);
+
+        if (!verification.verified) {
+          throw new Error("Stripe payment has not been marked as paid yet.");
+        }
+
+        const finalizedPayload: CreateBookingPayload = {
+          ...bookingDraft,
+          payment_method: "card",
+          reference_number: verification.paymentIntentId || verification.sessionId || sessionId,
+          amount_paid:
+            typeof bookingDraft.total_price === "number"
+              ? bookingDraft.total_price.toFixed(2)
+              : bookingDraft.amount_paid,
+          payment_screenshot_url: undefined,
+        };
+
+        await bookingApi.create(finalizedPayload);
+
+        sessionStorage.removeItem(STRIPE_BOOKING_DRAFT_KEY);
+
+        toast({
+          title: "Booking Confirmed",
+          description: "Your Stripe payment was verified and your booking has been submitted.",
+        });
+
+        navigate("/my-bookings", { replace: true });
+      } catch (err: any) {
+        console.error("Stripe booking finalization failed:", err);
+
+        toast({
+          title: "Stripe Booking Finalization Failed",
+          description:
+            err?.error ||
+            err?.message ||
+            "Your payment returned from Stripe, but we could not finalize the booking. Please contact support with your payment reference.",
+          variant: "destructive",
+        });
+
+        navigate("/booking", { replace: true, state: location.state });
+      } finally {
+        setStripeProcessing(false);
+        setIsSubmitting(false);
+      }
+    };
+
+    finalizeStripeBooking();
+  }, [location.search, location.state, navigate, toast]);
+
   const validateStep1 = (): boolean => {
     const missing: string[] = [];
     if (isHotel(shop)) {
@@ -508,10 +694,7 @@ const Booking = () => {
   const validateStep5 = (): boolean => {
     // Intentionally skip client-side payment validation to allow flexible testing/submission.
     // Server-side validation remains authoritative.
-    if (paymentMethod === "creditcard") return false;
     const missing: string[] = [];
-
-    const { total } = calculatePrices();
 
     if (paymentMethod === "gcash" || paymentMethod === "paymaya") {
       if (!referenceNumber.trim()) missing.push("referenceNumber");
@@ -530,80 +713,81 @@ const Booking = () => {
   const errorClass = (field: string) => errors[field] ? "border-destructive ring-destructive/30 ring-2" : "";
 
   const handleConfirm = async () => {
-    if (!validateStep5()) return;
+    if (!validateStep5() || isSubmitting || stripeProcessing) return;
 
-    const serviceType = shop?.type === "hotel" ? "boarding" : shop?.type === "grooming" ? "grooming" : shop?.type === "veterinary" ? "veterinary" : null;
+    const { subtotal, total } = calculatePrices();
+    if (!subtotal || subtotal <= 0 || !total || total <= 0) {
+      toast({
+        title: "Price Error",
+        description: "Unable to calculate booking price. Please go back and verify your booking details.",
+        variant: "destructive",
+      });
+      return;
+    }
 
-    const checkinDate = isHotel(shop) && checkInDate
-      ? format(checkInDate, "yyyy-MM-dd")
-      : selectedDate
-        ? format(selectedDate, "yyyy-MM-dd")
-        : new Date().toISOString().split("T")[0];
+    const isNewPet = petSelectionMode === "new";
+    if (!isNewPet && !selectedPetId) {
+      toast({
+        title: "Select a Pet",
+        description: "Please select an existing pet or choose Add New Pet.",
+        variant: "destructive",
+      });
+      setStep(2);
+      return;
+    }
 
-    const checkoutDate = isHotel(shop) && checkOutDate
-      ? format(checkOutDate, "yyyy-MM-dd")
-      : null;
+    const payload = buildBookingPayload();
+    if (!payload.property_id) {
+      toast({
+        title: "Property Missing",
+        description: "This booking is missing property information. Please restart from listings.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (paymentMethod === "stripe") {
+      try {
+        setIsSubmitting(true);
+        setStripeProcessing(true);
+
+        sessionStorage.setItem(STRIPE_BOOKING_DRAFT_KEY, JSON.stringify(payload));
+
+        const session = await bookingApi.createStripeCheckoutSession({
+          amount: typeof payload.total_price === "number" ? payload.total_price : total,
+          total_price: typeof payload.total_price === "number" ? payload.total_price : total,
+          currency: "php",
+          bookingTitle: payload.service_name || shop?.name || "PawStay Booking",
+          bookingDescription: `Secure card payment for ${payload.service_name || "booking"}`,
+          success_url: `${window.location.origin}/booking?stripe=success&session_id={CHECKOUT_SESSION_ID}`,
+          cancel_url: `${window.location.origin}/booking?stripe=cancelled`,
+          customer_email: payload.owner_email,
+          property_id: payload.property_id,
+          service_type: payload.service_type,
+          service_name: payload.service_name,
+          checkin: payload.checkin,
+        });
+
+        window.location.assign(session.url);
+        return;
+      } catch (err: any) {
+        console.error("Stripe checkout start failed:", err);
+        sessionStorage.removeItem(STRIPE_BOOKING_DRAFT_KEY);
+        toast({
+          title: "Stripe Checkout Failed",
+          description: err?.error || err?.message || err?.details || "Unable to start Stripe checkout.",
+          variant: "destructive",
+        });
+      } finally {
+        setIsSubmitting(false);
+        setStripeProcessing(false);
+      }
+      return;
+    }
 
     try {
-      // Calculate prices for the payload
-      const { subtotal, serviceFee, total } = calculatePrices();
-
-      // Validate prices before submitting
-      if (!subtotal || subtotal <= 0 || !total || total <= 0) {
-        toast({
-          title: "Price Error",
-          description: "Unable to calculate booking price. Please go back and verify your booking details.",
-          variant: "destructive",
-        });
-        return;
-      }
-
-      // Amount is always auto-filled from calculated total
-      const amountPaidPayload = total.toFixed(2);
-
-      const isNewPet = petSelectionMode === "new";
-      if (!isNewPet && !selectedPetId) {
-        toast({
-          title: "Select a Pet",
-          description: "Please select an existing pet or choose Add New Pet.",
-          variant: "destructive",
-        });
-        setStep(2);
-        return;
-      }
-
-      await bookingApi.create({
-        property_id: shop?.propertyId || "",
-        pet_id: isNewPet ? null : selectedPetId,
-        create_new_pet: isNewPet,
-        checkin: checkinDate,
-        checkout: checkoutDate,
-        time_slot: selectedTime || null,
-        pet_name: petName,
-        pet_type: petType,
-        pet_breed: breed,
-        pet_age: age,
-        pet_weight: weight,
-        special_requirements: specialRequirements,
-        med_cert_url: medCertFiles.length <= 1 ? (medCertFiles[0] ?? null) : JSON.stringify(medCertFiles),
-        vaccine_record_url: vaccineRecordFiles.length <= 1 ? (vaccineRecordFiles[0] ?? null) : JSON.stringify(vaccineRecordFiles),
-        service_name: shop?.serviceName || shop?.name || "",
-        service_type: serviceType || undefined,
-        owner_name: `${firstName} ${lastName}`,
-        owner_email: email,
-        owner_phone: phone,
-        emergency_contact: emergencyContact,
-        subtotal,
-        service_fee: serviceFee,
-        total_price: total,
-        payment_method: paymentMethod === "gcash" ? "gcash" : paymentMethod === "paymaya" ? "paymaya" : paymentMethod === "cash" ? "cash" : "card",
-        reference_number: paymentMethod === "cash" ? undefined : referenceNumber,
-        amount_paid: amountPaidPayload,
-        payment_screenshot_url: paymentScreenshot || undefined,
-        new_pet_species: isNewPet ? (petType === "dog" ? "Dog" : petType === "cat" ? "Cat" : "Other") : undefined,
-        new_pet_birthday: isNewPet ? new Date().toISOString().split("T")[0] : undefined,
-        dog_size: dogSize,
-      });
+      setIsSubmitting(true);
+      await bookingApi.create(payload);
 
       toast({
         title: "Booking Submitted! 🎉",
@@ -630,7 +814,9 @@ const Booking = () => {
             const dateStr = format(selectedDate, "yyyy-MM-dd");
             const data = await bookingApi.getSlotAvailability(shop.propertyId, dateStr);
             setAvailableSlots(data.availableSlots ?? []);
-          } catch { /* ignore */ }
+          } catch {
+            // ignore
+          }
         }
         if (isHotel(shop)) {
           setCheckInDate(undefined);
@@ -645,6 +831,8 @@ const Booking = () => {
         description: err?.error || err?.message || err?.details || "Something went wrong. Please try again.",
         variant: "destructive",
       });
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -1212,6 +1400,10 @@ const Booking = () => {
                         const gcashAccepted = isMethodAccepted("GCash");
                         const paymayaAccepted = isMethodAccepted("PayMaya");
                         const cashAccepted = isMethodAccepted("Cash");
+                        const stripeAccepted =
+                          isMethodAccepted("Card") ||
+                          isMethodAccepted("Credit Card") ||
+                          isMethodAccepted("Stripe");
 
                         return (
                           <div className="grid grid-cols-4 gap-3">
@@ -1269,10 +1461,23 @@ const Booking = () => {
                                 <span className="absolute -top-2 -right-2 text-[10px] px-1.5 py-0.5 bg-muted-foreground text-white rounded-full">N/A</span>
                               )}
                             </button>
-                            <button type="button" disabled className="relative p-4 rounded-xl border-2 border-border bg-muted/30 flex flex-col items-center gap-2 opacity-50 cursor-not-allowed">
+                            <button
+                              type="button"
+                              onClick={() => stripeAccepted && setPaymentMethod("stripe")}
+                              disabled={!stripeAccepted}
+                              className={`relative p-4 rounded-xl border-2 transition-all flex flex-col items-center gap-2 ${
+                                !stripeAccepted
+                                  ? "border-border bg-muted/30 opacity-40 cursor-not-allowed"
+                                  : paymentMethod === "stripe"
+                                    ? "border-primary bg-primary/5"
+                                    : "border-border hover:border-primary/50"
+                              }`}
+                            >
                               <CreditCard className="h-6 w-6" />
-                              <span className="text-sm font-medium">Credit Card</span>
-                              <Badge className="absolute -top-2 -right-2 text-[10px] px-1.5 py-0.5 bg-muted-foreground text-muted">Soon</Badge>
+                              <span className="text-sm font-medium">Card (Stripe)</span>
+                              {!stripeAccepted && hasAccepted && (
+                                <span className="absolute -top-2 -right-2 text-[10px] px-1.5 py-0.5 bg-muted-foreground text-white rounded-full">N/A</span>
+                              )}
                             </button>
                           </div>
                         );
@@ -1352,45 +1557,40 @@ const Booking = () => {
                       </div>
                     )}
 
-                    {paymentMethod === "creditcard" && (
-                      <div className="relative">
-                        <div className="space-y-4 opacity-40 pointer-events-none">
-                          <div className="space-y-2">
-                            <Label htmlFor="cardName">Name on Card</Label>
-                            <Input id="cardName" placeholder="John Doe" disabled />
-                          </div>
-                          <div className="space-y-2">
-                            <Label htmlFor="cardNumber">Card Number</Label>
-                            <div className="relative">
-                              <CreditCard className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                              <Input id="cardNumber" placeholder="4242 4242 4242 4242" className="pl-10" disabled />
-                            </div>
-                          </div>
-                          <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-2">
-                              <Label htmlFor="expiry">Expiry Date</Label>
-                              <Input id="expiry" placeholder="MM/YY" disabled />
-                            </div>
-                            <div className="space-y-2">
-                              <Label htmlFor="cvc">CVC</Label>
-                              <Input id="cvc" placeholder="123" disabled />
-                            </div>
-                          </div>
+                    {paymentMethod === "stripe" && (
+                      <div className="space-y-4">
+                        <div className="bg-secondary/30 rounded-xl p-4">
+                          <p className="text-sm text-muted-foreground">
+                            You will be redirected to Stripe Checkout to complete your secure card payment.
+                          </p>
                         </div>
-                        <div className="absolute inset-0 flex items-center justify-center">
-                          <div className="bg-card/95 backdrop-blur-sm border-2 border-primary rounded-xl p-6 shadow-lg text-center max-w-sm">
-                            <CreditCard className="h-12 w-12 mx-auto mb-3 text-primary" />
-                            <h3 className="font-semibold text-lg mb-2">Credit Card Payment Coming Soon</h3>
-                            <p className="text-sm text-muted-foreground">We're currently setting up secure credit card processing. Please use GCash or PayMaya for now.</p>
-                          </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="stripeAmount">Amount to Pay (₱)</Label>
+                          <Input
+                            id="stripeAmount"
+                            type="text"
+                            value={`₱${calculatePrices().total.toFixed(2)}`}
+                            readOnly
+                            className="bg-muted/50 font-semibold cursor-default"
+                          />
+                        </div>
+                        <div className="flex items-center gap-2 p-4 rounded-xl bg-primary/10 text-primary">
+                          <Shield className="h-5 w-5 shrink-0" />
+                          <p className="text-sm">Stripe securely processes your card details. PawStay does not store card numbers.</p>
                         </div>
                       </div>
                     )}
 
                     <div className="flex gap-3">
                       <Button variant="outline" className="flex-1" onClick={() => setStep(4)}>Back</Button>
-                      <Button variant="hero" className="flex-1" onClick={handleConfirm} disabled={paymentMethod === "creditcard"}>
-                        {paymentMethod === "creditcard" ? "Payment Method Unavailable" : paymentMethod === "cash" ? "Submit Booking (Cash)" : "Submit Booking"}
+                      <Button variant="hero" className="flex-1" onClick={handleConfirm} disabled={isSubmitting || stripeProcessing}>
+                        {isSubmitting || stripeProcessing
+                          ? "Processing..."
+                          : paymentMethod === "cash"
+                            ? "Submit Booking (Cash)"
+                            : paymentMethod === "stripe"
+                              ? "Pay with Card (Stripe)"
+                              : "Submit Booking"}
                       </Button>
                     </div>
                   </div>

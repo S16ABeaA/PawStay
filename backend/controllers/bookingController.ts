@@ -1,4 +1,5 @@
 import { Request, Response } from "express";
+import Stripe from "stripe";
 import { bookingModel } from "../models/bookingModel";
 import { petModel } from "../models/petModel";
 import { serviceHistoryModel } from "../models/serviceHistoryModel";
@@ -768,6 +769,9 @@ export const createBooking = async (req: Request, res: Response) => {
       dog_size,
     } = req.body;
 
+    const normalizedPaymentMethod = typeof payment_method === "string" ? payment_method.trim().toLowerCase() : null;
+    const submittedReferenceNumber = typeof reference_number === "string" ? reference_number.trim() : "";
+
     if (!property_id || !checkin) {
       return res.status(400).json({ error: "Missing required fields: property_id, checkin." });
     }
@@ -977,6 +981,79 @@ export const createBooking = async (req: Request, res: Response) => {
     const finalServiceFee = parsedServiceFee ?? (finalSubtotal != null ? Math.round(finalSubtotal * 0.10 * 100) / 100 : null);
     const finalTotalPrice = parsedTotalPrice ?? (finalSubtotal != null && finalServiceFee != null ? Math.round((finalSubtotal + finalServiceFee) * 100) / 100 : null);
 
+    // ── Verify Stripe card payments server-side before booking insert ──
+    let normalizedReferenceNumber: string | null = submittedReferenceNumber || null;
+    let shouldAutoMarkPaid = false;
+    let paidAtIso: string | null = null;
+
+    if (normalizedPaymentMethod === "card") {
+      if (!submittedReferenceNumber) {
+        return res.status(400).json({ error: "reference_number is required for card payments." });
+      }
+
+      const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
+      if (!stripeSecretKey) {
+        return res.status(503).json({
+          error: "Stripe card payments are unavailable because STRIPE_SECRET_KEY is not configured.",
+        });
+      }
+
+      const stripe = new Stripe(stripeSecretKey);
+
+      let stripePaymentIntent: any = null;
+
+      if (submittedReferenceNumber.startsWith("cs_")) {
+        const checkoutSession = await stripe.checkout.sessions.retrieve(submittedReferenceNumber, {
+          expand: ["payment_intent"],
+        });
+
+        if (checkoutSession.payment_status !== "paid") {
+          return res.status(400).json({ error: "Stripe checkout session is not marked as paid." });
+        }
+
+        const sessionUserId = checkoutSession.metadata?.user_id;
+        if (sessionUserId && sessionUserId !== String(userId)) {
+          return res.status(403).json({ error: "This Stripe checkout session belongs to another user." });
+        }
+
+        stripePaymentIntent =
+          typeof checkoutSession.payment_intent === "string"
+            ? await stripe.paymentIntents.retrieve(checkoutSession.payment_intent)
+            : checkoutSession.payment_intent;
+      } else {
+        stripePaymentIntent = await stripe.paymentIntents.retrieve(submittedReferenceNumber);
+      }
+
+      if (!stripePaymentIntent || stripePaymentIntent.status !== "succeeded") {
+        return res.status(400).json({ error: "Stripe payment is not completed." });
+      }
+
+      const paymentIntentUserId = stripePaymentIntent.metadata?.user_id;
+      if (paymentIntentUserId && paymentIntentUserId !== String(userId)) {
+        return res.status(403).json({ error: "This Stripe payment belongs to another user." });
+      }
+
+      const paidAmount =
+        stripePaymentIntent.amount_received && stripePaymentIntent.amount_received > 0
+          ? stripePaymentIntent.amount_received
+          : stripePaymentIntent.amount;
+
+      if (finalTotalPrice != null) {
+        const expectedAmount = Math.round(finalTotalPrice * 100);
+        if (paidAmount !== expectedAmount) {
+          return res.status(400).json({
+            error: "Stripe payment amount does not match this booking total.",
+            expected_amount: expectedAmount,
+            paid_amount: paidAmount,
+          });
+        }
+      }
+
+      normalizedReferenceNumber = stripePaymentIntent.id;
+      shouldAutoMarkPaid = true;
+      paidAtIso = new Date().toISOString();
+    }
+
     let resolvedPetId = pet_id || null;
 
     const uploadBase = `bookings/${userId}/${Date.now()}`;
@@ -1089,8 +1166,8 @@ export const createBooking = async (req: Request, res: Response) => {
           subtotal: finalSubtotal,
           service_fee: finalServiceFee,
           total_price: finalTotalPrice,
-          payment_method: payment_method || null,
-          reference_number: reference_number || null,
+          payment_method: normalizedPaymentMethod,
+          reference_number: normalizedReferenceNumber,
           payment_screenshot_url: uploadedPaymentProof,
           notes: null,
           source: "web",
@@ -1109,6 +1186,21 @@ export const createBooking = async (req: Request, res: Response) => {
         });
       }
       throw atomicErr; // re-throw unexpected errors
+    }
+
+    if (shouldAutoMarkPaid && paidAtIso) {
+      const { error: markPaidErr } = await supabaseAdmin
+        .from("bookings")
+        .update({ payment_status: "paid", paid_at: paidAtIso })
+        .eq("id", booking.id)
+        .eq("is_deleted", false);
+
+      if (markPaidErr) {
+        console.error("Failed to mark Stripe booking as paid:", markPaidErr);
+      } else {
+        booking.payment_status = "paid";
+        (booking as any).paid_at = paidAtIso;
+      }
     }
 
     // Create a service history entry for the pet if we have a pet ID and service info

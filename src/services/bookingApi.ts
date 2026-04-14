@@ -39,6 +39,38 @@ export interface CreateBookingPayload {
   dog_size?: string;
 }
 
+export interface StripeCheckoutSessionPayload {
+  amount: number;
+  total_price?: number;
+  currency?: string;
+  bookingTitle?: string;
+  bookingDescription?: string;
+  success_url?: string;
+  cancel_url?: string;
+  customer_email?: string;
+  property_id?: string;
+  service_type?: string;
+  service_name?: string;
+  checkin?: string;
+}
+
+export interface StripeCheckoutSessionResponse {
+  sessionId: string;
+  url: string;
+  expiresAt?: number;
+}
+
+export interface StripeSessionVerificationResponse {
+  verified: boolean;
+  sessionId: string;
+  status: string | null;
+  paymentStatus: string | null;
+  paymentIntentId: string | null;
+  amountTotal: number | null;
+  currency: string | null;
+  customerEmail: string | null;
+}
+
 export interface SlotAvailability {
   date: string;
   capacity: number;
@@ -138,6 +170,22 @@ export interface AdminCalendarResponse {
 }
 
 export const bookingApi = {
+  /** Create a Stripe checkout session for card payment */
+  createStripeCheckoutSession: (
+    data: StripeCheckoutSessionPayload
+  ): Promise<StripeCheckoutSessionResponse> =>
+    authHelper.post(`${API_BASE_URL}/api/payments/stripe/checkout-session`, data),
+
+  /** Verify a Stripe checkout session after redirect */
+  verifyStripeCheckoutSession: (
+    sessionId: string
+  ): Promise<StripeSessionVerificationResponse> =>
+    authHelper.get(
+      `${API_BASE_URL}/api/payments/stripe/verify-session?session_id=${encodeURIComponent(
+        sessionId
+      )}`
+    ),
+
   /** Create a new booking */
   create: (data: CreateBookingPayload) =>
     authHelper.post(`${API_BASE_URL}/api/bookings`, data),
