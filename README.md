@@ -28,3 +28,17 @@ npm run dev
 - shadcn-ui
 - Tailwind CSS
 - Supabase
+
+## Stripe Setup
+
+To enable card payments via Stripe Checkout, add these environment variables in the backend runtime (for local development, use `backend/.env`):
+
+```env
+STRIPE_SECRET_KEY=sk_test_xxx
+FRONTEND_URL=http://localhost:5173
+```
+
+Notes:
+
+- `STRIPE_SECRET_KEY` is required for both creating checkout sessions and verifying paid sessions.
+- `FRONTEND_URL` is used for Stripe success/cancel redirects when the request origin cannot be inferred.
