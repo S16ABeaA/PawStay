@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { Button } from "@/components/ui/button";
@@ -396,7 +396,7 @@ const SignIn = () => {
                   <div className="flex items-start gap-2">
                     <Checkbox id="terms" className="mt-1" checked={termsChecked} onCheckedChange={(checked) => setTermsChecked(!!checked)} />
                     <Label htmlFor="terms" className="text-sm cursor-pointer text-muted-foreground">
-                      I agree to the <a href="#" className="text-primary hover:underline">Terms of Service</a> and <a href="#" className="text-primary hover:underline">Privacy Policy</a>
+                      I agree to the <Link to="/legal/terms" className="text-primary hover:underline">Terms of Service</Link> and <Link to="/legal/privacy" className="text-primary hover:underline">Privacy Policy</Link>
                     </Label>
                   </div>
                 )}

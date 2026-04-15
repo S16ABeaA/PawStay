@@ -16,9 +16,8 @@ const Footer = () => {
       { label: "Contact Us", href: "/help-center" },
     ],
     legal: [
-      { label: "Terms", href: "#" },
-      { label: "Privacy", href: "#" },
-      { label: "Cookies", href: "#" },
+      { label: "Terms", href: "/legal/terms" },
+      { label: "Privacy", href: "/legal/privacy" },
     ],
   };
 
