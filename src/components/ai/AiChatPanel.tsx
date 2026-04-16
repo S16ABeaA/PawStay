@@ -100,6 +100,8 @@ const SMALL_PET_TERMS = ["rabbit", "hamster", "guinea pig", "bird", "parrot", "a
 const OTHER_ANIMAL_TERMS = [...PIG_TERMS, ...SMALL_PET_TERMS];
 type SpeciesKind = "dog" | "cat" | "pig" | "animal";
 const BOOKING_ID_REGEX = /(Booking\s*ID[:\s]*)([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/gi;
+const NEARBY_LOCATION_HINT_REGEX =
+  /\b(near me|nearby|around me|around here|my area|current location|closest|nearest|near us|nearby vet|nearby groomer)\b/i;
 
 const normalizePipeTableMarkdown = (input: string): string => {
   const text = String(input || "");
@@ -207,6 +209,7 @@ export const AiChatPanel = ({ className, variant = "floating" }: AiChatPanelProp
   const imageModelRef = useRef<any>(null);
   const rowCounterRef = useRef(0);
   const previewUrlsRef = useRef<string[]>([]);
+  const hasAutoCollapsedQuickActionsRef = useRef(false);
 
   const sessionId = useMemo(() => `ui-${Date.now()}`, []);
 
@@ -236,10 +239,12 @@ export const AiChatPanel = ({ className, variant = "floating" }: AiChatPanelProp
   }, []);
 
   useEffect(() => {
-    if (rows.length > 0 && showQuickActions) {
+    // Auto-collapse once after the first message, but allow manual toggling afterwards.
+    if (!hasAutoCollapsedQuickActionsRef.current && rows.length > 0) {
       setShowQuickActions(false);
+      hasAutoCollapsedQuickActionsRef.current = true;
     }
-  }, [rows.length, showQuickActions]);
+  }, [rows.length]);
 
   useEffect(() => {
     let cancelled = false;
@@ -575,6 +580,28 @@ export const AiChatPanel = ({ className, variant = "floating" }: AiChatPanelProp
     }
   };
 
+  const enrichMessageWithAutoLocation = async (messageText: string): Promise<string> => {
+    const message = String(messageText || "").trim();
+    if (!message || !NEARBY_LOCATION_HINT_REGEX.test(message)) {
+      return message;
+    }
+
+    try {
+      const resolved = await resolveLocationForSearch();
+      const location = String(resolved.location || "").trim();
+      if (!location) return message;
+
+      return [
+        message,
+        "",
+        `User location context: ${location} (source: ${resolved.source}).`,
+        "Use this location for nearby recommendations unless the user specifies another place.",
+      ].join("\n");
+    } catch {
+      return message;
+    }
+  };
+
   const sendMessage = async (rawMessage: string) => {
     const userMessage = String(rawMessage || "").trim();
     if (!userMessage || loading) return;
@@ -588,6 +615,7 @@ export const AiChatPanel = ({ className, variant = "floating" }: AiChatPanelProp
 
     try {
       setLoading(true);
+      const messageForAssistant = await enrichMessageWithAutoLocation(userMessage);
 
       const normalizedMessage = userMessage.toLowerCase();
       const wantsServiceHistoryScan = /(scan|analy[sz]e|review).*(service history|health record|medical record|vaccine)/i.test(normalizedMessage)
@@ -695,7 +723,7 @@ export const AiChatPanel = ({ className, variant = "floating" }: AiChatPanelProp
 
         const contextualMessage = [
           "The user is asking about an uploaded image.",
-          `Question: ${userMessage}`,
+          `Question: ${messageForAssistant}`,
           `Detected species: ${detections.detectedSpecies || "unknown"}`,
           `Likely breeds: ${(detections.likelyBreeds || []).join(", ") || "unknown"}`,
           `OCR text: ${extractedText || "none"}`,
@@ -707,7 +735,7 @@ export const AiChatPanel = ({ className, variant = "floating" }: AiChatPanelProp
         return;
       }
 
-      const response = await aiChatApi.chat({ message: userMessage, sessionId });
+      const response = await aiChatApi.chat({ message: messageForAssistant, sessionId });
 
       // Show tool activity bubbles if the agent called any tools
       if (response.toolActivity && response.toolActivity.length > 0) {
@@ -1330,7 +1358,7 @@ export const AiChatPanel = ({ className, variant = "floating" }: AiChatPanelProp
             aria-expanded={showQuickActions}
           >
             {showQuickActions ? "Hide" : "Show"}
-            {showQuickActions ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
+            {showQuickActions ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
           </button>
         </div>
 

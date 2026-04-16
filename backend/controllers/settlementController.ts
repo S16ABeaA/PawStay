@@ -110,7 +110,8 @@ export const dispatchSettlementRemindersJob = async (opts?: { now?: Date; dryRun
   const { data: properties, error: propsErr } = await supabaseAdmin
     .from("properties")
     .select("id, name, owner_id")
-    .eq("is_deleted", false);
+    .eq("is_deleted", false)
+    .eq("status", "approved");
 
   if (propsErr) throw propsErr;
 
@@ -586,6 +587,18 @@ export const createSettlement = async (req: Request, res: Response) => {
  */
 export const listSettlements = async (req: Request, res: Response) => {
   try {
+    const { data: activeProperties, error: activePropsErr } = await supabaseAdmin
+      .from("properties")
+      .select("id")
+      .eq("is_deleted", false)
+      .eq("status", "approved");
+    if (activePropsErr) throw activePropsErr;
+
+    const activePropertyIds = (activeProperties ?? []).map((row: any) => row.id);
+    if (activePropertyIds.length === 0) {
+      return res.json({ settlements: [] });
+    }
+
     let query = supabaseAdmin
       .from("proprietor_settlements")
       .select(`
@@ -593,12 +606,18 @@ export const listSettlements = async (req: Request, res: Response) => {
         properties:property_id ( name ),
         profiles:proprietor_id ( first_name, last_name, email )
       `)
+      .in("property_id", activePropertyIds)
       .order("settled_at", { ascending: false });
 
     const { proprietorId, propertyId, status, from, to, limit } = req.query as Record<string, string>;
 
     if (proprietorId) query = query.eq("proprietor_id", proprietorId);
-    if (propertyId) query = query.eq("property_id", propertyId);
+    if (propertyId) {
+      if (!activePropertyIds.includes(propertyId)) {
+        return res.json({ settlements: [] });
+      }
+      query = query.eq("property_id", propertyId);
+    }
     if (status) query = query.eq("status", status);
     if (from) query = query.gte("settled_at", from);
     if (to) query = query.lte("settled_at", to);
@@ -791,7 +810,8 @@ export const getMonthlyReceivables = async (req: Request, res: Response) => {
         .from("properties")
         .select("id")
         .eq("owner_id", proprietorId)
-        .eq("is_deleted", false);
+        .eq("is_deleted", false)
+        .eq("status", "approved");
       propIds = (props ?? []).map((p: any) => p.id);
       if (propIds.length === 0) {
         // No properties → return empty
@@ -1074,7 +1094,8 @@ export const getProprietorMonthlyStatus = async (req: Request, res: Response) =>
       .from("properties")
       .select("id, name")
       .eq("owner_id", proprietorId)
-      .eq("is_deleted", false);
+      .eq("is_deleted", false)
+      .eq("status", "approved");
 
     if (propertyId) {
       propsQuery = propsQuery.eq("id", propertyId);
@@ -1187,7 +1208,8 @@ export const getProprietorReceivables = async (req: Request, res: Response) => {
       .from("properties")
       .select("id, name, created_at")
       .eq("owner_id", proprietorId)
-      .eq("is_deleted", false);
+      .eq("is_deleted", false)
+      .eq("status", "approved");
 
     if (propertyId) propsQuery = propsQuery.eq("id", propertyId);
 
@@ -1410,6 +1432,7 @@ export const submitProprietorSettlement = async (req: Request, res: Response) =>
       .select("id, name, owner_id")
       .eq("id", propertyId)
       .eq("is_deleted", false)
+      .eq("status", "approved")
       .single();
     if (propErr) throw propErr;
 

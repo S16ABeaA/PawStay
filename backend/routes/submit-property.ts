@@ -111,6 +111,29 @@ interface PropertySubmissionData {
 
 const isObject = (value: unknown) => typeof value === 'object' && value !== null && !Array.isArray(value);
 
+const normalizePetTypeForStorage = (value: string): string => {
+  const raw = String(value || '').trim().toLowerCase();
+  if (!raw) return '';
+
+  if (['dog', 'dogs'].includes(raw)) return 'Dog';
+  if (['cat', 'cats'].includes(raw)) return 'Cat';
+  if (['others', 'other', 'exotic', 'exotics', 'exotic pet', 'exotic pets'].includes(raw)) return 'Others';
+
+  return String(value).trim();
+};
+
+const normalizeDogSizeForStorage = (value: string): string => {
+  const raw = String(value || '').trim().toLowerCase();
+  if (!raw) return '';
+
+  if (raw === 'small') return 'Small';
+  if (raw === 'medium') return 'Medium';
+  if (raw === 'large') return 'Large';
+  if (['giant', 'extra large', 'x-large', 'xl'].includes(raw)) return 'Giant';
+
+  return String(value).trim();
+};
+
 export const submitProperty = async (req: Request, res: Response) => {
   try {
     const supabaseUrl = process.env.PAW_STAY_SUPABASE_URL || process.env.SUPABASE_URL;
@@ -156,6 +179,13 @@ export const submitProperty = async (req: Request, res: Response) => {
         ? d.propertyTypes
         : [d.propertyType];
 
+    const normalizedPetTypes = Array.from(
+      new Set((d.petTypesAccepted || []).map(normalizePetTypeForStorage).filter(Boolean))
+    );
+    const normalizedDogSizes = Array.from(
+      new Set((d.dogSizes || []).map(normalizeDogSizeForStorage).filter(Boolean))
+    );
+
     // ================================================================
     // 1. INSERT INTO properties
     // ================================================================
@@ -176,8 +206,8 @@ export const submitProperty = async (req: Request, res: Response) => {
         phone: d.phone,
         description: d.description,
         capacity: d.animalCapacity || null,
-        pet_types_accepted: d.petTypesAccepted || [],
-        dog_sizes: d.dogSizes || [],
+        pet_types_accepted: normalizedPetTypes,
+        dog_sizes: normalizedDogSizes,
         exotic_pet_types: d.exoticPetTypes || null,
         facilities_amenities: d.facilitiesAmenities || [],
         images: d.propertyImages || [],

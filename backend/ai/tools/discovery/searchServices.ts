@@ -1,6 +1,10 @@
 import { backendApiClient } from "../../http/backendApiClient";
 import { TOOL_INPUT_SCHEMA_TEXT } from "../../schemas";
 import { ToolDefinition } from "../../types";
+import {
+  inferServiceTypeFromText,
+  resolveServiceIntent,
+} from "./serviceTaxonomy";
 
 export interface SearchServicesArgs {
   location?: string;
@@ -43,21 +47,6 @@ interface SearchServicesResult {
   total: number;
   properties: SearchServiceItem[];
 }
-
-const normalizeServiceCategory = (serviceType?: string): string | undefined => {
-  if (!serviceType) return undefined;
-  const value = serviceType.trim().toLowerCase();
-
-  // Map common chat terms to backend categories used by property search
-  if (["hotel", "boarding", "pet hotel"].includes(value)) return "Boarding";
-  if (["grooming", "groomer", "spa"].includes(value)) return "Grooming";
-  if (["vet", "veterinary", "clinic"].includes(value)) return "Veterinary";
-  // if (["walking", "dog walking", "walker"].includes(value)) return "Walking";
-  // if (["sitting", "pet sitting", "sitter"].includes(value)) return "Pet Sitting";
-
-  // Fallback: title-case arbitrary value
-  return value.charAt(0).toUpperCase() + value.slice(1);
-};
 
 const asString = (v: any): string | undefined => {
   if (v === undefined || v === null) return undefined;
@@ -119,26 +108,29 @@ export const searchServicesTool: ToolDefinition<SearchServicesArgs, SearchServic
       return undefined;
     };
 
-    const inferServiceTypeFromMessage = (text: string): string | undefined => {
-      const t = text.toLowerCase();
-      if (/\bgroom/.test(t)) return "Grooming";
-      if (/\bboard|boarding|hotel/.test(t)) return "Boarding";
-      if (/\bvet|clinic|veterin/.test(t)) return "Veterinary";
-      // if (/walk/.test(t)) return "Walking";
-      // if (/sit|sitter/.test(t)) return "Pet Sitting";
-      return undefined;
-    };
-
     const inferredLocation = inferLocationFromMessage(msg);
-    const inferredService = inferServiceTypeFromMessage(msg);
+    const inferredService = inferServiceTypeFromText(msg);
 
     const source = (args || {}) as SearchServicesArgs & Record<string, any>;
 
     const finalLocation = asString(source.location) || inferredLocation;
-    const finalService =
+    const finalServiceText =
       asString(source.service_type) ||
       asString(source.serviceType) ||
       inferredService;
+    const explicitCategory = asString(source.serviceCategory);
+
+    const resolvedFromServiceType = resolveServiceIntent(finalServiceText);
+    const resolvedFromCategory = resolveServiceIntent(explicitCategory);
+
+    const resolvedCategory =
+      explicitCategory
+        ? resolvedFromCategory.category
+        : resolvedFromServiceType.category;
+
+    const resolvedPropertyType =
+      asString(source.propertyType || source.type)?.toLowerCase() ||
+      resolvedFromServiceType.propertyType;
 
     const response = await backendApiClient.request<any>("/api/properties/search", {
       method: "GET",
@@ -149,10 +141,8 @@ export const searchServicesTool: ToolDefinition<SearchServicesArgs, SearchServic
         timeSlot: asString(source.timeSlot || source.time_slot),
         petType: toQueryString(normalizeStringOrArray(source.petType || source.pet)),
         dogSize: toQueryString(normalizeStringOrArray(source.dogSize || source.dogsize)),
-        propertyType: asString(source.propertyType || source.type)?.toLowerCase(),
-        serviceCategory:
-          normalizeServiceCategory(asString(source.serviceCategory)) ||
-          normalizeServiceCategory(finalService),
+        propertyType: resolvedPropertyType,
+        serviceCategory: resolvedCategory,
         minPrice: asNumber(source.minPrice),
         maxPrice: asNumber(source.maxPrice),
         rating: asNumber(source.rating),

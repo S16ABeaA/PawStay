@@ -103,12 +103,8 @@ app.use("/api/amenities", amenitiesRoutes);
 app.use("/api/location", locationRoutes);
 app.use("/api/pets", authGuardLimiter, petRoutes);
 app.use("/api/bookings", bookingRoutes);
-<<<<<<< HEAD
-app.use('/api/favorites', authGuardLimiter, favoritesRoutes);
-=======
 app.use('/api/payments', paymentRoutes);
 app.use('/api/favorites', favoritesRoutes);
->>>>>>> 084fe3caa720633a9dd9d09f16e5d0245efc1267
 app.use('/api/reviews', reviewsRoutes);
 app.use("/api/settings", authGuardLimiter, settingsRoutes);
 app.use('/api/platform-settings', require('./routes/platformSettingsRoute').default);

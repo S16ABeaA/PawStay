@@ -82,7 +82,7 @@ const visionIconMap = {
 const defaultContent: AboutContent = {
   hero: {
     badge: "About PawStay",
-    title: "Professional Pet Care, Delivered with Heart",
+    title: "The Smart Way to Book Pet Care One Tap Away",
     subtitle:
       "PawStay connects pet parents with verified, caring providers—backed by 24/7 support, secure payments, and transparent reviews.",
     primaryCta: { label: "Explore Services", href: "/hotels" },
@@ -147,7 +147,8 @@ const defaultContent: AboutContent = {
   ],
   vision: {
     title: "Our Vision for the Future",
-    subtitle: "Transforming pet care into a seamless, trusted, and joyful experience for every pet parent worldwide.",
+    subtitle:
+      "To create a world where booking pet services is easy, safe, and reliable while helping pet service providers grow through technology and global accessibility.",
     points: [
       {
         icon: "Sparkles",
@@ -782,9 +783,8 @@ const About = () => {
                   variants={fadeInLeft}
                   className="text-xl text-muted-foreground leading-relaxed"
                 >
-                  To create a world where finding trusted, quality care for your pet is as easy as
-                  booking a hotel for yourself. We blend verified providers, smart matching, and
-                  round-the-clock support so pet parents can book with total confidence.
+                  To make booking pet services easy and accessible to everyone, and bridging the
+                  gap between pet owners and pet service providers.
                 </motion.p>
                 <motion.div
                   variants={fadeInLeft}

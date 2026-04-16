@@ -1,9 +1,14 @@
 import { backendApiClient } from "../../http/backendApiClient";
 import { TOOL_INPUT_SCHEMA_TEXT } from "../../schemas";
 import { ToolDefinition } from "../../types";
+import {
+  isAllServicesRequest,
+  matchesServiceCategory,
+  resolveServiceIntent,
+} from "./serviceTaxonomy";
 
 export interface GetPropertyServicesArgs {
-  service_type: "hotel" | "vet" | "grooming" | "all";
+  service_type?: string;
   location?: string;
   keyword?: string;
 }
@@ -16,7 +21,7 @@ interface PropertyServiceItem {
   review_count: number | null;
   totalReviews: number | null;
   price: number | null;
-  service_type: "hotel" | "vet" | "grooming" | "all";
+  service_type: string;
   services: {
     id: string;
     name: string;
@@ -27,51 +32,29 @@ interface PropertyServiceItem {
 }
 
 interface GetPropertyServicesResult {
-  service_type: "hotel" | "vet" | "grooming" | "all";
+  service_type: string;
+  applied_service_category?: string;
   total: number;
   properties: PropertyServiceItem[];
 }
 
-const normalizeServiceType = (
-  serviceType: string,
-): "hotel" | "vet" | "grooming" | "all" => {
-  const value = String(serviceType || "").trim().toLowerCase();
-  if (value === "vet" || value === "veterinary") return "vet";
-  if (value === "grooming" || value === "groomer") return "grooming";
-  if (value === "hotel" || value === "boarding" || value === "accommodation") return "hotel";
-  if (value === "all") return "all";
-  return "all";
-};
-
-const resolvePropertyType = (serviceType: "hotel" | "vet" | "grooming" | "all") => {
-  if (serviceType === "hotel") return "hotel";
-  if (serviceType === "grooming") return "grooming";
-  if (serviceType === "vet") return "veterinary";
-  return undefined;
-};
-
-const resolveServiceCategory = (serviceType: "hotel" | "vet" | "grooming" | "all") => {
-  if (serviceType === "hotel") return "Boarding";
-  if (serviceType === "grooming") return "Grooming";
-  if (serviceType === "vet") return "Veterinary";
-  return undefined;
-};
-
 export const getPropertyServicesTool: ToolDefinition<GetPropertyServicesArgs, GetPropertyServicesResult> = {
   name: "get_property_services",
   description:
-    "Retrieves properties and their actual service list filtered by a required service_type (hotel, vet, grooming, or all).",
+    "Retrieves properties and their actual service list filtered by an optional service_type (supports new categories).",
   inputSchema: TOOL_INPUT_SCHEMA_TEXT.get_property_services,
   run: async (args) => {
-    const serviceType = normalizeServiceType(args?.service_type || "all");
+    const requestedServiceType = String(args?.service_type || "all").trim() || "all";
+    const resolvedService = resolveServiceIntent(requestedServiceType);
+    const isAllRequest = isAllServicesRequest(requestedServiceType);
 
     const response = await backendApiClient.request<any>("/api/properties/search", {
       method: "GET",
       query: {
         location: args?.location,
         keyword: args?.keyword,
-        propertyType: resolvePropertyType(serviceType),
-        serviceCategory: resolveServiceCategory(serviceType),
+        propertyType: resolvedService.propertyType,
+        serviceCategory: isAllRequest ? undefined : resolvedService.category,
       },
     });
 
@@ -84,8 +67,6 @@ export const getPropertyServicesTool: ToolDefinition<GetPropertyServicesArgs, Ge
     });
 
     const topRows = rows.slice(0, 10);
-
-    const categoryFilter = resolveServiceCategory(serviceType)?.toLowerCase();
 
     const propertiesWithServices = await Promise.all(
       topRows.map(async (row: any) => {
@@ -104,14 +85,11 @@ export const getPropertyServicesTool: ToolDefinition<GetPropertyServicesArgs, Ge
               ? servicesResponse.services
               : [];
 
-            services = categoryFilter
-              ? rawServices.filter((svc: any) =>
-                  String(svc?.category || "")
-                    .trim()
-                    .toLowerCase()
-                    .includes(categoryFilter),
-                )
-              : rawServices;
+            services = isAllRequest
+              ? rawServices
+              : rawServices.filter((svc: any) =>
+                  matchesServiceCategory(svc?.category, requestedServiceType),
+                );
           } catch {
             services = [];
           }
@@ -136,7 +114,7 @@ export const getPropertyServicesTool: ToolDefinition<GetPropertyServicesArgs, Ge
               : typeof row?.price === "number"
                 ? row.price
                 : Number(row?.cheapest_service_price ?? row?.price ?? row?.base_price) || null,
-          service_type: serviceType,
+          service_type: requestedServiceType,
           services: services.slice(0, 8).map((svc: any) => ({
             id: String(svc?.id ?? ""),
             name: String(svc?.name ?? "Unnamed Service"),
@@ -152,7 +130,8 @@ export const getPropertyServicesTool: ToolDefinition<GetPropertyServicesArgs, Ge
     );
 
     return {
-      service_type: serviceType,
+      service_type: requestedServiceType,
+      applied_service_category: isAllRequest ? undefined : resolvedService.category,
       total: rows.length,
       properties: propertiesWithServices,
     };

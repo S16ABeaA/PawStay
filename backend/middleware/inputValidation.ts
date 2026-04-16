@@ -114,7 +114,7 @@ const validateField = (key: string, value: unknown, rule: FieldRule): { ok: bool
 
   if (rule.type === "uuid") {
     if (typeof value !== "string") return { ok: false, error: `${key} must be a string` };
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     const sanitized = value.trim();
     if (!uuidRegex.test(sanitized)) return { ok: false, error: `${key} must be a valid UUID` };
     return { ok: true, value: sanitized };

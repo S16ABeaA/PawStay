@@ -134,7 +134,7 @@ export const aiController = {
             : mimeType;
 
         const result = uploadKind === "image"
-          ? await extractTextFromImageBuffer(uploadedFile.buffer, language)
+          ? await extractTextFromImageBuffer(uploadedFile.buffer, normalizedMime, language)
           : await extractTextFromDocumentBuffer(uploadedFile.buffer, normalizedMime, language);
         return res.json({
           text: result.text,
@@ -156,9 +156,15 @@ export const aiController = {
       });
     } catch (error: any) {
       console.error("ai ocr error:", error);
-      return res.status(500).json({
-        error: "Failed to process OCR request",
-        details: error?.message ?? "Unknown error",
+      const details = String(error?.message || "Unknown error");
+      const isBusy =
+        /\b503\b|\b429\b|high demand|service unavailable|resource exhausted|overloaded|temporarily unavailable/i.test(
+          details,
+        );
+
+      return res.status(isBusy ? 503 : 500).json({
+        error: isBusy ? "OCR service is temporarily busy" : "Failed to process OCR request",
+        details,
       });
     }
   },

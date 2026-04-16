@@ -44,6 +44,32 @@ function haversineDistance(
   return R * c;
 }
 
+type CanonicalPetType = "dog" | "cat" | "others";
+type CanonicalDogSize = "small" | "medium" | "large" | "giant";
+
+const normalizePetType = (value: unknown): CanonicalPetType | null => {
+  const raw = String(value || "").trim().toLowerCase();
+  if (!raw) return null;
+
+  if (["dog", "dogs", "canine", "canines"].includes(raw)) return "dog";
+  if (["cat", "cats", "feline", "felines"].includes(raw)) return "cat";
+  if (["others", "other", "exotic", "exotics", "exotic pet", "exotic pets"].includes(raw)) return "others";
+
+  return null;
+};
+
+const normalizeDogSize = (value: unknown): CanonicalDogSize | null => {
+  const raw = String(value || "").trim().toLowerCase();
+  if (!raw) return null;
+
+  if (raw === "small") return "small";
+  if (raw === "medium") return "medium";
+  if (raw === "large") return "large";
+  if (["giant", "extra large", "x-large", "xl"].includes(raw)) return "giant";
+
+  return null;
+};
+
 export async function getProperties(filters: HotelFilters = {}) {
   // Diagnostics: count + sample row
   // const { count: totalCount } = await supabase
@@ -114,46 +140,8 @@ export async function getProperties(filters: HotelFilters = {}) {
     }
   }
 
-  // ── Pet type (multi-select) ──
-  if (filters.petType) {
-    const petTypes = (Array.isArray(filters.petType) ? filters.petType : [filters.petType]).filter(Boolean);
-    if (petTypes.length > 0) {
-      const hasOthers = petTypes.some(t => t.toLowerCase() === "others");
-      const normalTypes = petTypes
-        .filter(t => t.toLowerCase() !== "others")
-        .map(t => t.charAt(0).toUpperCase() + t.slice(1).toLowerCase());
-
-      if (hasOthers && normalTypes.length === 0) {
-        query = query.not("exotic_pet_types", "is", null);
-      } else if (hasOthers && normalTypes.length > 0 && has("pet_types_accepted")) {
-        const orParts = normalTypes.map(t => `pet_types_accepted.cs.{${t}}`);
-        orParts.push("exotic_pet_types.not.is.null");
-        query = query.or(orParts.join(","));
-      } else if (normalTypes.length > 0 && has("pet_types_accepted")) {
-        if (normalTypes.length === 1) {
-          query = query.contains("pet_types_accepted", [normalTypes[0]]);
-        } else {
-          const orParts = normalTypes.map(t => `pet_types_accepted.cs.{${t}}`);
-          query = query.or(orParts.join(","));
-        }
-      }
-    }
-  }
-
-  // ── Dog Size (multi-select) ──
-  if (filters.dogSize) {
-    const dogSizes = (Array.isArray(filters.dogSize) ? filters.dogSize : [filters.dogSize]).filter(Boolean);
-    const validSizes = dogSizes.map(s => s.charAt(0).toUpperCase() + s.slice(1).toLowerCase());
-
-    if (validSizes.length > 0 && has("dog_sizes")) {
-      if (validSizes.length === 1) {
-        query = query.contains("dog_sizes", [validSizes[0]]);
-      } else {
-        const orParts = validSizes.map(s => `dog_sizes.cs.{${s}}`);
-        query = query.or(orParts.join(","));
-      }
-    }
-  }
+  // Pet type and dog size are filtered after fetch with canonical matching.
+  // This supports legacy stored values like "Dogs"/"Cats" and case variations.
 
   // -- Availability filter --
   //
@@ -408,6 +396,59 @@ export async function getProperties(filters: HotelFilters = {}) {
 
   let rows = data || [];
   if (rows.length === 0) return [];
+
+  const requestedPetTypes = (Array.isArray(filters.petType) ? filters.petType : [filters.petType])
+    .map((t) => normalizePetType(t))
+    .filter((t): t is CanonicalPetType => !!t);
+
+  if (requestedPetTypes.length > 0) {
+    const needsDog = requestedPetTypes.includes("dog");
+    const needsCat = requestedPetTypes.includes("cat");
+    const needsOthers = requestedPetTypes.includes("others");
+
+    rows = rows.filter((p: any) => {
+      const acceptedRaw = Array.isArray(p.pet_types_accepted) ? p.pet_types_accepted : [];
+      const accepted = new Set(
+        acceptedRaw
+          .map((v: unknown) => normalizePetType(v))
+          .filter((v: CanonicalPetType | null): v is CanonicalPetType => !!v)
+      );
+
+      const hasDog = accepted.has("dog");
+      const hasCat = accepted.has("cat");
+      const hasOthersInAccepted = accepted.has("others");
+      const hasExoticDetails = String(p.exotic_pet_types || "").trim().length > 0;
+      const hasOthers = hasOthersInAccepted || hasExoticDetails;
+
+      const matchesDog = !needsDog || hasDog;
+      const matchesCat = !needsCat || hasCat;
+      const matchesOthers = !needsOthers || hasOthers;
+
+      return matchesDog && matchesCat && matchesOthers;
+    });
+
+    if (rows.length === 0) return [];
+  }
+
+  const requestedDogSizes = (Array.isArray(filters.dogSize) ? filters.dogSize : [filters.dogSize])
+    .map((s) => normalizeDogSize(s))
+    .filter((s): s is CanonicalDogSize => !!s);
+
+  if (requestedDogSizes.length > 0) {
+    const requestedSet = new Set<CanonicalDogSize>(requestedDogSizes);
+
+    rows = rows.filter((p: any) => {
+      const sizesRaw = Array.isArray(p.dog_sizes) ? p.dog_sizes : [];
+      const normalizedSizes = sizesRaw
+        .map((v: unknown) => normalizeDogSize(v))
+        .filter((v: CanonicalDogSize | null): v is CanonicalDogSize => !!v);
+
+      if (normalizedSizes.length === 0) return true;
+      return normalizedSizes.some((size: CanonicalDogSize) => requestedSet.has(size));
+    });
+
+    if (rows.length === 0) return [];
+  }
 
   // ── Geo radius filter (post-query) ──
   if (filters.lat != null && filters.lng != null) {

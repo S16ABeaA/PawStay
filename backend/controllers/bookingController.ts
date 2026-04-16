@@ -1531,6 +1531,89 @@ export const getBooking = async (req: Request, res: Response) => {
   }
 };
 
+/** PATCH /api/bookings/:id/cancel — cancel a user's own booking */
+export const cancelBookingForUser = async (req: Request, res: Response) => {
+  try {
+    const userId = (req as any).user?.id;
+    if (!userId) return res.status(401).json({ error: "Unauthorized" });
+
+    const bookingId = req.params.id as string;
+    if (!bookingId) {
+      return res.status(400).json({ error: "Missing booking id" });
+    }
+
+    const { data: booking, error: bookingErr } = await supabaseAdmin
+      .from("bookings")
+      .select("id, user_id, property_id, status, payment_status, service_name, service_type, checkin")
+      .eq("id", bookingId)
+      .eq("user_id", userId)
+      .eq("is_deleted", false)
+      .maybeSingle();
+
+    if (bookingErr) throw bookingErr;
+    if (!booking) {
+      return res.status(404).json({ error: "Booking not found." });
+    }
+
+    const currentStatus = String(booking.status || "").toLowerCase();
+    if (["cancelled", "completed", "checked_out", "no_show"].includes(currentStatus)) {
+      return res.status(400).json({
+        error: `Booking cannot be cancelled because it is already ${currentStatus || "finalized"}.`,
+      });
+    }
+
+    const { data: updated, error: updateErr } = await supabaseAdmin
+      .from("bookings")
+      .update({ status: "cancelled" })
+      .eq("id", bookingId)
+      .eq("user_id", userId)
+      .eq("is_deleted", false)
+      .select()
+      .single();
+
+    if (updateErr) throw updateErr;
+
+    try {
+      const { data: property } = await supabaseAdmin
+        .from("properties")
+        .select("owner_id, name")
+        .eq("id", booking.property_id)
+        .maybeSingle();
+
+      if (property?.owner_id) {
+        const svcLabel = booking.service_name || booking.service_type || "a booking";
+        const dateStr = booking.checkin
+          ? new Date(booking.checkin).toLocaleDateString("en-US", {
+              month: "short",
+              day: "numeric",
+              year: "numeric",
+            })
+          : "the selected date";
+
+        await notificationModel.create({
+          user_id: property.owner_id,
+          type: "booking_cancelled",
+          title: "Booking Cancelled by Customer",
+          message: `A customer cancelled ${svcLabel} on ${dateStr} at ${property.name || "your property"}.`,
+          link: `/admin/bookings?bookingId=${bookingId}`,
+          reference_id: bookingId,
+          reference_type: "booking",
+        });
+      }
+    } catch (notifErr) {
+      console.error("Failed to create cancellation notification for owner:", notifErr);
+    }
+
+    return res.json({
+      booking: updated,
+      message: "Booking cancelled successfully.",
+    });
+  } catch (err: any) {
+    console.error("cancelBookingForUser error:", err);
+    return res.status(500).json({ error: "Failed to cancel booking.", details: err?.message || err });
+  }
+};
+
 /**
  * GET /api/bookings/availability/:propertyId
  * Query params:
@@ -2010,7 +2093,8 @@ export const getReceivables = async (req: Request, res: Response) => {
     const { data: bookings, error: bookingsErr } = await bookingsQuery;
     if (bookingsErr) throw bookingsErr;
 
-    const propertyIds = [...new Set((bookings ?? []).map((b: any) => b.property_id).filter(Boolean))];
+    const bookingRows = bookings ?? [];
+    const propertyIds = [...new Set(bookingRows.map((b: any) => b.property_id).filter(Boolean))];
     if (propertyIds.length === 0) {
       return res.json({
         summary: { totalPayables: 0, totalSettled: 0, outstandingPayables: 0, propertiesWithBalance: 0 },
@@ -2022,8 +2106,20 @@ export const getReceivables = async (req: Request, res: Response) => {
       .from("properties")
       .select("id, name, owner_id")
       .in("id", propertyIds)
-      .eq("is_deleted", false);
+      .eq("is_deleted", false)
+      .eq("status", "approved");
     if (propsErr) throw propsErr;
+
+    const activePropertyIds = (properties ?? []).map((p: any) => p.id);
+    if (activePropertyIds.length === 0) {
+      return res.json({
+        summary: { totalPayables: 0, totalSettled: 0, outstandingPayables: 0, propertiesWithBalance: 0 },
+        properties: [],
+      });
+    }
+
+    const activePropertySet = new Set(activePropertyIds);
+    const scopedBookings = bookingRows.filter((b: any) => activePropertySet.has(b.property_id));
 
     const ownerIds = [...new Set((properties ?? []).map((p: any) => p.owner_id).filter(Boolean))];
     const { data: owners, error: ownersErr } = await supabaseAdmin
@@ -2035,7 +2131,7 @@ export const getReceivables = async (req: Request, res: Response) => {
     const { data: settlements, error: setErr } = await supabaseAdmin
       .from("proprietor_settlements")
       .select("property_id, amount, status")
-      .in("property_id", propertyIds)
+      .in("property_id", activePropertyIds)
       .limit(100000);
     if (setErr) throw setErr;
 
@@ -2050,10 +2146,10 @@ export const getReceivables = async (req: Request, res: Response) => {
       }
     });
 
-    let rows = propertyIds.map((propertyId) => {
+    let rows = activePropertyIds.map((propertyId) => {
       const prop = propertyMap.get(propertyId);
       const owner = ownerMap.get(prop?.owner_id);
-      const propBookings = (bookings ?? []).filter((b: any) => b.property_id === propertyId);
+      const propBookings = scopedBookings.filter((b: any) => b.property_id === propertyId);
       const totalPayable = propBookings.reduce((sum: number, b: any) => sum + (parseFloat(b.service_fee) || 0), 0);
       const totalSettled = settledByProperty[propertyId] || 0;
       const outstanding = Math.max(0, Math.round((totalPayable - totalSettled) * 100) / 100);

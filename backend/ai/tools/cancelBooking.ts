@@ -20,10 +20,27 @@ export const cancelBookingTool: ToolDefinition<CancelBookingArgs, CancelBookingR
   description: "Cancel an existing booking",
   inputSchema: TOOL_INPUT_SCHEMA_TEXT.cancel_booking,
   run: async (args, context?: ToolContext) => {
-    const response = await backendApiClient.request<any>(`/api/bookings/${args.booking_id}/cancel`, {
-      method: "PATCH",
-      authToken: context?.authToken,
-    });
+    let response: any;
+
+    try {
+      response = await backendApiClient.request<any>(`/api/bookings/${args.booking_id}/cancel`, {
+        method: "PATCH",
+        authToken: context?.authToken,
+      });
+    } catch (error: any) {
+      const message = String(error?.message || "");
+      const routeMissing = /\b404\b|\b405\b|Cannot\s+PATCH|not\s+found|method\s+not\s+allowed/i.test(message);
+
+      if (!routeMissing) {
+        throw error;
+      }
+
+      response = await backendApiClient.request<any>(`/api/bookings/${args.booking_id}/status`, {
+        method: "POST",
+        authToken: context?.authToken,
+        body: { status: "cancelled" },
+      });
+    }
 
     const booking = response?.booking ?? response?.data ?? response;
     return {

@@ -21,13 +21,13 @@ const bookingInvalid = sanitizeToolArgs("create_booking", {
   user_id: "user-1",
   service_id: "svc-1",
   date: "03/16/2026",
-  time: "9am",
+  time: "noon",
 });
 const bookingValidation = validateToolArgs("create_booking", bookingInvalid);
 assert.equal(bookingValidation.ok, false);
 if (!bookingValidation.ok) {
   assert.ok(bookingValidation.errors.includes("date must be YYYY-MM-DD"));
-  assert.ok(bookingValidation.errors.includes("time must be HH:mm"));
+  assert.ok(bookingValidation.errors.includes("time must be HH:mm or h[:mm] am/pm"));
 }
 
 const revenueArgs = sanitizeToolArgs("get_provider_revenue", {

@@ -24,6 +24,7 @@ const PROTECTED_PREFIXES = [
 ];
 
 const PROTECTED_EXACT = new Set([
+  "/api/auth/signIn",
   "/api/auth/profile",
   "/api/auth/updateProfile",
   "/api/auth/uploadAvatar",

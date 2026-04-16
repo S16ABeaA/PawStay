@@ -8,13 +8,27 @@ router.get("/reverse", anonBrowseHourlyLimiter, async (req, res) => {
   try {
     const data = await reverseGeocode(lat, lng);
 
-    const city =
-      data.address.city ||
-      data.address.town ||
-      data.address.municipality ||
-      data.address.village;
+    const address = data?.address ?? {};
 
-    res.status(200).json({ city: `${city}`, displayName: data.display_name });
+    const sanitizeText = (value: unknown): string => {
+      const text = String(value ?? "").trim();
+      const lowered = text.toLowerCase();
+      if (!text || lowered === "undefined" || lowered === "null") return "";
+      return text;
+    };
+
+    const city =
+      sanitizeText(address.city) ||
+      sanitizeText(address.town) ||
+      sanitizeText(address.municipality) ||
+      sanitizeText(address.village) ||
+      sanitizeText(address.county) ||
+      sanitizeText(address.state) ||
+      sanitizeText(data?.display_name).split(",")[0].trim();
+
+    const displayName = sanitizeText(data?.display_name);
+
+    res.status(200).json({ city, displayName, address: displayName });
   } catch (err: any) {
     res.status(500).json({ message: err.message || "Reverse geocoding failed" });
   }

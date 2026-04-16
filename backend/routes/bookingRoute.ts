@@ -13,6 +13,7 @@ import {
   createBooking,
   listBookings,
   getBooking,
+  cancelBookingForUser,
   checkAvailability,
   checkPaymentStatus,
   adminCalendar,
@@ -84,6 +85,7 @@ router.get('/receivables', requireSuperAdmin, getReceivables);
 
 router.get("/", listBookings);
 router.get("/:id", getBooking);
+router.patch("/:id/cancel", bookingConfirmationLimiter, cancelBookingForUser);
 router.get("/:id/payment-status", checkPaymentStatus);
 router.post("/", bookingOpsHourlyLimiter, bookingConfirmationLimiter, createBooking);
 

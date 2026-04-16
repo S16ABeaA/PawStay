@@ -43,6 +43,13 @@ export const getBookingSummaryTool: ToolDefinition<GetBookingSummaryArgs, GetBoo
 
       // If booking_id is provided, retrieve that specific booking
       if (args.booking_id) {
+        if (!userId) {
+          return {
+            booking: null,
+            message: "User authentication is required to retrieve booking details.",
+          };
+        }
+
         const { data: bookings, error } = await supabaseAdmin
           .from("bookings")
           .select(
@@ -70,6 +77,7 @@ export const getBookingSummaryTool: ToolDefinition<GetBookingSummaryArgs, GetBoo
             `
           )
           .eq("id", args.booking_id)
+          .eq("user_id", userId)
           .eq("is_deleted", false)
           .limit(1);
 

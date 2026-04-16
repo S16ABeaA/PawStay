@@ -13,8 +13,10 @@ import { readImageTextTool } from "./ocr/readImageText";
 import { checkAvailabilityTool } from "./checkAvailability";
 import { getCancellationPolicyTool } from "./getCancellationPolicy";
 import { getBookingSummaryTool } from "./getBookingSummary";
+import { pawlyTools } from "./pawlyTools";
 
 export const defaultTools = [
+  ...pawlyTools,
   searchServicesTool,
   getPropertyServicesTool,
   createBookingTool,

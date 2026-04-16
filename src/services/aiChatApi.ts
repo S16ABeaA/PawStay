@@ -1,5 +1,16 @@
 const API_BASE_URL = import.meta.env.VITE_BACKEND_URL || "";
 
+const parseApiErrorDetail = async (res: Response): Promise<string> => {
+  let detail = `status ${res.status}`;
+  try {
+    const body = await res.json();
+    detail = body?.details ?? body?.error ?? body?.message ?? detail;
+  } catch {
+    // response wasn't JSON — keep status fallback
+  }
+  return detail;
+};
+
 export interface AiChatRequest {
   message: string;
   sessionId?: string;
@@ -118,13 +129,7 @@ export const aiChatApi = {
     });
 
     if (!res.ok) {
-      let detail = `status ${res.status}`;
-      try {
-        const body = await res.json();
-        detail = body?.error ?? body?.message ?? detail;
-      } catch {
-        // response wasn't JSON — use status text
-      }
+      const detail = await parseApiErrorDetail(res);
       throw new Error(detail);
     }
 
@@ -143,13 +148,7 @@ export const aiChatApi = {
     });
 
     if (!res.ok) {
-      let detail = `status ${res.status}`;
-      try {
-        const body = await res.json();
-        detail = body?.error ?? body?.message ?? detail;
-      } catch {
-        // response wasn't JSON — use status text
-      }
+      const detail = await parseApiErrorDetail(res);
       throw new Error(detail);
     }
 
@@ -165,13 +164,7 @@ export const aiChatApi = {
     });
 
     if (!res.ok) {
-      let detail = `status ${res.status}`;
-      try {
-        const body = await res.json();
-        detail = body?.error ?? body?.message ?? detail;
-      } catch {
-        // response wasn't JSON — use status text
-      }
+      const detail = await parseApiErrorDetail(res);
       throw new Error(detail);
     }
 
@@ -192,13 +185,7 @@ export const aiChatApi = {
     });
 
     if (!res.ok) {
-      let detail = `status ${res.status}`;
-      try {
-        const body = await res.json();
-        detail = body?.error ?? body?.message ?? detail;
-      } catch {
-        // response wasn't JSON — use status text
-      }
+      const detail = await parseApiErrorDetail(res);
       throw new Error(detail);
     }
 
