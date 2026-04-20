@@ -7,6 +7,7 @@ export const SUPPORTED_TOOL_NAMES: readonly ToolName[] = [
   "search_services",
   "get_property_services",
   "get_review_count",
+  "get_review_summary",
   "read_image_text",
   "get_pets",
   "get_pet_profile",
@@ -14,6 +15,8 @@ export const SUPPORTED_TOOL_NAMES: readonly ToolName[] = [
   "predict_next_booking",
   "create_booking",
   "get_user_bookings",
+  "analyze_booking_patterns",
+  "get_account_details",
   "cancel_booking",
   "check_availability",
   "get_cancellation_policy",
@@ -28,6 +31,7 @@ export const TOOL_INPUT_SCHEMA_TEXT: Record<ToolName, string> = {
     "{ location?: string, service_type?: string, checkin?: string, checkout?: string, timeSlot?: string, petType?: string|string[], dogSize?: string|string[], propertyType?: string, serviceCategory?: string, minPrice?: number, maxPrice?: number, rating?: number, amenities?: string|string[], keyword?: string, lat?: number, lng?: number, radiusKm?: number }",
   get_property_services: "{ service_type: 'hotel'|'vet'|'grooming'|'all', location?: string, keyword?: string }",
   get_review_count: "{ propertyId: string }",
+  get_review_summary: "{ propertyId: string }",
   read_image_text: "{ image_base64: string, language?: string }",
   get_pets: "{}",
   get_pet_profile: "{ pet_id: string }",
@@ -35,6 +39,8 @@ export const TOOL_INPUT_SCHEMA_TEXT: Record<ToolName, string> = {
   predict_next_booking: "{ pet_id?: string, pet_name?: string, include_breed_recommendations?: boolean, include_health_recommendations?: boolean, include_booking_pattern?: boolean }",
   create_booking: "{ user_id: string, service_id: string, date: string, time: string }",
   get_user_bookings: "{}",
+  analyze_booking_patterns: "{ user_id?: string }",
+  get_account_details: "{}",
   cancel_booking: "{ booking_id: string }",
   check_availability: "{ property_id: string, date: string, time_slots?: string[] }",
   get_cancellation_policy: "{ property_id?: string, property_name?: string }",
@@ -93,6 +99,16 @@ export const GEMINI_TOOL_SCHEMAS: Record<ToolName, GeminiParameterSchema> = {
       propertyId: {
         type: SchemaType.STRING,
         description: "Property ID to fetch review stats for",
+      },
+    },
+    required: ["propertyId"],
+  },
+  get_review_summary: {
+    type: SchemaType.OBJECT,
+    properties: {
+      propertyId: {
+        type: SchemaType.STRING,
+        description: "Property ID to generate review summary for",
       },
     },
     required: ["propertyId"],
@@ -174,6 +190,19 @@ export const GEMINI_TOOL_SCHEMAS: Record<ToolName, GeminiParameterSchema> = {
     required: ["user_id", "service_id", "date", "time"],
   },
   get_user_bookings: {
+    type: SchemaType.OBJECT,
+    properties: {},
+  },
+  analyze_booking_patterns: {
+    type: SchemaType.OBJECT,
+    properties: {
+      user_id: {
+        type: SchemaType.STRING,
+        description: "Optional user ID (uses authenticated user if not provided)",
+      },
+    },
+  },
+  get_account_details: {
     type: SchemaType.OBJECT,
     properties: {},
   },
@@ -410,6 +439,9 @@ export const validateToolArgs = (
       break;
     case "get_booking_summary":
       // booking_id is optional - if not provided, will retrieve most recent booking
+      break;
+    case "get_account_details":
+      // No required arguments for this tool
       break;
     case "get_provider_revenue":
       if (!requiredString("provider_id")) errors.push("provider_id is required");
