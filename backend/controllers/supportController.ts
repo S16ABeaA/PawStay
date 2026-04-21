@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import { supabaseAdmin } from "../config/supabaseAdmin";
 import { notificationModel } from "../models/notificationModel";
+import { logger } from "../utils/logger";
 
 /* ─── helpers ─── */
 const generateTicketNumber = () => {
@@ -66,8 +67,8 @@ export const supportController = {
         total: tickets.length,
       });
     } catch (err: any) {
-      console.error("getTicketStats error:", err);
-      return res.status(500).json({ error: err.message || "Failed to get ticket stats" });
+      logger.error("getTicketStats error", err);
+      return res.status(500).json({ error: "Internal server error." });
     }
   },
 
@@ -129,8 +130,8 @@ export const supportController = {
 
       return res.json(enriched);
     } catch (err: any) {
-      console.error("getTickets error:", err);
-      return res.status(500).json({ error: err.message || "Failed to get tickets" });
+      logger.error("getTickets error", err);
+      return res.status(500).json({ error: "Internal server error." });
     }
   },
 
@@ -200,8 +201,8 @@ export const supportController = {
         messages: enrichedMessages,
       });
     } catch (err: any) {
-      console.error("getTicketDetail error:", err);
-      return res.status(500).json({ error: err.message || "Failed to get ticket detail" });
+      logger.error("getTicketDetail error", err);
+      return res.status(500).json({ error: "Internal server error." });
     }
   },
 
@@ -293,8 +294,8 @@ export const supportController = {
 
       return res.status(201).json(ticket);
     } catch (err: any) {
-      console.error("createTicket error:", err);
-      return res.status(500).json({ error: err.message || "Failed to create ticket" });
+      logger.error("createTicket error", err);
+      return res.status(500).json({ error: "Internal server error." });
     }
   },
 
@@ -418,8 +419,8 @@ export const supportController = {
         sender_avatar: msg.profiles?.avatar_url || "",
       });
     } catch (err: any) {
-      console.error("sendMessage error:", err);
-      return res.status(500).json({ error: err.message || "Failed to send message" });
+      logger.error("sendMessage error", err);
+      return res.status(500).json({ error: "Internal server error." });
     }
   },
 
@@ -450,8 +451,8 @@ export const supportController = {
 
       return res.json(data);
     } catch (err: any) {
-      console.error("updateTicketStatus error:", err);
-      return res.status(500).json({ error: err.message || "Failed to update ticket status" });
+      logger.error("updateTicketStatus error", err);
+      return res.status(500).json({ error: "Internal server error." });
     }
   },
 
@@ -483,8 +484,8 @@ export const supportController = {
 
       return res.json({ indicators });
     } catch (err: any) {
-      console.error("getUnreadIndicators error:", err);
-      return res.status(500).json({ error: err.message || "Failed to get unread indicators" });
+      logger.error("getUnreadIndicators error", err);
+      return res.status(500).json({ error: "Internal server error." });
     }
   },
 };

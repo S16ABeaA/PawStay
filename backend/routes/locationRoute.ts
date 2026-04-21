@@ -1,9 +1,19 @@
 import express from "express";
 import { reverseGeocode, searchLocation } from "../services/locationService";
 import { anonBrowseHourlyLimiter, anonSearchHourlyLimiter } from "../middleware/rateLimiters";
+import { validateQuery } from "../middleware/inputValidation";
 const router = express.Router();
 
-router.get("/reverse", anonBrowseHourlyLimiter, async (req, res) => {
+const reverseQuerySchema = {
+  lat: { type: "number", required: true, min: -90, max: 90 },
+  lng: { type: "number", required: true, min: -180, max: 180 },
+} as const;
+
+const searchQuerySchema = {
+  q: { type: "string", required: true, minLength: 1, maxLength: 120, pattern: /^[a-zA-Z0-9\s,.'\-]*$/ },
+} as const;
+
+router.get("/reverse", anonBrowseHourlyLimiter, validateQuery(reverseQuerySchema), async (req, res) => {
   const { lat, lng } = req.query;
   try {
     const data = await reverseGeocode(lat, lng);
@@ -16,15 +26,12 @@ router.get("/reverse", anonBrowseHourlyLimiter, async (req, res) => {
 
     res.status(200).json({ city: `${city}`, displayName: data.display_name });
   } catch (err: any) {
-    res.status(500).json({ message: err.message || "Reverse geocoding failed" });
+    res.status(500).json({ message: "Reverse geocoding failed" });
   }
 });
 
-router.get("/search", anonSearchHourlyLimiter, async (req, res) => {
+router.get("/search", anonSearchHourlyLimiter, validateQuery(searchQuerySchema), async (req, res) => {
   const query = String(req.query.q || "").trim();
-  if (!query) {
-    return res.status(400).json({ message: "Missing query parameter 'q'" });
-  }
 
   try {
     const data = await searchLocation(query);
@@ -60,7 +67,7 @@ router.get("/search", anonSearchHourlyLimiter, async (req, res) => {
 
     res.status(200).json({ locations: unique });
   } catch (err: any) {
-    res.status(500).json({ message: err.message || "Location search failed" });
+    res.status(500).json({ message: "Location search failed" });
   }
 });
 

@@ -3,6 +3,7 @@ import { supabaseAdmin } from "../config/supabaseAdmin";
 import { supabaseClient } from "../config/supabaseClient";
 import { userModel } from "../models/userModel";
 import { clearAuthCookies, setAuthCookies } from "../middleware/authMiddleware";
+import { logger } from "../utils/logger";
 
 const isProd = process.env.NODE_ENV === "production";
 const sameSitePolicy: "lax" | "none" = isProd ? "none" : "lax";
@@ -14,8 +15,6 @@ export const authController = {
 
     const role = isPartnerSignup ? "proprietor" : "customer";
 
-    console.log("[signUp] resolved role:", role);
-
     if(!email || !password || !firstName || !lastName){
       return res.status(400).json({ message: "All fields are required." });
     }
@@ -24,9 +23,8 @@ export const authController = {
     if (!emailRegex.test(email)) {
         return res.status(400).json({ message: "Invalid email format." });
     }
-    // Validate password strength
-    if (password.length < 6) {
-        return res.status(400).json({ message: "Password must be at least 6 characters." });
+    if (!/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/.test(password)) {
+      return res.status(400).json({ error: "Password must be at least 8 characters with uppercase, lowercase, number, and special character." });
     }
 
     try {
@@ -34,16 +32,13 @@ export const authController = {
       const { data: existingUser } = await supabaseAdmin.auth.admin.listUsers({ perPage: 1000 });
       const userExists = existingUser?.users?.some(u => u.email === email);
       if (userExists) {
-          return res.status(409).json({ message: "User with this email already exists." });
+          logger.warn("signUp failed", { code: 409 });
+          return res.status(400).json({ error: "Unable to process signup." });
       }
 
       // Test 1: List all users (admin only)
       // const { data: users, error: usersError } = await supabaseAdmin.auth.admin.listUsers();
       // console.log("Admin users test:", { users: users?.users?.length, usersError });
-
-      // /*
-      console.log("Creating user in Auth...");
-      // */
 
       // Create user in Supabase Auth
       const { data: signUpData, error: signUpError } = await supabaseAdmin.auth.admin.createUser({
@@ -53,9 +48,10 @@ export const authController = {
         // email_confirm: true, // Skip email confirmation for testing
         user_metadata: { firstName, lastName, role }
       });
-      if (signUpError) return res.status(400).json({ error: signUpError.message });
-
-      console.log("SignUpData:", signUpData);
+      if (signUpError) {
+        logger.warn("signUp failed", { code: (signUpError as any)?.status });
+        return res.status(500).json({ error: "Internal server error." });
+      }
 
       const userId = signUpData.user?.id;
       if (!userId) throw new Error("User ID not returned from Supabase");
@@ -73,7 +69,7 @@ export const authController = {
         );
 
       if (profileUpsertError) {
-        console.error("[signUp] Profile upsert failed:", profileUpsertError.message);
+        logger.warn("auth failed", { code: (profileUpsertError as any)?.status });
         await supabaseAdmin.auth.admin.deleteUser(userId);
         return res.status(500).json({ error: "Failed to create profile." });
       }
@@ -88,7 +84,7 @@ export const authController = {
       //   await supabaseAdmin.auth.admin.deleteUser(signUpData.user.id);
       //   console.log("Rolled back Auth user due to error:", err.message);
       // }
-      console.error("SignUp Error:", err);
+      logger.warn("signUp failed", { code: err?.status });
       return res.status(500).json({ error: "Internal server error." });
     }
   },
@@ -101,12 +97,12 @@ export const authController = {
     const user = users?.users.find(u => u.email === email);
 
     if (!user) {
-      return res.status(404).json({ message: "User not found." });
+      return res.status(401).json({ error: "Invalid credentials." });
     }
 
     // Check if already confirmed
     if (user.confirmed_at) {
-      return res.status(400).json({ message: "Email is already confirmed." });
+      return res.status(401).json({ error: "Invalid credentials." });
     }
 
     // check last resend timestamp from your DB
@@ -127,7 +123,7 @@ export const authController = {
       });
 
       if (error) {
-        return res.status(500).json({ message: error.message });
+        return res.status(500).json({ message: "Unable to resend confirmation email right now." });
       }
 
       // update last resend timestamp in DB
@@ -135,7 +131,7 @@ export const authController = {
 
       return res.status(200).json({ message: "Confirmation email resent successfully." });
     } catch (err: any) {
-      console.error("Resend Confirmation Error:", err);
+      logger.warn("resendConfirmation failed", { code: err?.status });
       return res.status(500).json({ message: "Internal server error." });
     }
   },
@@ -148,10 +144,13 @@ export const authController = {
 
     try {
       const { data: signInData, error: signInError } = await supabaseClient.auth.signInWithPassword({ email, password });
-      if (signInError) return res.status(401).json({ error: signInError.message });
+      if (signInError) {
+        logger.warn("signIn failed", { code: signInError.status });
+        return res.status(401).json({ error: "Invalid credentials." });
+      }
 
       if (!signInData.user?.email_confirmed_at) {
-        return res.status(403).json({ message: "Please confirm your email before signing in." });
+        return res.status(401).json({ error: "Invalid credentials." });
       }
 
       const userId = signInData.user.id;
@@ -177,7 +176,8 @@ export const authController = {
       };
       return res.json({ user });
     } catch (err: any) {
-      res.status(500).json({ error: err.message });
+      logger.warn("signIn failed", { code: err?.status });
+      return res.status(401).json({ error: "Invalid credentials." });
     }
   },
 
@@ -195,13 +195,15 @@ export const authController = {
       });
 
       if (error) {
-        return res.status(400).json({ message: error.message });
+        logger.warn("signInWithGoogle failed", { code: (error as any)?.status });
+        return res.status(401).json({ error: "Invalid credentials." });
       }
 
       return res.json({ url: data.url });
 
     } catch (err: any) {
-      return res.status(500).json({ message: err.message });
+      logger.warn("signInWithGoogle failed", { code: err?.status });
+      return res.status(500).json({ error: "Internal server error." });
     }
   },
 
@@ -228,28 +230,18 @@ export const authController = {
       // Set cookies
       setAuthCookies(res, data.session);
       
-      // Get user info for welcome message
-      const user = data.session.user;
-      const userEmail = user.email || "";
-
-      // Set user info
+      // Set user session marker
       if (data.session.user) {
-        res.cookie("sb-user", JSON.stringify({
-          id: data.session.user.id,
-          email: data.session.user.email,
-          name: data.session.user.user_metadata?.full_name || data.session.user.email,
-          avatar: data.session.user.user_metadata?.avatar_url,
-        }), {
-          httpOnly: false,
-          secure: isProd,
-          sameSite: sameSitePolicy,
+        const userId = data.session.user.id;
+        res.cookie("session", userId, {
+          httpOnly: true,
+          secure: process.env.NODE_ENV === "production",
+          sameSite: "lax",
           maxAge: 7 * 24 * 60 * 60 * 1000,
-          path: "/",
         });
       }
       
-      return res.redirect(`${process.env.FRONTEND_URL || "http://localhost:8080"}/signin?` +
-      `oauth_success=true&email=${encodeURIComponent(userEmail)}`);
+      return res.redirect(`${process.env.FRONTEND_URL || "http://localhost:8080"}/oauth/callback`);
 
     } catch (err: any) {
       return res.redirect(`${process.env.FRONTEND_URL}/signin?error=server_error`);
@@ -271,15 +263,16 @@ export const authController = {
       });
 
       if (error) {
-        return res.status(400).json({ message: error.message });
+        logger.warn("forgotPassword failed", { code: (error as any)?.status });
+        return res.status(500).json({ error: "Internal server error." });
       }
 
       return res.status(200).json({
         message: "Password reset email sent successfully.",
       });
     } catch (err: any) {
-      console.error("Forgot Password Error:", err);
-      return res.status(500).json({ message: "Internal server error." });
+      logger.warn("forgotPassword failed", { code: err?.status });
+      return res.status(500).json({ error: "Internal server error." });
     }
   },
 
@@ -292,10 +285,6 @@ export const authController = {
     try{
       const userProfile = await userModel.getUserById(user.id);
       
-      // /*
-      console.log("[BACKEND] Fetched user profile:", userProfile?.id);
-      // */
-
       if (!userProfile) {
         return res.status(404).json({ error: "User not found" });
       }
@@ -314,8 +303,8 @@ export const authController = {
         }
       });
     }catch(err: any){
-      console.error("[BACKEND] Error in getUserById:", err.message); 
-      res.status(500).json({ error: err.message });
+      logger.error("getProfile error", err);
+      res.status(500).json({ error: "Internal server error." });
     }
   },
 
@@ -354,7 +343,7 @@ export const authController = {
         },
       });
     } catch (err: any) {
-      console.error("[BACKEND] Error updating profile:", err.message);
+      logger.warn("updateProfile failed", { code: err?.status });
       return res.status(500).json({ error: "Failed to update profile." });
     }
   },
@@ -394,7 +383,7 @@ export const authController = {
         });
 
       if (uploadError) {
-        console.error("[BACKEND] Storage upload error:", uploadError.message);
+        logger.warn("auth failed", { code: (uploadError as any)?.status });
         return res.status(500).json({ error: "Failed to upload avatar." });
       }
 
@@ -414,7 +403,7 @@ export const authController = {
         avatar_url: avatarUrl,
       });
     } catch (err: any) {
-      console.error("[BACKEND] Error uploading avatar:", err.message);
+      logger.warn("auth failed", { code: err?.status });
       return res.status(500).json({ error: "Failed to upload avatar." });
     }
   },
@@ -430,8 +419,14 @@ export const authController = {
         supabaseAdmin.auth.admin.listUsers({ perPage: 1000 }),
       ]);
 
-      if (profilesResult.error) return res.status(500).json({ error: profilesResult.error.message });
-      if (authResult.error)     return res.status(500).json({ error: authResult.error.message });
+      if (profilesResult.error) {
+        logger.warn("listUsers failed", { code: (profilesResult.error as any)?.status });
+        return res.status(500).json({ error: "Internal server error." });
+      }
+      if (authResult.error) {
+        logger.warn("listUsers failed", { code: (authResult.error as any)?.status });
+        return res.status(500).json({ error: "Internal server error." });
+      }
 
       const authMap = new Map(
         authResult.data.users.map((u) => [u.id, u])
@@ -459,14 +454,17 @@ export const authController = {
       return res.status(403).json({ error: "Forbidden." });
     }
     const { id } = req.params;
-    const { ban } = req.body; // true = suspend, false = reinstate
+    const ban = req.body?.ban ?? req.body?.banned;
     const userId = Array.isArray(id) ? id[0] : id;
     if (!userId) return res.status(400).json({ error: "User id is required." });
     try {
       const { error } = await supabaseAdmin.auth.admin.updateUserById(userId, {
         ban_duration: ban ? "876000h" : "none",
       });
-      if (error) return res.status(500).json({ error: error.message });
+      if (error) {
+        logger.warn("banUser failed", { code: (error as any)?.status });
+        return res.status(500).json({ error: "Internal server error." });
+      }
       console.log(`[banUser] ${requester.email} ${ban ? "suspended" : "reinstated"} user ${id}`);
       return res.json({ message: ban ? "User suspended." : "User reinstated." });
     } catch (err: any) {
@@ -489,7 +487,10 @@ export const authController = {
     try {
       // Delete from Supabase Auth (profiles cascade via FK if set, else clean up explicitly)
       const { error: authError } = await supabaseAdmin.auth.admin.deleteUser(userId);
-      if (authError) return res.status(500).json({ error: authError.message });
+      if (authError) {
+        logger.warn("deleteUser failed", { code: (authError as any)?.status });
+        return res.status(500).json({ error: "Internal server error." });
+      }
       // Explicit profile cleanup in case FK cascade is not configured
       await supabaseAdmin.from("profiles").delete().eq("id", id);
       console.log(`[deleteUser] ${requester.email} deleted user ${id}`);
@@ -506,34 +507,42 @@ export const authController = {
       return res.status(403).json({ error: "Forbidden: super admin access required." });
     }
 
-    const { email, role } = req.body;
+    const { email: rawEmailOrId, user_id, role } = req.body;
+    const emailOrId = user_id || rawEmailOrId;
     const allowedRoles = ["customer", "proprietor", "admin", "super_admin"];
 
-    if (!email || !role) {
-      return res.status(400).json({ error: "email and role are required." });
+    if (!emailOrId || !role) {
+      return res.status(400).json({ error: "user_id and role are required." });
     }
     if (!allowedRoles.includes(role)) {
       return res.status(400).json({ error: `Invalid role. Must be one of: ${allowedRoles.join(", ")}.` });
     }
 
     try {
-      // Look up the profile by email first (avoids listUsers pagination bug)
-      const { data: profile, error: profileLookupError } = await supabaseAdmin
-        .from("profiles")
-        .select("id")
-        .eq("email", email)
-        .eq("is_deleted", false)
-        .maybeSingle();
+      const candidate = String(emailOrId);
+      const isUuidCandidate = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(candidate);
 
-      if (profileLookupError) return res.status(500).json({ error: profileLookupError.message });
+      const profileQuery = supabaseAdmin
+        .from("profiles")
+        .select("id, email")
+        .eq("is_deleted", false);
+
+      const { data: profile, error: profileLookupError } = await (isUuidCandidate
+        ? profileQuery.eq("id", candidate).maybeSingle()
+        : profileQuery.eq("email", candidate).maybeSingle());
+
+      if (profileLookupError) {
+        logger.warn("promoteUser failed", { code: (profileLookupError as any)?.status });
+        return res.status(500).json({ error: "Internal server error." });
+      }
       if (!profile) {
-        return res.status(404).json({ error: `No user found with email: ${email}` });
+        return res.status(404).json({ error: `No user found for identifier: ${candidate}` });
       }
 
       // Fetch the auth user by ID (reliable, no pagination)
       const { data: authData, error: authError } = await supabaseAdmin.auth.admin.getUserById(profile.id);
       if (authError || !authData?.user) {
-        return res.status(404).json({ error: `Auth record not found for: ${email}` });
+        return res.status(404).json({ error: `Auth record not found for identifier: ${candidate}` });
       }
       const authUser = authData.user;
 
@@ -544,7 +553,8 @@ export const authController = {
         .eq("id", authUser.id);
 
       if (profileError) {
-        return res.status(500).json({ error: "Failed to update profile role: " + profileError.message });
+        logger.warn("promoteUser failed", { code: (profileError as any)?.status });
+        return res.status(500).json({ error: "Internal server error." });
       }
 
       // Update user_metadata in Supabase Auth
@@ -553,11 +563,13 @@ export const authController = {
       });
 
       if (metaError) {
-        return res.status(500).json({ error: "Failed to update auth metadata: " + metaError.message });
+        logger.warn("promoteUser failed", { code: (metaError as any)?.status });
+        return res.status(500).json({ error: "Internal server error." });
       }
 
-      console.log(`[promoteUser] ${requester.email} promoted ${email} to ${role}`);
-      return res.json({ message: `User ${email} has been promoted to ${role}.` });
+      const resolvedEmail = profile.email || authUser.email || candidate;
+      console.log(`[promoteUser] ${requester.email} promoted ${resolvedEmail} to ${role}`);
+      return res.json({ message: `User ${resolvedEmail} has been promoted to ${role}.` });
     } catch (err: any) {
       console.error("[promoteUser] Error:", err);
       return res.status(500).json({ error: "Internal server error." });

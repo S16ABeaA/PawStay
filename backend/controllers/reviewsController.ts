@@ -70,7 +70,7 @@ export const reviewsController = {
       res.status(200).json({ reviews: out, avgRating: Number(avgRating.toFixed(1)), total: out.length, pendingReplies });
     } catch (err: any) {
       console.error("[myReviews]", err);
-      res.status(500).json({ message: err.message || "Failed to fetch reviews" });
+      res.status(500).json({ message: "Internal server error." });
     }
   },
 
@@ -123,7 +123,7 @@ export const reviewsController = {
       res.status(200).json({ success: true, review: data });
     } catch (err: any) {
       console.error("[replyToReview]", err);
-      res.status(500).json({ message: err.message || "Failed to submit reply" });
+      res.status(500).json({ message: "Internal server error." });
     }
   },
 
@@ -247,7 +247,7 @@ export const reviewsController = {
       res.status(201).json({ success: true, review });
     } catch (err: any) {
       console.error("[createReview]", err);
-      res.status(500).json({ message: err.message || "Failed to create review" });
+      res.status(500).json({ message: "Internal server error." });
     }
   },
 
@@ -298,7 +298,7 @@ export const reviewsController = {
       res.status(200).json({ reviews: out, avgRating, total: out.length });
     } catch (err: any) {
       console.error("[getPropertyReviews]", err);
-      res.status(500).json({ message: err.message || "Failed to fetch reviews" });
+      res.status(500).json({ message: "Internal server error." });
     }
   },
 
@@ -319,7 +319,7 @@ export const reviewsController = {
       res.status(200).json({ hasReview: !!data, review: data || null });
     } catch (err: any) {
       console.error("[checkReview]", err);
-      res.status(500).json({ message: err.message || "Failed to check review" });
+      res.status(500).json({ message: "Internal server error." });
     }
   },
 };

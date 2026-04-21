@@ -11,6 +11,7 @@ import {
 } from "../services/petCareNotificationJobs";
 import { supabaseAdmin } from "../config/supabaseAdmin";
 import { extractTextFromDocumentBuffer } from "../services/ocrService";
+import { logger } from "../utils/logger";
 
 const toDate = (value: unknown): Date | null => {
   const raw = String(value ?? "").trim();
@@ -223,8 +224,8 @@ export const createPet = async (req: Request, res: Response) => {
 
     return res.status(201).json({ pet });
   } catch (err: any) {
-    console.error("createPet error:", err);
-    return res.status(500).json({ error: "Failed to create pet.", details: err?.message || err });
+    logger.error("createPet error", err);
+    return res.status(500).json({ error: "Internal server error." });
   }
 };
 
@@ -364,8 +365,8 @@ export const processPetHealthRecord = async (req: Request, res: Response) => {
       validation_status: saved.validation_status,
     });
   } catch (err: any) {
-    console.error("processPetHealthRecord error:", err);
-    return res.status(500).json({ error: err.message || "Failed to process pet health record" });
+    logger.error("processPetHealthRecord error", err);
+    return res.status(500).json({ error: "Internal server error." });
   }
 };
 
@@ -388,8 +389,8 @@ export const getLatestPetHealthRecord = async (req: Request, res: Response) => {
       created_at: latest.created_at,
     });
   } catch (err: any) {
-    console.error("getLatestPetHealthRecord error:", err);
-    return res.status(500).json({ error: err.message || "Failed to fetch pet health record" });
+    logger.error("getLatestPetHealthRecord error", err);
+    return res.status(500).json({ error: "Internal server error." });
   }
 };
 
@@ -431,8 +432,8 @@ export const downloadLatestPetHealthRecord = async (req: Request, res: Response)
 
     return res.status(400).json({ error: "Invalid format. Use ?format=json or ?format=pdf" });
   } catch (err: any) {
-    console.error("downloadLatestPetHealthRecord error:", err);
-    return res.status(500).json({ error: err.message || "Failed to download pet health record" });
+    logger.error("downloadLatestPetHealthRecord error", err);
+    return res.status(500).json({ error: "Internal server error." });
   }
 };
 
@@ -753,8 +754,8 @@ export const getPetDiagnosticHistory = async (req: Request, res: Response) => {
       })),
     });
   } catch (err: any) {
-    console.error("getPetDiagnosticHistory error:", err);
-    return res.status(500).json({ error: err.message || "Failed to fetch diagnostic history" });
+    logger.error("getPetDiagnosticHistory error", err);
+    return res.status(500).json({ error: "Internal server error." });
   }
 };
 
@@ -788,8 +789,8 @@ export const getPetDiagnosticVersion = async (req: Request, res: Response) => {
       ocr_confidence_score: record.ocr_confidence_score,
     });
   } catch (err: any) {
-    console.error("getPetDiagnosticVersion error:", err);
-    return res.status(500).json({ error: err.message || "Failed to fetch diagnostic report" });
+    logger.error("getPetDiagnosticVersion error", err);
+    return res.status(500).json({ error: "Internal server error." });
   }
 };
 
@@ -822,8 +823,8 @@ export const downloadPetDiagnosticVersion = async (req: Request, res: Response) 
 
     return res.status(400).json({ error: "Invalid format. Use ?format=json or ?format=pdf" });
   } catch (err: any) {
-    console.error("downloadPetDiagnosticVersion error:", err);
-    return res.status(500).json({ error: err.message || "Failed to download diagnostic report" });
+    logger.error("downloadPetDiagnosticVersion error", err);
+    return res.status(500).json({ error: "Internal server error." });
   }
 };
 
@@ -850,8 +851,8 @@ export const previewPetDiagnostic = async (req: Request, res: Response) => {
       saved: false,
     });
   } catch (err: any) {
-    console.error("previewPetDiagnostic error:", err);
-    return res.status(500).json({ error: err.message || "Failed to preview pet diagnostic" });
+    logger.error("previewPetDiagnostic error", err);
+    return res.status(500).json({ error: "Internal server error." });
   }
 };
 
@@ -895,8 +896,8 @@ export const savePetDiagnostic = async (req: Request, res: Response) => {
       saved: true,
     });
   } catch (err: any) {
-    console.error("savePetDiagnostic error:", err);
-    return res.status(500).json({ error: err.message || "Failed to save pet diagnostic" });
+    logger.error("savePetDiagnostic error", err);
+    return res.status(500).json({ error: "Internal server error." });
   }
 };
 
@@ -1268,7 +1269,7 @@ export const getPetServiceHistoryInsights = async (req: Request, res: Response) 
       bookings: bookingSummaries,
     });
   } catch (err: any) {
-    console.error("getPetServiceHistoryInsights error:", err);
-    return res.status(500).json({ error: err?.message || "Failed to analyze service history records" });
+    logger.error("[pet] service history insights error", err);
+    return res.status(500).json({ error: "Internal server error." });
   }
 };

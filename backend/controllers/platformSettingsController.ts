@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import { supabaseAdmin } from "../config/supabaseAdmin";
+import { logger } from "../utils/logger";
 
 export const platformSettingsController = {
   getPlatformSettings: async (_req: Request, res: Response) => {
@@ -12,8 +13,8 @@ export const platformSettingsController = {
       if (error) throw error;
       return res.json({ success: true, settings: data });
     } catch (err: any) {
-      console.error("[PlatformSettings] get error:", err.message);
-      return res.status(500).json({ error: err.message });
+      logger.error("[PlatformSettings] get error", err);
+      return res.status(500).json({ error: "Internal server error." });
     }
   },
 
@@ -34,8 +35,8 @@ export const platformSettingsController = {
       if (error) throw error;
       return res.json({ success: true });
     } catch (err: any) {
-      console.error("[PlatformSettings] update error:", err.message);
-      return res.status(500).json({ error: err.message });
+      logger.error("[PlatformSettings] update error", err);
+      return res.status(500).json({ error: "Internal server error." });
     }
   },
 };

@@ -1,6 +1,6 @@
 import { NextFunction, Request, Response } from "express";
 
-type PrimitiveType = "string" | "number" | "boolean" | "email" | "uuid";
+type PrimitiveType = "string" | "number" | "boolean" | "email" | "uuid" | "url";
 
 type FieldRule = {
   type: PrimitiveType | "enum" | "string[]";
@@ -118,6 +118,20 @@ const validateField = (key: string, value: unknown, rule: FieldRule): { ok: bool
     const sanitized = value.trim();
     if (!uuidRegex.test(sanitized)) return { ok: false, error: `${key} must be a valid UUID` };
     return { ok: true, value: sanitized };
+  }
+
+  if (rule.type === "url") {
+    if (typeof value !== "string") return { ok: false, error: `${key} must be a string` };
+    try {
+      const trimmed = value.trim();
+      const parsed = new URL(trimmed);
+      if (!["http:", "https:"].includes(parsed.protocol)) {
+        return { ok: false, error: `${key} must be http or https` };
+      }
+      return { ok: true, value: trimmed };
+    } catch {
+      return { ok: false, error: `${key} must be a valid URL` };
+    }
   }
 
   if (rule.type === "number") {

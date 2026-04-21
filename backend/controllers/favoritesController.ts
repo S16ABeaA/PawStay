@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import { addFavorites, removeFavorites, getFavorites, checkFavorite } from "../services/favoriteService";
+import { logger } from "../utils/logger";
 
 
 export const favoritesController = {
@@ -24,8 +25,8 @@ export const favoritesController = {
       if (err?.code === "23505") {
         return res.status(409).json({ message: "Already in favorites" });
       }
-      console.error("[addFavorite]", err);
-      return res.status(500).json({ message: err.message || "Failed to add favorite" });
+      logger.error("[addFavorite]", err);
+      return res.status(500).json({ error: "Internal server error." });
     }
   },
 
@@ -46,8 +47,8 @@ export const favoritesController = {
 
       return res.status(200).json({ message: "Favorite removed successfully" });
     } catch (err: any) {
-      console.error("[removeFavorite]", err);
-      return res.status(500).json({ message: err.message || "Failed to remove favorite" });
+      logger.error("[removeFavorite]", err);
+      return res.status(500).json({ error: "Internal server error." });
     }
   },
 
@@ -63,10 +64,8 @@ export const favoritesController = {
 
       return res.status(200).json({ favorites });
     } catch (err: any) {
-      console.error("[getFavorites]", err);
-      return res
-        .status(500)
-        .json({ message: err.message || "Failed to get favorites" });
+      logger.error("[getFavorites]", err);
+      return res.status(500).json({ error: "Internal server error." });
     }
   },
 
@@ -83,8 +82,8 @@ export const favoritesController = {
 
       return res.status(200).json({ isFavorited });
     } catch (err: any) {
-      console.error("[checkFavorite]", err);
-      return res.status(500).json({ message: err.message || "Failed to check favorite" });
+      logger.error("[checkFavorite]", err);
+      return res.status(500).json({ error: "Internal server error." });
     }
   },
 }
