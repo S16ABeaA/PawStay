@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import { notificationModel } from "../models/notificationModel";
+import { logger } from "../utils/logger";
 
 /** GET /api/notifications — list notifications for the authenticated user */
 export const listNotifications = async (req: Request, res: Response) => {
@@ -13,8 +14,8 @@ export const listNotifications = async (req: Request, res: Response) => {
     const { notifications, total } = await notificationModel.listByUser(userId, { limit, offset });
     return res.json({ notifications, total, limit, offset });
   } catch (err: any) {
-    console.error("listNotifications error:", err);
-    return res.status(500).json({ error: err.message || "Failed to fetch notifications" });
+    logger.error("listNotifications error", err);
+    return res.status(500).json({ error: "Internal server error." });
   }
 };
 
@@ -27,8 +28,8 @@ export const getUnreadCount = async (req: Request, res: Response) => {
     const count = await notificationModel.unreadCount(userId);
     return res.json({ count });
   } catch (err: any) {
-    console.error("getUnreadCount error:", err);
-    return res.status(500).json({ error: err.message || "Failed to fetch unread count" });
+    logger.error("getUnreadCount error", err);
+    return res.status(500).json({ error: "Internal server error." });
   }
 };
 
@@ -64,8 +65,8 @@ export const createNotification = async (req: Request, res: Response) => {
 
     return res.status(201).json({ notification });
   } catch (err: any) {
-    console.error("createNotification error:", err);
-    return res.status(500).json({ error: err.message || "Failed to create notification" });
+    logger.error("createNotification error", err);
+    return res.status(500).json({ error: "Internal server error." });
   }
 };
 
@@ -78,8 +79,8 @@ export const markAsRead = async (req: Request, res: Response) => {
     const notification = await notificationModel.markRead(req.params.id as string, userId);
     return res.json({ notification });
   } catch (err: any) {
-    console.error("markAsRead error:", err);
-    return res.status(500).json({ error: err.message || "Failed to mark notification as read" });
+    logger.error("markAsRead error", err);
+    return res.status(500).json({ error: "Internal server error." });
   }
 };
 
@@ -92,8 +93,8 @@ export const markAllAsRead = async (req: Request, res: Response) => {
     const count = await notificationModel.markAllRead(userId);
     return res.json({ updated: count });
   } catch (err: any) {
-    console.error("markAllAsRead error:", err);
-    return res.status(500).json({ error: err.message || "Failed to mark all as read" });
+    logger.error("markAllAsRead error", err);
+    return res.status(500).json({ error: "Internal server error." });
   }
 };
 
@@ -106,8 +107,8 @@ export const deleteNotification = async (req: Request, res: Response) => {
     await notificationModel.remove(req.params.id as string, userId);
     return res.json({ success: true });
   } catch (err: any) {
-    console.error("deleteNotification error:", err);
-    return res.status(500).json({ error: err.message || "Failed to delete notification" });
+    logger.error("deleteNotification error", err);
+    return res.status(500).json({ error: "Internal server error." });
   }
 };
 
@@ -120,7 +121,7 @@ export const deleteAllNotifications = async (req: Request, res: Response) => {
     const count = await notificationModel.removeAll(userId);
     return res.json({ deleted: count });
   } catch (err: any) {
-    console.error("deleteAllNotifications error:", err);
-    return res.status(500).json({ error: err.message || "Failed to delete notifications" });
+    logger.error("deleteAllNotifications error", err);
+    return res.status(500).json({ error: "Internal server error." });
   }
 };

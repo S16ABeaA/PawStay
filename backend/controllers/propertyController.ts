@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import { getProperties, getPropertyById, HotelFilters } from "../services/property.service";
 import { supabaseAdmin } from "../config/supabaseAdmin";
+import { logger } from "../utils/logger";
 
 const normalizeText = (value: unknown): string =>
   String(value || "")
@@ -88,8 +89,8 @@ export const propertyController = {
       // Return JSON response
       res.status(200).json({ properties });
     } catch (err: any) {
-      //console.error("[searchProperties]", err);
-      res.status(500).json({ message: err.message || "Failed to fetch properties" });
+      logger.error("searchProperties error", err);
+      return res.status(500).json({ error: "Internal server error." });
     }
   },
 
@@ -102,7 +103,8 @@ export const propertyController = {
       const properties = shuffled.slice(0, limit);
       res.status(200).json({ properties });
     } catch (err: any) {
-      res.status(500).json({ message: err.message || "Failed to fetch random properties" });
+      logger.error("randomProperties error", err);
+      return res.status(500).json({ error: "Internal server error." });
     }
   },
 
@@ -228,8 +230,8 @@ export const propertyController = {
       scored.sort((a, b) => b.score - a.score);
       return res.status(200).json({ properties: scored.slice(0, limit).map((row) => row.property) });
     } catch (err: any) {
-      console.error("[recommendedProperties]", err);
-      return res.status(500).json({ message: err.message || "Failed to fetch recommended properties" });
+      logger.error("[recommendedProperties]", err);
+      return res.status(500).json({ error: "Internal server error." });
     }
   },
 
@@ -249,7 +251,8 @@ export const propertyController = {
       }
       res.status(200).json({ property });
     } catch (err: any) {
-      res.status(500).json({ message: err.message || "Failed to fetch property" });
+      logger.error("getById error", err);
+      return res.status(500).json({ error: "Internal server error." });
     }
   },
 
@@ -294,8 +297,8 @@ export const propertyController = {
         paymayaNumber: paymentOpts.paymaya_number || null,
       });
     } catch (err: any) {
-      console.error("getPaymentOptions error:", err);
-      res.status(500).json({ message: err.message || "Failed to fetch payment options" });
+      logger.error("getPaymentOptions error", err);
+      return res.status(500).json({ error: "Internal server error." });
     }
   },
 
@@ -378,8 +381,8 @@ export const propertyController = {
         message: "Cancellation policy retrieved successfully",
       });
     } catch (err: any) {
-      console.error("getCancellationPolicy error:", err);
-      res.status(500).json({ message: err.message || "Failed to fetch cancellation policy" });
+      logger.error("[property] unexpected error", err);
+      return res.status(500).json({ error: "Internal server error." });
     }
   },
 
@@ -424,7 +427,8 @@ export const propertyController = {
 
       res.status(200).json({ reviews: data ?? [] });
     } catch (err: any) {
-      res.status(500).json({ message: err.message || "Failed to fetch reviews" });
+      logger.error("[property] unexpected error", err);
+      return res.status(500).json({ error: "Internal server error." });
     }
   },
 
@@ -477,8 +481,8 @@ export const propertyController = {
 
       res.status(200).json({ properties: out });
     } catch (err: any) {
-      console.error("[myProperties]", err);
-      res.status(500).json({ message: err.message || "Failed to fetch user properties" });
+      logger.error("[property] unexpected error", err);
+      return res.status(500).json({ error: "Internal server error." });
     }
   },
   seedMyProperty: async (req: Request, res: Response) => {
@@ -528,8 +532,8 @@ export const propertyController = {
 
       res.status(200).json({ success: true, propertyId: property.id, name: property.name });
     } catch (err: any) {
-      console.error('[seedMyProperty]', err);
-      res.status(500).json({ message: err.message || 'Failed to seed property' });
+      logger.error("seedMyProperty error", err);
+      return res.status(500).json({ error: "Internal server error." });
     }
   },
   dashboardStats: async (req: Request, res: Response) => {
@@ -622,8 +626,8 @@ export const propertyController = {
         occupancy,
       });
     } catch (err: any) {
-      console.error('[dashboardStats]', err);
-      res.status(500).json({ message: err.message || 'Failed to compute dashboard stats' });
+      logger.error("dashboardStats error", err);
+      return res.status(500).json({ error: "Internal server error." });
     }
   },
 
@@ -663,8 +667,8 @@ export const propertyController = {
       if (error) throw error;
       res.status(200).json({ services: data || [] });
     } catch (err: any) {
-      console.error('[getServices]', err);
-      res.status(500).json({ message: err.message || 'Failed to fetch services' });
+      logger.error("[property] unexpected error", err);
+      return res.status(500).json({ error: "Internal server error." });
     }
   },
 
@@ -737,8 +741,8 @@ export const propertyController = {
       if (error) throw error;
       res.status(201).json({ service: data });
     } catch (err: any) {
-      console.error('[createService]', err);
-      res.status(500).json({ message: err.message || 'Failed to create service' });
+      logger.error("[property] unexpected error", err);
+      return res.status(500).json({ error: "Internal server error." });
     }
   },
 
@@ -770,8 +774,8 @@ export const propertyController = {
       if (error) throw error;
       res.status(200).json({ service: data });
     } catch (err: any) {
-      console.error('[updateService]', err);
-      res.status(500).json({ message: err.message || 'Failed to update service' });
+      logger.error("[property] unexpected error", err);
+      return res.status(500).json({ error: "Internal server error." });
     }
   },
 
@@ -803,8 +807,8 @@ export const propertyController = {
       if (error) throw error;
       res.status(200).json({ service: data });
     } catch (err: any) {
-      console.error('[deleteService]', err);
-      res.status(500).json({ message: err.message || 'Failed to delete service' });
+      logger.error("[property] unexpected error", err);
+      return res.status(500).json({ error: "Internal server error." });
     }
   },
 };

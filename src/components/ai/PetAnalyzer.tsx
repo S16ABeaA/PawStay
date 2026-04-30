@@ -626,14 +626,14 @@ export default function PetAnalyzer() {
         sessionId: sessionIdRef.current,
         detectedSpecies,
         primaryPrediction: finalPrimaryBreed,
-        primaryConfidence: finalPrimaryConfidence,
+        primaryConfidence: finalPrimaryConfidence / 100,
         alternatives: finalAlternatives,
         descriptionHint: buildDescriptionFromClassifier(finalPrimaryBreed),
         healthCheck: healthAssessment
           ? {
               status: healthAssessment.status,
               injured: healthAssessment.injured,
-              confidence: healthAssessment.confidence,
+              confidence: healthAssessment.confidence > 1 ? healthAssessment.confidence / 100 : healthAssessment.confidence,
               summary: healthAssessment.summary,
               visible_signs: healthAssessment.visible_signs,
               recommended_actions: healthAssessment.recommended_actions,

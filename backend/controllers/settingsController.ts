@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import { supabaseAdmin } from "../config/supabaseAdmin";
+import { logger } from "../utils/logger";
 
 // ─── Helper: get a specific property (or first) owned by the authenticated user ───
 async function getOwnerProperty(ownerId: string, propertyId?: string | null) {
@@ -139,8 +140,8 @@ export const settingsController = {
         },
       });
     } catch (err: any) {
-      console.error("[Settings] getSettings error:", err.message);
-      return res.status(500).json({ error: err.message });
+      logger.error("[Settings] getSettings error", err);
+      return res.status(500).json({ error: "Internal server error." });
     }
   },
 
@@ -174,8 +175,8 @@ export const settingsController = {
 
       return res.json({ success: true });
     } catch (err: any) {
-      console.error("[Settings] updateBusiness error:", err.message);
-      return res.status(500).json({ error: err.message });
+      logger.error("[Settings] updateBusiness error", err);
+      return res.status(500).json({ error: "Internal server error." });
     }
   },
 
@@ -207,8 +208,8 @@ export const settingsController = {
 
       return res.json({ success: true });
     } catch (err: any) {
-      console.error("[Settings] updateNotifications error:", err.message);
-      return res.status(500).json({ error: err.message });
+      logger.error("[Settings] updateNotifications error", err);
+      return res.status(500).json({ error: "Internal server error." });
     }
   },
 
@@ -265,8 +266,8 @@ export const settingsController = {
 
       return res.json({ success: true });
     } catch (err: any) {
-      console.error("[Settings] updateAvailability error:", err.message);
-      return res.status(500).json({ error: err.message });
+      logger.error("[Settings] updateAvailability error", err);
+      return res.status(500).json({ error: "Internal server error." });
     }
   },
 
@@ -313,8 +314,8 @@ export const settingsController = {
 
       return res.json({ success: true });
     } catch (err: any) {
-      console.error("[Settings] updatePayment error:", err.message);
-      return res.status(500).json({ error: err.message });
+      logger.error("[Settings] updatePayment error", err);
+      return res.status(500).json({ error: "Internal server error." });
     }
   },
 
@@ -383,8 +384,8 @@ export const settingsController = {
 
       return res.json({ success: true });
     } catch (err: any) {
-      console.error("[Settings] updatePropertySetup error:", err.message);
-      return res.status(500).json({ error: err.message });
+      logger.error("[Settings] updatePropertySetup error", err);
+      return res.status(500).json({ error: "Internal server error." });
     }
   },
 };

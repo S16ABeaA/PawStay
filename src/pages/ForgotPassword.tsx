@@ -89,8 +89,9 @@ const ForgotPassword = () => {
     if (newPassword !== confirmPassword) {
       return setError("Passwords do not match");
     }
-    if (newPassword.length < 6) {
-      return setError("Password must be at least 6 characters");
+    const strong = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/;
+    if (!strong.test(newPassword)) {
+      return setError("Use 8+ chars with upper/lower/number/symbol.");
     }
 
     setIsLoading(true);

@@ -3,6 +3,7 @@ import { petPlatformAgent } from "../ai/agent";
 import { petAnalysisService } from "../ai/petAnalysisService";
 import { petHealthCheckService } from "../ai/petHealthCheckService";
 import { extractTextFromBase64Image, extractTextFromDocumentBuffer, extractTextFromImageBuffer } from "../services/ocrService";
+import { logger } from "../utils/logger";
 
 interface ChatRequestBody {
   message?: string;
@@ -99,10 +100,16 @@ export const aiController = {
         toolActivity: result.toolActivity ?? [],
       });
     } catch (error: any) {
-      console.error("ai chat error:", error);
-      return res.status(500).json({
-        error: "Failed to process AI chat request",
-        details: error?.message ?? "Unknown error",
+      logger.error("ai error", error);
+      const details = String(error?.message || "Unknown error");
+      const isBusy =
+        /\b503\b|\b429\b|high demand|service unavailable|resource exhausted|overloaded|temporarily unavailable/i.test(
+          details,
+        );
+
+      return res.status(isBusy ? 503 : 500).json({
+        error: isBusy ? "OCR service is temporarily busy" : "Failed to process OCR request",
+        details,
       });
     }
   },
@@ -154,18 +161,9 @@ export const aiController = {
         language: result.language,
         characters: result.text.length,
       });
-    } catch (error: any) {
-      console.error("ai ocr error:", error);
-      const details = String(error?.message || "Unknown error");
-      const isBusy =
-        /\b503\b|\b429\b|high demand|service unavailable|resource exhausted|overloaded|temporarily unavailable/i.test(
-          details,
-        );
-
-      return res.status(isBusy ? 503 : 500).json({
-        error: isBusy ? "OCR service is temporarily busy" : "Failed to process OCR request",
-        details,
-      });
+    } catch (err: any) {
+      logger.error("ai error", err);
+      return res.status(500).json({ error: "Internal server error." });
     }
   },
 
@@ -195,12 +193,9 @@ export const aiController = {
       });
 
       return res.json(result);
-    } catch (error: any) {
-      console.error("ai pet-analysis error:", error);
-      return res.status(500).json({
-        error: "Failed to process pet analysis request",
-        details: error?.message ?? "Unknown error",
-      });
+    } catch (err: any) {
+      logger.error("ai error", err);
+      return res.status(500).json({ error: "Internal server error." });
     }
   },
 
@@ -220,12 +215,9 @@ export const aiController = {
       );
 
       return res.json(result);
-    } catch (error: any) {
-      console.error("ai health-check error:", error);
-      return res.status(500).json({
-        error: "Failed to process pet health check request",
-        details: error?.message ?? "Unknown error",
-      });
+    } catch (err: any) {
+      logger.error("ai error", err);
+      return res.status(500).json({ error: "Internal server error." });
     }
   },
 };

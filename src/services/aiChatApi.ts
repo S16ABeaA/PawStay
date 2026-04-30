@@ -1,15 +1,6 @@
-const API_BASE_URL = import.meta.env.VITE_BACKEND_URL || "";
+import { authHelper } from "../helpers/authHelper";
 
-const parseApiErrorDetail = async (res: Response): Promise<string> => {
-  let detail = `status ${res.status}`;
-  try {
-    const body = await res.json();
-    detail = body?.details ?? body?.error ?? body?.message ?? detail;
-  } catch {
-    // response wasn't JSON — keep status fallback
-  }
-  return detail;
-};
+const API_BASE_URL = import.meta.env.VITE_BACKEND_URL || "";
 
 export interface AiChatRequest {
   message: string;
@@ -121,19 +112,12 @@ export interface PetHealthCheckResponse {
 
 export const aiChatApi = {
   async chat(payload: AiChatRequest): Promise<AiChatResponse> {
-    const res = await fetch(`${API_BASE_URL}/api/ai/chat`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify(payload),
-    });
-
-    if (!res.ok) {
-      const detail = await parseApiErrorDetail(res);
+    try {
+      return await authHelper.post(`${API_BASE_URL}/api/ai/chat`, payload);
+    } catch (error: any) {
+      const detail = error?.error ?? error?.message ?? `status ${error?.status ?? 500}`;
       throw new Error(detail);
     }
-
-    return res.json();
   },
 
   async readImageText(file: File, language = "eng"): Promise<OcrReadResponse> {
@@ -141,34 +125,25 @@ export const aiChatApi = {
     form.append("image", file);
     form.append("language", language);
 
-    const res = await fetch(`${API_BASE_URL}/api/ai/ocr`, {
-      method: "POST",
-      credentials: "include",
-      body: form,
-    });
-
-    if (!res.ok) {
-      const detail = await parseApiErrorDetail(res);
+    try {
+      return await authHelper.fetchWithAuth(`${API_BASE_URL}/api/ai/ocr`, {
+        method: "POST",
+        body: form,
+        credentials: "include",
+      });
+    } catch (error: any) {
+      const detail = error?.error ?? error?.message ?? `status ${error?.status ?? 500}`;
       throw new Error(detail);
     }
-
-    return res.json();
   },
 
   async analyzePet(payload: PetAnalysisRequest): Promise<PetAnalysisResponse> {
-    const res = await fetch(`${API_BASE_URL}/api/ai/pet-analysis`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify(payload),
-    });
-
-    if (!res.ok) {
-      const detail = await parseApiErrorDetail(res);
+    try {
+      return await authHelper.post(`${API_BASE_URL}/api/ai/pet-analysis`, payload);
+    } catch (error: any) {
+      const detail = error?.error ?? error?.message ?? `status ${error?.status ?? 500}`;
       throw new Error(detail);
     }
-
-    return res.json();
   },
 
   async checkPetHealth(file: File, detectedSpecies?: string): Promise<PetHealthCheckResponse> {
@@ -178,17 +153,15 @@ export const aiChatApi = {
       form.append("detectedSpecies", detectedSpecies);
     }
 
-    const res = await fetch(`${API_BASE_URL}/api/ai/pet-health-check`, {
-      method: "POST",
-      credentials: "include",
-      body: form,
-    });
-
-    if (!res.ok) {
-      const detail = await parseApiErrorDetail(res);
+    try {
+      return await authHelper.fetchWithAuth(`${API_BASE_URL}/api/ai/pet-health-check`, {
+        method: "POST",
+        body: form,
+        credentials: "include",
+      });
+    } catch (error: any) {
+      const detail = error?.error ?? error?.message ?? `status ${error?.status ?? 500}`;
       throw new Error(detail);
     }
-
-    return res.json();
   },
 };

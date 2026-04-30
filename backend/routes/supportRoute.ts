@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { supportController } from "../controllers/supportController";
 import { authMiddleware, requireSuperAdmin } from "../middleware/authMiddleware";
-import { messagingHourlyLimiter } from "../middleware/rateLimiters";
+import { authBrowseHourlyLimiter, bulkOpsLimiter, messagingHourlyLimiter } from "../middleware/rateLimiters";
 import { validateBody, validateParams, validateQuery } from "../middleware/inputValidation";
 
 const router = Router();
@@ -11,8 +11,9 @@ const ticketIdParamSchema = {
 } as const;
 
 const ticketsQuerySchema = {
-	status: { type: "enum", required: false, enumValues: ["all", "Open", "Pending", "In Progress", "Resolved", "Closed"] },
-	search: { type: "string", required: false, maxLength: 80, pattern: /^[a-zA-Z0-9\s,.'\-]*$/ },
+	status: { type: "string", required: false, maxLength: 20 },
+	page: { type: "number", required: false, min: 1 },
+	limit: { type: "number", required: false, min: 1, max: 100 },
 } as const;
 
 const createTicketSchema = {
@@ -34,24 +35,29 @@ const statusSchema = {
 router.use(authMiddleware);
 
 // Stats – super-admin only
-router.get("/tickets/stats", requireSuperAdmin, supportController.getTicketStats);
+router.get("/tickets/stats", authBrowseHourlyLimiter, requireSuperAdmin, supportController.getTicketStats);
 
 // List tickets (user sees own, super-admin sees all)
-router.get("/tickets", validateQuery(ticketsQuerySchema), supportController.getTickets);
+router.get("/tickets", authBrowseHourlyLimiter, validateQuery(ticketsQuerySchema), supportController.getTickets);
 
 // Per-ticket unread chat indicators for badges/dots
-router.get("/tickets/unread-indicators", supportController.getUnreadIndicators);
+router.get(
+	"/tickets/unread-indicators",
+	authBrowseHourlyLimiter,
+	authMiddleware,
+	supportController.getUnreadIndicators
+);
 
 // Get ticket detail with messages
-router.get("/tickets/:id", validateParams(ticketIdParamSchema), supportController.getTicketDetail);
+router.get("/tickets/:id", authBrowseHourlyLimiter, validateParams(ticketIdParamSchema), supportController.getTicketDetail);
 
 // Create a new ticket
-router.post("/tickets", validateBody(createTicketSchema), supportController.createTicket);
+router.post("/tickets", bulkOpsLimiter, validateBody(createTicketSchema), supportController.createTicket);
 
 // Send a message on a ticket
 router.post("/tickets/:id/messages", validateParams(ticketIdParamSchema), validateBody(messageSchema), messagingHourlyLimiter, supportController.sendMessage);
 
 // Update ticket status – super-admin only
-router.patch("/tickets/:id/status", validateParams(ticketIdParamSchema), validateBody(statusSchema), requireSuperAdmin, supportController.updateTicketStatus);
+router.patch("/tickets/:id/status", bulkOpsLimiter, validateParams(ticketIdParamSchema), validateBody(statusSchema), requireSuperAdmin, supportController.updateTicketStatus);
 
 export default router;

@@ -70,17 +70,19 @@ const createLimiter = ({
 export const anonBrowseHourlyLimiter = createLimiter({
   prefix: "rl:anon:browse:1h",
   windowMs: ONE_HOUR,
-  max: 300,
+  max: 600,
   keyGenerator: getIpKey,
   message: "Browsing limit reached. Please try again in about an hour.",
+  skipFailedRequests: true,
 });
 
 export const anonSearchHourlyLimiter = createLimiter({
   prefix: "rl:anon:search:1h",
   windowMs: ONE_HOUR,
-  max: 100,
+  max: 300,
   keyGenerator: getIpKey,
   message: "Search limit reached. Please try again later.",
+  skipFailedRequests: true,
 });
 
 // Pre-auth guard for protected endpoints (throttles abuse before auth checks)
@@ -90,6 +92,7 @@ export const authGuardLimiter = createLimiter({
   max: 600,
   keyGenerator: getIpKey,
   message: "Too many requests to protected endpoints. Please slow down.",
+  skipFailedRequests: true,
 });
 
 // Authenticated browsing/search
@@ -99,6 +102,7 @@ export const authBrowseHourlyLimiter = createLimiter({
   max: 500,
   keyGenerator: getUserOrIpKey,
   message: "Request limit reached for this hour.",
+  skipFailedRequests: true,
 });
 
 export const authBrowseDailyLimiter = createLimiter({
@@ -107,17 +111,33 @@ export const authBrowseDailyLimiter = createLimiter({
   max: 5000,
   keyGenerator: getUserOrIpKey,
   message: "Daily request limit reached.",
+  skipFailedRequests: true,
 });
 
 // Authentication endpoints
 export const loginLimiter = createLimiter({
   prefix: "rl:auth:login:15m",
   windowMs: 15 * ONE_MINUTE,
-  max: 10,
-  keyGenerator: getIpKey,
+  max: 5,
+  keyGenerator: (req) => {
+    const ip = getIpKey(req);
+    const email = String((req.body as any)?.email || "").trim().toLowerCase();
+    return `${ip}-${email}`;
+  },
   message: "Too many login attempts. Please try again later.",
   skipSuccessfulRequests: true,
+  skipFailedRequests: true,
 });
+
+export const oauthLimiter = createLimiter({
+  prefix: "rl:auth:oauth:15m",
+  windowMs: 15 * ONE_MINUTE,
+  max: 20,
+  keyGenerator: getIpKey,
+  message: "Too many OAuth attempts. Please try again later.",
+  skipFailedRequests: true,
+});
+
 
 export const registrationLimiter = createLimiter({
   prefix: "rl:auth:register:1h",
@@ -125,6 +145,7 @@ export const registrationLimiter = createLimiter({
   max: 3,
   keyGenerator: getIpKey,
   message: "Too many registration attempts. Please try again later.",
+  skipFailedRequests: true,
 });
 
 export const resendVerificationLimiter = createLimiter({
@@ -133,6 +154,7 @@ export const resendVerificationLimiter = createLimiter({
   max: 5,
   keyGenerator: getEmailOrIpKey,
   message: "Too many verification resends. Please try again later.",
+  skipFailedRequests: true,
 });
 
 export const passwordResetLimiter = createLimiter({
@@ -141,6 +163,7 @@ export const passwordResetLimiter = createLimiter({
   max: 3,
   keyGenerator: getEmailOrIpKey,
   message: "Too many password reset attempts for this account.",
+  skipFailedRequests: true,
 });
 
 // Profile + uploads
@@ -150,6 +173,7 @@ export const profileUpdateLimiter = createLimiter({
   max: 20,
   keyGenerator: getUserOrIpKey,
   message: "Profile update limit reached.",
+  skipFailedRequests: true,
 });
 
 export const photoUploadHourlyLimiter = createLimiter({
@@ -177,6 +201,7 @@ export const bookingConfirmationLimiter = createLimiter({
   max: 30,
   keyGenerator: getUserOrIpKey,
   message: "Booking confirmation limit reached for this hour.",
+  skipFailedRequests: true,
 });
 
 export const bookingOpsHourlyLimiter = createLimiter({
@@ -185,6 +210,7 @@ export const bookingOpsHourlyLimiter = createLimiter({
   max: 50,
   keyGenerator: getUserOrIpKey,
   message: "Booking operation limit reached for this hour.",
+  skipFailedRequests: true,
 });
 
 export const paymentInitiationLimiter = createLimiter({
@@ -193,6 +219,7 @@ export const paymentInitiationLimiter = createLimiter({
   max: 20,
   keyGenerator: getUserOrIpKey,
   message: "Payment operation limit reached for this hour.",
+  skipFailedRequests: true,
 });
 
 export const refundRequestLimiter = createLimiter({
@@ -201,6 +228,7 @@ export const refundRequestLimiter = createLimiter({
   max: 10,
   keyGenerator: getUserOrIpKey,
   message: "Refund request limit reached for this hour.",
+  skipFailedRequests: true,
 });
 
 // Reviews/ratings
@@ -210,6 +238,7 @@ export const reviewsHourlyLimiter = createLimiter({
   max: 10,
   keyGenerator: getUserOrIpKey,
   message: "Review limit reached for this hour.",
+  skipFailedRequests: true,
 });
 
 // Service provider dashboard + operations
@@ -219,6 +248,7 @@ export const calendarAccessLimiter = createLimiter({
   max: 100,
   keyGenerator: getUserOrIpKey,
   message: "Calendar request limit reached for this hour.",
+  skipFailedRequests: true,
 });
 
 export const availabilityUpdateLimiter = createLimiter({
@@ -227,6 +257,7 @@ export const availabilityUpdateLimiter = createLimiter({
   max: 50,
   keyGenerator: getUserOrIpKey,
   message: "Availability update limit reached for this hour.",
+  skipFailedRequests: true,
 });
 
 export const serviceListingUpdateLimiter = createLimiter({
@@ -235,6 +266,7 @@ export const serviceListingUpdateLimiter = createLimiter({
   max: 30,
   keyGenerator: getUserOrIpKey,
   message: "Service listing update limit reached for this hour.",
+  skipFailedRequests: true,
 });
 
 export const bulkOpsLimiter = createLimiter({
@@ -243,6 +275,7 @@ export const bulkOpsLimiter = createLimiter({
   max: 10,
   keyGenerator: getUserOrIpKey,
   message: "Bulk operation limit reached for this hour.",
+  skipFailedRequests: true,
 });
 
 // Messaging
@@ -252,4 +285,14 @@ export const messagingHourlyLimiter = createLimiter({
   max: 200,
   keyGenerator: getUserOrIpKey,
   message: "Messaging limit reached for this hour.",
+  skipFailedRequests: true,
+});
+
+export const aiOpsPerMinuteLimiter = createLimiter({
+  prefix: "rl:ai:ops:1m",
+  windowMs: ONE_MINUTE,
+  max: 10,
+  keyGenerator: getUserOrIpKey,
+  message: "Too many AI requests. Please try again shortly.",
+  skipFailedRequests: true,
 });

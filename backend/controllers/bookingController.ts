@@ -13,6 +13,7 @@ import {
   parseStorageRef,
   uploadDataUrlToBucket,
 } from "../utils/storageMedia";
+import { logger } from "../utils/logger";
 
 const PROPERTY_IMAGE_BUCKET = "property-images";
 const BOOKING_DOCUMENT_BUCKET = "booking-documents";
@@ -167,8 +168,8 @@ export const adminCalendar = async (req: Request, res: Response) => {
       propertyServices: propertyServices ?? [],
     });
   } catch (err: any) {
-    console.error("adminCalendar error:", err);
-    return res.status(500).json({ error: "Failed to fetch calendar data.", details: err?.message || err });
+    logger.error("adminCalendar error", err);
+    return res.status(500).json({ error: "Internal server error." });
   }
 };
 
@@ -358,8 +359,8 @@ export const adminCreateWalkin = async (req: Request, res: Response) => {
 
     return res.status(201).json({ booking: signBookingMedia(booking, createdBookingSignedMap) });
   } catch (err: any) {
-    console.error("adminCreateWalkin error:", err);
-    return res.status(500).json({ error: "Failed to create walk-in booking.", details: err?.message || err });
+    logger.error("adminCreateWalkin error", err);
+    return res.status(500).json({ error: "Internal server error." });
   }
 };
 
@@ -478,8 +479,8 @@ export const listBookingsForOwner = async (req: any, res: any) => {
 
     const status = req.query.status as string | undefined;
     const service = req.query.service as string | undefined;
-    const page = Number(req.query.page) || 1;
-    const limit = Number(req.query.limit) || 50;
+    const page = Math.max(1, parseInt(req.query.page as string) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit as string) || 10));
     const filterPropertyId = req.query.property_id as string | undefined;
 
     let propsQuery = supabaseAdmin
@@ -809,50 +810,29 @@ export const createBooking = async (req: Request, res: Response) => {
       return res.status(400).json({ error: `Amount paid (₱${parsedAmountPaid.toFixed(2)}) must exactly match the total price (₱${parsedTotalPrice.toFixed(2)}).` });
     }
 
-    // Validate property_id is a valid UUID format; if not, try to find a matching property
+    // Validate property_id is a valid UUID format
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     let resolvedPropertyId = property_id;
 
     if (!uuidRegex.test(property_id)) {
-      // Non-UUID property_id (e.g. from demo/hardcoded detail pages) — find the first approved property as fallback
-      const { data: fallbackProp } = await supabaseAdmin
-        .from("properties")
-        .select("id")
-        .eq("status", "approved")
-        .limit(1)
-        .single();
-
-      if (!fallbackProp) {
-        return res.status(400).json({ error: "No properties available for booking. Please try again later." });
-      }
-      resolvedPropertyId = fallbackProp.id;
-      console.log(`Resolved non-UUID property_id "${property_id}" → fallback ${resolvedPropertyId}`);
-    } else {
-      // Verify the UUID property exists
-      const { data: propertyExists, error: propCheckErr } = await supabaseAdmin
-        .from("properties")
-        .select("id")
-        .eq("id", property_id)
-        .eq("status", "approved")
-        .eq("is_deleted", false)
-        .single();
-
-      if (propCheckErr || !propertyExists) {
-        // Fallback to first approved property
-        const { data: fallbackProp } = await supabaseAdmin
-          .from("properties")
-          .select("id")
-          .eq("status", "approved")
-          .limit(1)
-          .single();
-
-        if (!fallbackProp) {
-          return res.status(400).json({ error: "The selected property does not exist and no fallback is available." });
-        }
-        resolvedPropertyId = fallbackProp.id;
-        console.log(`Property ${property_id} not found → fallback ${resolvedPropertyId}`);
-      }
+      return res.status(404).json({ error: "Property not found or unavailable." });
     }
+
+    const { data: propertyExists, error: propCheckErr } = await supabaseAdmin
+      .from("properties")
+      .select("id, status, is_deleted")
+      .eq("id", property_id)
+      .maybeSingle();
+
+    if (propCheckErr) {
+      throw propCheckErr;
+    }
+
+    if (!propertyExists || propertyExists.status !== "approved" || propertyExists.is_deleted) {
+      return res.status(404).json({ error: "Property not found or unavailable." });
+    }
+
+    resolvedPropertyId = propertyExists.id;
 
     // ── Resolve capacity for concurrency check ──
     const isBoarding = !!checkout;
@@ -1294,8 +1274,8 @@ export const createBooking = async (req: Request, res: Response) => {
 
     return res.status(201).json({ booking });
   } catch (err: any) {
-    console.error("createBooking error:", err);
-    return res.status(500).json({ error: "Failed to create booking.", details: err?.message || err });
+    logger.error("createBooking error", err);
+    return res.status(500).json({ error: "Internal server error." });
   }
 };
 
@@ -1460,8 +1440,8 @@ export const adminUpdatePaymentStatus = async (req: Request, res: Response) => {
 
     return res.json({ booking: updated });
   } catch (err: any) {
-    console.error("adminUpdatePaymentStatus error:", err);
-    return res.status(500).json({ error: "Failed to update payment status.", details: err?.message || err });
+    logger.error("adminUpdatePaymentStatus error", err);
+    return res.status(500).json({ error: "Internal server error." });
   }
 };
 
@@ -1624,9 +1604,9 @@ export const cancelBookingForUser = async (req: Request, res: Response) => {
 export const checkAvailability = async (req: Request, res: Response) => {
   try {
     const propertyId = req.params.propertyId as string;
-    const date = req.query.date as string | undefined;
-    const rangeStart = req.query.rangeStart as string | undefined;
-    const rangeEnd = req.query.rangeEnd as string | undefined;
+    const date = req.query.startDate as string | undefined;
+    const rangeStart = req.query.startDate as string | undefined;
+    const rangeEnd = req.query.endDate as string | undefined;
     const type = req.query.type as string | undefined;
 
     if (!propertyId) {
@@ -1634,7 +1614,7 @@ export const checkAvailability = async (req: Request, res: Response) => {
     }
 
     // Hotel: return unavailable dates in range
-    if (type === "hotel") {
+    if (type === "monthly") {
       if (!rangeStart || !rangeEnd) {
         return res.status(400).json({ error: "Missing rangeStart or rangeEnd for hotel availability." });
       }
@@ -1676,8 +1656,8 @@ export const checkAvailability = async (req: Request, res: Response) => {
       availableSlots,
     });
   } catch (err: any) {
-    console.error("checkAvailability error:", err);
-    return res.status(500).json({ error: "Failed to check availability.", details: err?.message || err });
+    logger.error("checkAvailability error", err);
+    return res.status(500).json({ error: "Internal server error." });
   }
 };
 
@@ -1761,8 +1741,8 @@ export const adminUpdateBookingStatus = async (req: Request, res: Response) => {
 
     return res.json({ booking: updated });
   } catch (err: any) {
-    console.error("adminUpdateBookingStatus error:", err);
-    return res.status(500).json({ error: "Failed to update booking status.", details: err?.message || err });
+    logger.error("adminUpdateBookingStatus error", err);
+    return res.status(500).json({ error: "Internal server error." });
   }
 };
 
@@ -1799,8 +1779,8 @@ export const adminDeleteBooking = async (req: Request, res: Response) => {
     await bookingModel.softDelete(bookingId);
     return res.json({ success: true });
   } catch (err: any) {
-    console.error("adminDeleteBooking error:", err);
-    return res.status(500).json({ error: "Failed to delete booking.", details: err?.message || err });
+    logger.error("adminDeleteBooking error", err);
+    return res.status(500).json({ error: "Internal server error." });
   }
 };
 
@@ -1824,8 +1804,8 @@ export const getTotalRevenue = async (_req: Request, res: Response) => {
     const totalRevenue = bookings.reduce((sum: number, b: any) => sum + (parseFloat(b.service_fee) || 0), 0);
     return res.json({ totalRevenue: Math.round(totalRevenue * 100) / 100, currency: "PHP" });
   } catch (err: any) {
-    console.error("getTotalRevenue error:", err);
-    return res.status(500).json({ error: "Failed to fetch total revenue.", details: err?.message || err });
+    logger.error("getTotalRevenue error", err);
+    return res.status(500).json({ error: "Internal server error." });
   }
 };
 
@@ -1852,8 +1832,8 @@ export const getRevenueByServiceType = async (_req: Request, res: Response) => {
 
     return res.json({ breakdown, currency: "PHP" });
   } catch (err: any) {
-    console.error("getRevenueByServiceType error:", err);
-    return res.status(500).json({ error: "Failed to fetch service-type revenue.", details: err?.message || err });
+    logger.error("getRevenueByServiceType error", err);
+    return res.status(500).json({ error: "Internal server error." });
   }
 };
 
@@ -1890,8 +1870,8 @@ export const getRevenueByProperty = async (_req: Request, res: Response) => {
 
     return res.json({ breakdown, currency: "PHP" });
   } catch (err: any) {
-    console.error("getRevenueByProperty error:", err);
-    return res.status(500).json({ error: "Failed to fetch property revenue.", details: err?.message || err });
+    logger.error("getRevenueByProperty error", err);
+    return res.status(500).json({ error: "Internal server error." });
   }
 };
 
@@ -1927,8 +1907,8 @@ export const getRevenueByLocation = async (_req: Request, res: Response) => {
 
     return res.json({ breakdown, currency: "PHP" });
   } catch (err: any) {
-    console.error("getRevenueByLocation error:", err);
-    return res.status(500).json({ error: "Failed to fetch location revenue.", details: err?.message || err });
+    logger.error("getRevenueByLocation error", err);
+    return res.status(500).json({ error: "Internal server error." });
   }
 };
 
@@ -1968,8 +1948,8 @@ export const getRevenueByTimePeriod = async (_req: Request, res: Response) => {
       currency: "PHP",
     });
   } catch (err: any) {
-    console.error("getRevenueByTimePeriod error:", err);
-    return res.status(500).json({ error: "Failed to fetch revenue by period.", details: err?.message || err });
+    logger.error("getRevenueByTimePeriod error", err);
+    return res.status(500).json({ error: "Internal server error." });
   }
 };
 
@@ -2030,8 +2010,8 @@ export const getRevenuePeriodComparison = async (_req: Request, res: Response) =
       currency: "PHP",
     });
   } catch (err: any) {
-    console.error("getRevenuePeriodComparison error:", err);
-    return res.status(500).json({ error: "Failed to fetch revenue comparison.", details: err?.message || err });
+    logger.error("getRevenuePeriodComparison error", err);
+    return res.status(500).json({ error: "Internal server error." });
   }
 };
 
@@ -2067,8 +2047,8 @@ export const getRevenueMonthlySeries = async (_req: Request, res: Response) => {
 
     return res.json({ series, currency: "PHP" });
   } catch (err: any) {
-    console.error("getRevenueMonthlySeries error:", err);
-    return res.status(500).json({ error: "Failed to fetch monthly revenue series.", details: err?.message || err });
+    logger.error("getRevenueMonthlySeries error", err);
+    return res.status(500).json({ error: "Internal server error." });
   }
 };
 
@@ -2219,7 +2199,7 @@ export const getReceivables = async (req: Request, res: Response) => {
 
     return res.json({ summary, properties: rows, currency: "PHP" });
   } catch (err: any) {
-    console.error("getReceivables error:", err);
-    return res.status(500).json({ error: "Failed to fetch receivables.", details: err?.message || err });
+    logger.error("getReceivables error", err);
+    return res.status(500).json({ error: "Internal server error." });
   }
 };

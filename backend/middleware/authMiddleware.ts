@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from "express";
 import { supabaseClient } from "../config/supabaseClient";
 import { userModel } from "../models/userModel";
+import { logger } from "../utils/logger";
 
 const isProd = process.env.NODE_ENV === "production";
 const sameSitePolicy: "lax" | "none" = isProd ? "none" : "lax";
@@ -10,10 +11,6 @@ const sameSitePolicy: "lax" | "none" = isProd ? "none" : "lax";
  * Checks for Supabase auth tokens and attaches user info to req.user.
  */
 export const authMiddleware = async (req: Request, res: Response, next: NextFunction) => {
-  console.log("========== AUTH MIDDLEWARE START ==========");
-  console.log("Path:", req.path);
-  console.log("Cookies:", req.cookies);
-  
   try {
     // Get tokens from cookies (or Authorization header as fallback)
     const accessToken = req.cookies?.["sb-access-token"] || 
@@ -21,11 +18,9 @@ export const authMiddleware = async (req: Request, res: Response, next: NextFunc
     const refreshToken = req.cookies?.["sb-refresh-token"];
 
     if (!accessToken) {
-      return res.status(401).json({ error: "Unauthorized: no access token found." });
+      logger.warn("auth failed", { reason: "missing_access_token", path: req.path });
+      return res.status(401).json({ error: "Unauthorized." });
     }
-
-    console.log("Access token exists:", !!accessToken);
-    console.log("Access token first 30 chars:", accessToken?.substring(0, 30) + "...");
 
     // Verify the access token and get user
     const { data: { user }, error: getUserError } = await supabaseClient.auth.getUser(accessToken);
@@ -34,7 +29,8 @@ export const authMiddleware = async (req: Request, res: Response, next: NextFunc
     if (getUserError || !user) {
       if (!refreshToken) {
         clearAuthCookies(res);
-        return res.status(401).json({ error: "Unauthorized: session expired. Please login again." });
+        logger.warn("auth failed", { reason: "missing_refresh_token", path: req.path });
+        return res.status(401).json({ error: "Unauthorized." });
       }
 
       // Attempt to refresh the session
@@ -44,7 +40,8 @@ export const authMiddleware = async (req: Request, res: Response, next: NextFunc
 
       if (refreshError || !refreshData.session) {
         clearAuthCookies(res);
-        return res.status(401).json({ error: "Unauthorized: session refresh failed." });
+        logger.warn("auth failed", { reason: "session_refresh_failed", path: req.path });
+        return res.status(401).json({ error: "Unauthorized." });
       }
 
       // Set new cookies with refreshed tokens
@@ -54,14 +51,16 @@ export const authMiddleware = async (req: Request, res: Response, next: NextFunc
       const refreshedUser = refreshData.user;
       if (!refreshedUser) {
         clearAuthCookies(res);
-        return res.status(401).json({ error: "Unauthorized: user not found after refresh." });
+        logger.warn("auth failed", { reason: "missing_refreshed_user", path: req.path });
+        return res.status(401).json({ error: "Unauthorized." });
       }
 
       // Fetch user profile
       const userProfile = await userModel.getUserById(refreshedUser.id);
       if (!userProfile) {
         clearAuthCookies(res);
-        return res.status(401).json({ error: "Unauthorized: user profile not found." });
+        logger.warn("auth failed", { reason: "missing_user_profile_after_refresh", path: req.path });
+        return res.status(401).json({ error: "Unauthorized." });
       }
 
       // Attach user info to request object
@@ -78,7 +77,8 @@ export const authMiddleware = async (req: Request, res: Response, next: NextFunc
     const userProfile = await userModel.getUserById(user.id);
     if (!userProfile) {
       clearAuthCookies(res);
-      return res.status(401).json({ error: "Unauthorized: user profile not found." });
+      logger.warn("auth failed", { reason: "missing_user_profile", path: req.path });
+      return res.status(401).json({ error: "Unauthorized." });
     }
 
     // Attach user info to request object

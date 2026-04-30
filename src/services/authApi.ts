@@ -14,14 +14,11 @@ export const authApi = {
   uploadAvatar: async (file: File) => {
     const formData = new FormData();
     formData.append("avatar", file);
-    const res = await fetch(`${API_BASE_URL}/api/auth/uploadAvatar`, {
+    return authHelper.fetchWithAuth(`${API_BASE_URL}/api/auth/uploadAvatar`, {
       method: "POST",
       body: formData,
-      credentials: "include",
+      credentials: "include"
     });
-    const data = await res.json();
-    if (!res.ok) throw data;
-    return data;
   },
   getUsers: async () => authHelper.get(`${API_BASE_URL}/api/auth/users`),
   promoteUser: async (data: { email: string; role: string }) =>

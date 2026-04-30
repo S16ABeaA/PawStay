@@ -36,6 +36,18 @@ const SignIn = () => {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [termsChecked, setTermsChecked] = useState(false);
   const handleSignUp = async () => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      toast({ title: "Error", description: "Please enter a valid email address." });
+      return;
+    }
+
+    const strongPassword = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/;
+    if (!strongPassword.test(password)) {
+      toast({ title: "Error", description: "Password must be 8+ chars with upper, lower, number, and symbol." });
+      return;
+    }
+
     if (isSignUp && !termsChecked) {
       toast({ title: "Error", description: "You must agree to the terms." });
       return;

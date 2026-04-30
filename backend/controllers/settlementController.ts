@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import { supabaseAdmin } from "../config/supabaseAdmin";
 import { notificationModel } from "../models/notificationModel";
 import { getSuperAdminRecipients } from "../services/notificationRecipients";
+import { logger } from "../utils/logger";
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
@@ -209,8 +210,8 @@ export const dispatchSettlementReminders = async (req: Request, res: Response) =
     const result = await dispatchSettlementRemindersJob({ now, dryRun });
     return res.json({ success: true, ...result });
   } catch (err: any) {
-    console.error("dispatchSettlementReminders error:", err);
-    return res.status(500).json({ error: "Failed to dispatch settlement reminders.", details: err?.message || err });
+    logger.error("dispatchSettlementReminders error", err);
+    return res.status(500).json({ error: "Internal server error." });
   }
 };
 
@@ -281,11 +282,8 @@ export const getSettlementPaymentChannels = async (_req: Request, res: Response)
     const channels = getSettlementPaymentChannelsFromPrefs(selected?.notification_prefs || {});
     return res.json({ paymentChannels: channels });
   } catch (err: any) {
-    console.error("getSettlementPaymentChannels error:", err);
-    return res.status(500).json({
-      error: "Failed to load settlement payment channels.",
-      details: err?.message || err,
-    });
+    logger.error("getSettlementPaymentChannels error", err);
+    return res.status(500).json({ error: "Internal server error." });
   }
 };
 
@@ -384,11 +382,8 @@ export const updateSettlementPaymentChannels = async (req: Request, res: Respons
 
     return res.json({ paymentChannels: getSettlementPaymentChannelsFromPrefs(mergedPrefs) });
   } catch (err: any) {
-    console.error("updateSettlementPaymentChannels error:", err);
-    return res.status(500).json({
-      error: "Failed to update settlement payment channels.",
-      details: err?.message || err,
-    });
+    logger.error("updateSettlementPaymentChannels error", err);
+    return res.status(500).json({ error: "Internal server error." });
   }
 };
 
@@ -569,8 +564,8 @@ export const createSettlement = async (req: Request, res: Response) => {
       allocation: { totalFees, totalAlreadySettled, newSettlement: parsedAmount, remainingOutstanding: Math.max(0, totalOutstanding - parsedAmount) },
     });
   } catch (err: any) {
-    console.error("createSettlement error:", err);
-    return res.status(500).json({ error: "Failed to create settlement.", details: err?.message || err });
+    logger.error("createSettlement error", err);
+    return res.status(500).json({ error: "Internal server error." });
   }
 };
 
@@ -637,8 +632,8 @@ export const listSettlements = async (req: Request, res: Response) => {
 
     return res.json({ settlements });
   } catch (err: any) {
-    console.error("listSettlements error:", err);
-    return res.status(500).json({ error: "Failed to list settlements.", details: err?.message || err });
+    logger.error("listSettlements error", err);
+    return res.status(500).json({ error: "Internal server error." });
   }
 };
 
@@ -689,8 +684,8 @@ export const getSettlement = async (req: Request, res: Response) => {
       },
     });
   } catch (err: any) {
-    console.error("getSettlement error:", err);
-    return res.status(500).json({ error: "Failed to get settlement.", details: err?.message || err });
+    logger.error("getSettlement error", err);
+    return res.status(500).json({ error: "Internal server error." });
   }
 };
 
@@ -759,8 +754,8 @@ export const updateSettlementStatus = async (req: Request, res: Response) => {
 
     return res.json({ settlement: data });
   } catch (err: any) {
-    console.error("updateSettlementStatus error:", err);
-    return res.status(500).json({ error: "Failed to update settlement.", details: err?.message || err });
+    logger.error("updateSettlementStatus error", err);
+    return res.status(500).json({ error: "Internal server error." });
   }
 };
 
@@ -891,8 +886,8 @@ export const getMonthlyReceivables = async (req: Request, res: Response) => {
       currency: "PHP",
     });
   } catch (err: any) {
-    console.error("getMonthlyReceivables error:", err);
-    return res.status(500).json({ error: "Failed to get monthly receivables.", details: err?.message || err });
+    logger.error("getMonthlyReceivables error", err);
+    return res.status(500).json({ error: "Internal server error." });
   }
 };
 
@@ -980,8 +975,8 @@ export const getReceivableSummary = async (req: Request, res: Response) => {
       currency: "PHP",
     });
   } catch (err: any) {
-    console.error("getReceivableSummary error:", err);
-    return res.status(500).json({ error: "Failed to get receivable summary.", details: err?.message || err });
+    logger.error("getReceivableSummary error", err);
+    return res.status(500).json({ error: "Internal server error." });
   }
 };
 
@@ -1015,8 +1010,8 @@ export const getPropertySettlements = async (req: Request, res: Response) => {
 
     return res.json({ settlements });
   } catch (err: any) {
-    console.error("getPropertySettlements error:", err);
-    return res.status(500).json({ error: "Failed to get property settlements.", details: err?.message || err });
+    logger.error("getPropertySettlements error", err);
+    return res.status(500).json({ error: "Internal server error." });
   }
 };
 
@@ -1061,8 +1056,8 @@ export const deleteSettlement = async (req: Request, res: Response) => {
 
     return res.json({ success: true });
   } catch (err: any) {
-    console.error("deleteSettlement error:", err);
-    return res.status(500).json({ error: "Failed to delete settlement.", details: err?.message || err });
+    logger.error("deleteSettlement error", err);
+    return res.status(500).json({ error: "Internal server error." });
   }
 };
 
@@ -1179,8 +1174,8 @@ export const getProprietorMonthlyStatus = async (req: Request, res: Response) =>
       currency: "PHP",
     });
   } catch (err: any) {
-    console.error("getProprietorMonthlyStatus error:", err);
-    return res.status(500).json({ error: "Failed to get monthly settlement status.", details: err?.message || err });
+    logger.error("getProprietorMonthlyStatus error", err);
+    return res.status(500).json({ error: "Internal server error." });
   }
 };
 
@@ -1343,10 +1338,8 @@ export const getProprietorReceivables = async (req: Request, res: Response) => {
       properties: rows,
     });
   } catch (err: any) {
-    console.error("getProprietorReceivables error:", err);
-    return res
-      .status(500)
-      .json({ error: "Failed to load proprietor receivables.", details: err?.message || err });
+    logger.error("getProprietorReceivables error", err);
+    return res.status(500).json({ error: "Internal server error." });
   }
 };
 
@@ -1393,10 +1386,8 @@ export const getProprietorSettlements = async (req: Request, res: Response) => {
 
     return res.json({ settlements });
   } catch (err: any) {
-    console.error("getProprietorSettlements error:", err);
-    return res
-      .status(500)
-      .json({ error: "Failed to load settlement history.", details: err?.message || err });
+    logger.error("getProprietorSettlements error", err);
+    return res.status(500).json({ error: "Internal server error." });
   }
 };
 
@@ -1529,9 +1520,7 @@ export const submitProprietorSettlement = async (req: Request, res: Response) =>
       message: "Settlement request submitted successfully and is pending superadmin review.",
     });
   } catch (err: any) {
-    console.error("submitProprietorSettlement error:", err);
-    return res
-      .status(500)
-      .json({ error: "Failed to submit settlement request.", details: err?.message || err });
+    logger.error("submitProprietorSettlement error", err);
+    return res.status(500).json({ error: "Internal server error." });
   }
 };

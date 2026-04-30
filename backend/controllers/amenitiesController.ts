@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import { supabaseAdmin } from "../config/supabaseAdmin";
+import { logger } from "../utils/logger";
 
 export const amenitiesController = {
   getamenitiesByServiceType: async (req: Request, res: Response) => {
@@ -25,10 +26,8 @@ export const amenitiesController = {
       //console.log("[getamenitiesByServiceType] Retrieved amenities:", data);
       return res.status(200).json({ properties: data ?? [] });
     } catch (err: any) {
-      console.error("[getamenitiesByServiceType]", err);
-      return res
-        .status(500)
-        .json({ message: err.message || "Failed to fetch amenities" });
+      logger.error("[getamenitiesByServiceType]", err);
+      return res.status(500).json({ error: "Internal server error." });
     }
   },
   // Admin: list all amenities (optional ?is_active=true|false)
@@ -48,8 +47,8 @@ export const amenitiesController = {
       if (error) throw error;
       return res.status(200).json({ amenities: data ?? [] });
     } catch (err: any) {
-      console.error("[listAmenities]", err);
-      return res.status(500).json({ message: err.message || "Failed to list amenities" });
+      logger.error("[listAmenities]", err);
+      return res.status(500).json({ error: "Internal server error." });
     }
   },
   createAmenity: async (req: Request, res: Response) => {
@@ -70,8 +69,8 @@ export const amenitiesController = {
       if (error) throw error;
       return res.status(201).json({ amenity: data?.[0] ?? null });
     } catch (err: any) {
-      console.error("[createAmenity]", err);
-      return res.status(500).json({ message: err.message || "Failed to create amenity" });
+      logger.error("[createAmenity]", err);
+      return res.status(500).json({ error: "Internal server error." });
     }
   },
   updateAmenity: async (req: Request, res: Response) => {
@@ -95,8 +94,8 @@ export const amenitiesController = {
       if (error) throw error;
       return res.status(200).json({ amenity: data?.[0] ?? null });
     } catch (err: any) {
-      console.error("[updateAmenity]", err);
-      return res.status(500).json({ message: err.message || "Failed to update amenity" });
+      logger.error("[updateAmenity]", err);
+      return res.status(500).json({ error: "Internal server error." });
     }
   },
   deleteAmenity: async (req: Request, res: Response) => {
@@ -118,8 +117,8 @@ export const amenitiesController = {
       if (error) throw error;
       return res.status(200).json({ success: true });
     } catch (err: any) {
-      console.error("[deleteAmenity]", err);
-      return res.status(500).json({ message: err.message || "Failed to delete amenity" });
+      logger.error("[deleteAmenity]", err);
+      return res.status(500).json({ error: "Internal server error." });
     }
   },
 };

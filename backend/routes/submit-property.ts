@@ -134,35 +134,131 @@ const normalizeDogSizeForStorage = (value: string): string => {
   return String(value).trim();
 };
 
+const isNonEmptyString = (value: unknown, max = 300) =>
+  typeof value === 'string' && value.trim().length > 0 && value.trim().length <= max;
+
+const toFiniteNumber = (value: unknown): number | null => {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string' && value.trim() !== '') {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return null;
+};
+
+const sanitizeDeep = (value: unknown): unknown => {
+  if (typeof value === 'string') return value.trim();
+  if (Array.isArray(value)) return value.map((item) => sanitizeDeep(item));
+  if (isObject(value)) {
+    const out: Record<string, unknown> = {};
+    const objectValue = value as Record<string, unknown>;
+    for (const [key, item] of Object.entries(objectValue)) {
+      out[key] = sanitizeDeep(item);
+    }
+    return out;
+  }
+  return value;
+};
+
+const validateSubmitPropertyPayload = (payload: PropertySubmissionData): string | null => {
+  const nestedObjectKeys: Array<keyof PropertySubmissionData> = [
+    'weeklyHours',
+    'cancellationPolicy',
+    'petSizePricing',
+    'boardingRules',
+    'feesCharges',
+    'paymentOptions',
+    'contractingParty',
+    'contractingPartyAddress',
+    'legalAgreementAccepted',
+    'vetFees',
+  ];
+
+  for (const key of nestedObjectKeys) {
+    const value = payload[key] as unknown;
+    if (value !== undefined && value !== null && !isObject(value)) {
+      return `${String(key)} is invalid`;
+    }
+  }
+
+  const nestedArrayKeys: Array<keyof PropertySubmissionData> = [
+    'services',
+    'propertyImages',
+    'baseServices',
+    'addOns',
+    'serviceCapacities',
+    'petTypesAccepted',
+    'dogSizes',
+    'facilitiesAmenities',
+    'bookingRules',
+    'complianceRequirements',
+    'healthSafety',
+    'vetAvailability',
+    'sanitationProtocols',
+    'propertyTypes',
+    'lguPermits',
+  ];
+
+  for (const key of nestedArrayKeys) {
+    const value = payload[key] as unknown;
+    if (value !== undefined && value !== null && !Array.isArray(value)) {
+      return `${String(key)} is invalid`;
+    }
+  }
+
+  if (!isNonEmptyString(payload.propertyName, 120)) return 'propertyName is required';
+  if (!isNonEmptyString(payload.addressSearch, 255)) return 'addressSearch is required';
+  if (!isNonEmptyString(payload.city, 120)) return 'city is required';
+  if (!isNonEmptyString(payload.ownerName, 120)) return 'ownerName is required';
+  if (!isNonEmptyString(payload.email, 254)) return 'email is required';
+  if (!isNonEmptyString(payload.password, 128) || String(payload.password).length < 8) return 'password is invalid';
+
+  const latitude = toFiniteNumber(payload.latitude);
+  const longitude = toFiniteNumber(payload.longitude);
+  if (latitude === null || latitude < -90 || latitude > 90) return 'latitude is invalid';
+  if (longitude === null || longitude < -180 || longitude > 180) return 'longitude is invalid';
+
+  const capacity = toFiniteNumber(payload.animalCapacity);
+  if (capacity === null || capacity < 0 || capacity > 100000) return 'animalCapacity is invalid';
+
+  if (!Array.isArray(payload.services) || payload.services.length === 0 || payload.services.length > 30) {
+    return 'services must be a non-empty array';
+  }
+
+  if (!Array.isArray(payload.propertyImages) || payload.propertyImages.length > 30) {
+    return 'propertyImages is invalid';
+  }
+
+  if (payload.propertyType && !['hotel', 'grooming', 'veterinary'].includes(payload.propertyType)) {
+    return 'propertyType is invalid';
+  }
+
+  return null;
+};
+
 export const submitProperty = async (req: Request, res: Response) => {
   try {
     const supabaseUrl = process.env.PAW_STAY_SUPABASE_URL || process.env.SUPABASE_URL;
-    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_PAW_STAY_SUPABASE_ANON_KEY;
-
-    console.log('Supabase URL:', supabaseUrl);
-    console.log('Supabase Key exists:', !!supabaseKey);
-
-    // Temporarily disabled for testing
-    // if (!hasBearerToken(req.headers.authorization)) {
-    //   return res.status(401).json({ success: false, error: 'Authentication required' });
-    // }
+    if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      throw new Error("Missing service role key");
+    }
+    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
     if (!supabaseUrl || !supabaseKey) {
       throw new Error('Supabase configuration missing');
     }
 
-    const supabaseClient = createClient(supabaseUrl, supabaseKey, {
-      // Temporarily disabled for testing
-      // global: {
-      //   headers: { Authorization: req.headers.authorization || '' },
-      // },
-    });
+    const supabaseClient = createClient(supabaseUrl, supabaseKey);
 
     if (!isObject(req.body)) {
       return res.status(400).json({ success: false, error: 'Invalid request payload' });
     }
 
-    const d: PropertySubmissionData = req.body;
+    const d: PropertySubmissionData = sanitizeDeep(req.body) as PropertySubmissionData;
+    const payloadValidationError = validateSubmitPropertyPayload(d);
+    if (payloadValidationError) {
+      return res.status(400).json({ success: false, error: payloadValidationError });
+    }
 
     const ownerId = (req as any).user?.id as string | undefined;
 
@@ -511,15 +607,10 @@ export const submitProperty = async (req: Request, res: Response) => {
       console.error('Failed to create new property application notifications:', notifErr);
     }
   } catch (error) {
-    const errorPayload = error instanceof Error
-      ? { message: error.message, stack: error.stack }
-      : { error };
-    console.error('Error submitting property:', errorPayload);
-    res.status(400).json({
+    console.error('Error submitting property:', error);
+    res.status(500).json({
       success: false,
-      error: process.env.NODE_ENV === 'production'
-        ? 'Failed to submit property listing'
-        : errorPayload,
+      error: 'Failed to submit property listing',
     });
   }
 };

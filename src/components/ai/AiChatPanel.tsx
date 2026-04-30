@@ -374,7 +374,7 @@ export const AiChatPanel = ({ className, variant = "floating" }: AiChatPanelProp
       sessionId,
       detectedSpecies: detectedSpecies || "unknown",
       primaryPrediction: finalPrimaryBreed,
-      primaryConfidence: finalTopMatch,
+      primaryConfidence: finalTopMatch / 100,
       alternatives: finalAlternatives,
       ocrText: extracted,
       descriptionHint: `${finalPrimaryBreed} detected from visual traits.`,
@@ -382,7 +382,7 @@ export const AiChatPanel = ({ className, variant = "floating" }: AiChatPanelProp
         ? {
             status: healthResponse.status,
             injured: healthResponse.injured,
-            confidence: healthResponse.confidence,
+            confidence: healthResponse.confidence > 1 ? healthResponse.confidence / 100 : healthResponse.confidence,
             summary: healthResponse.summary,
             visible_signs: healthResponse.visible_signs,
             recommended_actions: healthResponse.recommended_actions,

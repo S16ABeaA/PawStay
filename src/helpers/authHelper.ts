@@ -1,3 +1,5 @@
+const API_BASE_URL = import.meta.env.VITE_BACKEND_URL || "http://localhost:5001";
+
 const normalizePathname = (url: string): string => {
   try {
     if (url.startsWith("http://") || url.startsWith("https://")) {
@@ -8,6 +10,18 @@ const normalizePathname = (url: string): string => {
     const [pathOnly] = String(url || "").split("?");
     return pathOnly || "/";
   }
+};
+
+const resolveApiUrl = (url: string): string => {
+  if (url.startsWith("http://") || url.startsWith("https://")) {
+    return url;
+  }
+
+  if (url.startsWith("/")) {
+    return `${API_BASE_URL}${url}`;
+  }
+
+  return `${API_BASE_URL}/${url}`;
 };
 
 const PROTECTED_PREFIXES = [
@@ -35,9 +49,132 @@ const PROTECTED_EXACT = new Set([
   "/api/reviews/mine",
 ]);
 
+const PUBLIC_AUTH_ENDPOINTS = new Set([
+  "/api/auth",
+  "/api/auth/login",
+  "/api/auth/signin",
+  "/api/auth/signIn",
+  "/api/auth/signup",
+  "/api/auth/signUp",
+  "/api/auth/register",
+  "/api/auth/forgot-password",
+  "/api/auth/forgotPassword",
+  "/api/auth/reset-password",
+  "/api/auth/resetPassword",
+  "/api/auth/verify-email",
+  "/api/auth/verifyEmail",
+]);
+
+const MUTATING_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
+
+let csrfTokenCache: string | null = null;
+let csrfTokenPromise: Promise<string> | null = null;
+let csrfTokenOrigin: string | null = null;
+
+const toRequestError = (data: any, status: number) => {
+  if (typeof data === "object" && data !== null) {
+    return { ...data, status: data.status ?? status };
+  }
+  return { error: data, status };
+};
+
+const parseResponseBody = async (res: Response): Promise<any> => {
+  const contentType = res.headers.get("content-type") || "";
+  const isJson = contentType.includes("application/json");
+
+  if (isJson) {
+    try {
+      return await res.json();
+    } catch {
+      return {};
+    }
+  }
+
+  const text = await res.text();
+  try {
+    return JSON.parse(text);
+  } catch {
+    return {
+      error: res.ok ? "Unexpected non-JSON response" : "Request failed",
+      details: text.slice(0, 500) || "No response body",
+      status: res.status,
+    };
+  }
+};
+
+const isApiEndpoint = (url: string): boolean => {
+  const pathname = normalizePathname(url);
+  return pathname.startsWith("/api/") || pathname === "/api";
+};
+
+const isMutatingRequest = (method?: string): boolean => {
+  return MUTATING_METHODS.has(String(method || "GET").toUpperCase());
+};
+
+const resolveRequestOrigin = (url: string): string => {
+  try {
+    return new URL(resolveApiUrl(url)).origin;
+  } catch {
+    return new URL(API_BASE_URL).origin;
+  }
+};
+
+const resolveCsrfUrl = (url: string): string => {
+  const origin = resolveRequestOrigin(url);
+  return `${origin}/api/auth/csrf-token`;
+};
+
+const clearCsrfTokenCache = () => {
+  csrfTokenCache = null;
+  csrfTokenPromise = null;
+  csrfTokenOrigin = null;
+};
+
+const fetchCsrfToken = async (url: string, force = false): Promise<string> => {
+  const requestOrigin = resolveRequestOrigin(url);
+
+  if (!force && csrfTokenCache && csrfTokenOrigin === requestOrigin) {
+    return csrfTokenCache;
+  }
+
+  if (!force && csrfTokenPromise && csrfTokenOrigin === requestOrigin) {
+    return csrfTokenPromise;
+  }
+
+  csrfTokenOrigin = requestOrigin;
+  const csrfUrl = resolveCsrfUrl(url);
+
+  csrfTokenPromise = fetch(csrfUrl, {
+    method: "GET",
+    credentials: "include",
+    cache: "no-store",
+  })
+    .then(async (res) => {
+      const data = await parseResponseBody(res);
+      if (!res.ok || !data?.csrfToken) {
+        throw toRequestError(data, res.status);
+      }
+      csrfTokenCache = data.csrfToken;
+      return data.csrfToken as string;
+    })
+    .finally(() => {
+      csrfTokenPromise = null;
+    });
+
+  return csrfTokenPromise;
+};
+
 const isAuthenticatedEndpoint = (url: string, method?: string): boolean => {
   const pathname = normalizePathname(url);
   const verb = String(method || "GET").toUpperCase();
+
+  if (PUBLIC_AUTH_ENDPOINTS.has(pathname)) {
+    return true;
+  }
+
+  if (pathname.startsWith("/api/auth/")) {
+    return true;
+  }
 
   if (PROTECTED_EXACT.has(pathname)) return true;
   if (PROTECTED_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`))) {
@@ -56,8 +193,6 @@ const isAuthenticatedEndpoint = (url: string, method?: string): boolean => {
     return !pathname.startsWith("/api/bookings/availability/");
   }
 
-  if (pathname === "/api/auth/users" || pathname.startsWith("/api/auth/users/")) return true;
-
   if (pathname === "/api/properties/mine" || pathname.startsWith("/api/properties/mine/")) return true;
   if (/^\/api\/properties\/[^/]+\/services(?:\/[^/]+)?$/.test(pathname)) {
     return verb !== "GET";
@@ -72,25 +207,31 @@ const isAuthenticatedEndpoint = (url: string, method?: string): boolean => {
 
 export const authHelper = {
   fetchWithAuth: async (url: string, options: RequestInit = {}) => {
-    console.log("Fetching with auth:", url, options); // Debug log to see the request details
-    const credentials = options.credentials ?? (isAuthenticatedEndpoint(url, options.method) ? "include" : "omit");
-    const res = await fetch(url, { ...options, credentials, cache: "no-store" });
-    const contentType = res.headers.get("content-type") || "";
-    const isJson = contentType.includes("application/json");
+    const resolvedUrl = resolveApiUrl(url);
+    const mutating = isMutatingRequest(options.method);
+    const isApi = isApiEndpoint(resolvedUrl);
+    const shouldIncludeCredentials = isAuthenticatedEndpoint(resolvedUrl, options.method);
+    const credentials = options.credentials ?? (shouldIncludeCredentials || (isApi && mutating) ? "include" : "omit");
 
-    let data: any;
-    if (isJson) {
-      data = await res.json();
-    } else {
-      const text = await res.text();
-      data = {
-        error: res.ok ? "Unexpected non-JSON response" : "Request failed",
-        details: text?.slice(0, 500) || "No response body",
-        status: res.status,
-      };
+    const headers = new Headers(options.headers || undefined);
+    if (isApi && mutating) {
+      const csrfToken = await fetchCsrfToken(url);
+      headers.set("X-CSRF-Token", csrfToken);
     }
 
-    if (!res.ok) throw data;
+    let res = await fetch(resolvedUrl, { ...options, credentials, cache: "no-store", headers });
+
+    if (isApi && mutating && res.status === 403) {
+      const retryHeaders = new Headers(options.headers || undefined);
+      clearCsrfTokenCache();
+      const csrfToken = await fetchCsrfToken(url, true);
+      retryHeaders.set("X-CSRF-Token", csrfToken);
+      res = await fetch(resolvedUrl, { ...options, credentials, cache: "no-store", headers: retryHeaders });
+    }
+
+    const data = await parseResponseBody(res);
+
+    if (!res.ok) throw toRequestError(data, res.status);
     return data;
   },
 
@@ -125,4 +266,6 @@ export const authHelper = {
       ...options, 
       method: "DELETE" 
     }),
+
+  clearCsrfTokenCache,
 };

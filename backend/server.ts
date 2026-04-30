@@ -3,6 +3,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
+import csrf from 'csurf';
 import { submitProperty } from './routes/submit-property';
 import { authMiddleware } from './middleware/authMiddleware';
 import searchRoutes from "./routes/searchRoute";
@@ -36,6 +37,19 @@ import { inputFirewall } from './middleware/inputValidation';
 dotenv.config({ path: '../.env' });
 dotenv.config();
 
+if (process.env.NODE_ENV === "production") {
+  const missingUpstash =
+    !process.env.UPSTASH_REDIS_REST_URL ||
+    !process.env.UPSTASH_REDIS_REST_TOKEN;
+  if (missingUpstash) {
+    console.error(
+      "[FATAL] Upstash Redis not configured. " +
+      "Distributed rate limiting will not work in production."
+    );
+    process.exit(1);
+  }
+}
+
 const app = express();
 const PORT = process.env.PORT || 5001;
 
@@ -58,23 +72,28 @@ const allowedOrigins = (process.env.CORS_ORIGINS
   .map((origin) => origin.trim())
   .filter(Boolean);
 
+if (process.env.NODE_ENV === "production" && allowedOrigins.length === 0) {
+  throw new Error("CORS_ORIGINS must be set in production");
+}
+
 const corsOptions: cors.CorsOptions = {
   origin: (origin, callback) => {
-    if (
-      !origin ||
-      allowedOrigins.length === 0 ||
-      allowedOrigins.includes(origin) ||
-      (process.env.NODE_ENV !== 'production' && isLocalDevOrigin(origin))
-    ) {
-      callback(null, true);
-      return;
-    }
-    callback(new Error(`CORS blocked for origin: ${origin}`));
+    if (!origin) return callback(null, true); // non-browser clients only
+    if (allowedOrigins.includes(origin)) return callback(null, true);
+    return callback(new Error("CORS blocked"));
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-CSRF-Token', 'x-csrf-token'],
 };
+
+const csrfProtection = csrf({
+  cookie: {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+  },
+});
 
 app.disable('x-powered-by');
 app.use(helmet());
@@ -84,6 +103,17 @@ app.use(cookieParser());
 app.use(express.json({ limit: '20mb' }));
 app.use(express.urlencoded({ extended: true, limit: '20mb' }));
 app.use(inputFirewall);
+
+app.get('/api/auth/csrf-token', csrfProtection, (req, res) => {
+  return res.status(200).json({ csrfToken: req.csrfToken() });
+});
+
+app.use('/api', (req, res, next) => {
+  if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method)) {
+    return csrfProtection(req, res, next);
+  }
+  return next();
+});
 
 // Prevent browsers from caching API responses so property-switching always gets fresh data
 app.use('/api', (_req, res, next) => {
@@ -117,6 +147,13 @@ app.use('/api/ai', authGuardLimiter, aiRoutes);
 // Simple health/root route
 app.get('/', (_req, res) => {
   res.status(200).json({ success: true, message: 'PawStay backend is running' });
+});
+
+app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  if (err?.code === "EBADCSRFTOKEN") {
+    return res.status(403).json({ error: "Invalid CSRF token." });
+  }
+  return res.status(500).json({ error: "Internal server error." });
 });
 
 app.listen(PORT, () => {
