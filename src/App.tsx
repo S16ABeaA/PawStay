@@ -5,6 +5,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate, useLocation, Outlet } from "react-router-dom";
 import ScrollToTop from "@/components/ScrollToTop";
+import { CookieBanner } from "@/components/CookieBanner";
 import Index from "./pages/Index";
 import Hotels from "./pages/Hotels";
 import HotelDetail from "./pages/HotelDetail";
@@ -27,6 +28,8 @@ import MyBookings from "./pages/MyBookings";
 import Notifications from "./pages/Notifications";
 import HelpCenter from "./pages/HelpCenter";
 import FAQ from "./pages/FAQ";
+import Terms from "./pages/legal/Terms";
+import Privacy from "./pages/legal/Privacy";
 import RequireAuth from "./components/RequireAuth";
 import RequireAdmin from "./components/RequireAdmin";
 import RequireSuperAdmin from "./components/RequireSuperAdmin";
@@ -100,6 +103,9 @@ const App = () => (
           <Route path="/search" element={<SearchResults />} />
           <Route path="/faq" element={<FAQ />} />
           <Route path="/help-center" element={<HelpCenter />} />
+          <Route path="/legal" element={<Navigate to="/legal/terms" replace />} />
+          <Route path="/legal/terms" element={<Terms />} />
+          <Route path="/legal/privacy" element={<Privacy />} />
           <Route
             path="/profile"
             element={
@@ -153,6 +159,7 @@ const App = () => (
           <Route path="*" element={<NotFound />} />
         </Routes>
         <AiChatButton />
+        <CookieBanner />
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>
