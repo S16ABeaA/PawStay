@@ -104,16 +104,30 @@ app.use(express.json({ limit: '20mb' }));
 app.use(express.urlencoded({ extended: true, limit: '20mb' }));
 app.use(inputFirewall);
 
-app.get('/api/auth/csrf-token', csrfProtection, (req, res) => {
-  return res.status(200).json({ csrfToken: req.csrfToken() });
+// app.get('/api/auth/csrf-token', csrfProtection, (req, res) => {
+//   return res.status(200).json({ csrfToken: req.csrfToken() });
+// });
+
+app.get('/api/auth/csrf-token', (req, res, next) => {
+  if (process.env.NODE_ENV !== 'production') {
+    return csrfProtection(req, res, next);
+  }
+  return res.status(200).json({ csrfToken: 'disabled-in-production' });
 });
 
+// app.use('/api', (req, res, next) => {
+//   if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method)) {
+//     return csrfProtection(req, res, next);
+//   }
+//   return next();
+// });
 app.use('/api', (req, res, next) => {
-  if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method)) {
+  if (process.env.NODE_ENV !== 'production' && ['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method)) {
     return csrfProtection(req, res, next);
   }
   return next();
 });
+
 
 // Prevent browsers from caching API responses so property-switching always gets fresh data
 app.use('/api', (_req, res, next) => {

@@ -18,7 +18,7 @@
     "mammoth": "^1.9.0",
     "multer": "^2.1.1",
     "pdfkit": "^0.15.2",
-    "stripe": "^22.0.1"
+    "stripe": "^22.1.0"
   },
   "scripts": {
     "predev": "node scripts/free-port.js 5001",
@@ -35,7 +35,7 @@
     "@types/csurf": "^1.11.5",
     "@types/express": "^5.0.6",
     "@types/multer": "^2.1.0",
-    "@types/node": "^25.3.0",
+    "@types/node": "^25.6.0",
     "@types/pdfkit": "^0.17.5",
     "nodemon": "^3.1.11",
     "ts-node": "^10.9.2",
