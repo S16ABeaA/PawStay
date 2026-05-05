@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
@@ -117,6 +117,8 @@ const Booking = () => {
   const [referenceNumber, setReferenceNumber] = useState("");
   const [paymentScreenshot, setPaymentScreenshot] = useState<string | null>(null);
   const [paymentScreenshotName, setPaymentScreenshotName] = useState<string>("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const submitLockRef = useRef(false);
 
   // Validation errors
   const [errors, setErrors] = useState<Record<string, boolean>>({});
@@ -530,21 +532,26 @@ const Booking = () => {
   const errorClass = (field: string) => errors[field] ? "border-destructive ring-destructive/30 ring-2" : "";
 
   const handleConfirm = async () => {
-    if (!validateStep5()) return;
+    if (submitLockRef.current) return;
 
-    const serviceType = shop?.type === "hotel" ? "boarding" : shop?.type === "grooming" ? "grooming" : shop?.type === "veterinary" ? "veterinary" : null;
-
-    const checkinDate = isHotel(shop) && checkInDate
-      ? format(checkInDate, "yyyy-MM-dd")
-      : selectedDate
-        ? format(selectedDate, "yyyy-MM-dd")
-        : new Date().toISOString().split("T")[0];
-
-    const checkoutDate = isHotel(shop) && checkOutDate
-      ? format(checkOutDate, "yyyy-MM-dd")
-      : null;
+    submitLockRef.current = true;
+    setIsSubmitting(true);
 
     try {
+      if (!validateStep5()) return;
+
+      const serviceType = shop?.type === "hotel" ? "boarding" : shop?.type === "grooming" ? "grooming" : shop?.type === "veterinary" ? "veterinary" : null;
+
+      const checkinDate = isHotel(shop) && checkInDate
+        ? format(checkInDate, "yyyy-MM-dd")
+        : selectedDate
+          ? format(selectedDate, "yyyy-MM-dd")
+          : new Date().toISOString().split("T")[0];
+
+      const checkoutDate = isHotel(shop) && checkOutDate
+        ? format(checkOutDate, "yyyy-MM-dd")
+        : null;
+
       // Calculate prices for the payload
       const { subtotal, serviceFee, total } = calculatePrices();
 
@@ -645,6 +652,9 @@ const Booking = () => {
         description: err?.error || err?.message || err?.details || "Something went wrong. Please try again.",
         variant: "destructive",
       });
+    } finally {
+      submitLockRef.current = false;
+      setIsSubmitting(false);
     }
   };
 
@@ -1389,8 +1399,13 @@ const Booking = () => {
 
                     <div className="flex gap-3">
                       <Button variant="outline" className="flex-1" onClick={() => setStep(4)}>Back</Button>
-                      <Button variant="hero" className="flex-1" onClick={handleConfirm} disabled={paymentMethod === "creditcard"}>
-                        {paymentMethod === "creditcard" ? "Payment Method Unavailable" : paymentMethod === "cash" ? "Submit Booking (Cash)" : "Submit Booking"}
+                      <Button variant="hero" className="flex-1" onClick={handleConfirm} disabled={paymentMethod === "creditcard" || isSubmitting}>
+                        {isSubmitting ? (
+                          <span className="inline-flex items-center gap-2">
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            Processing...
+                          </span>
+                        ) : paymentMethod === "creditcard" ? "Payment Method Unavailable" : paymentMethod === "cash" ? "Submit Booking (Cash)" : "Submit Booking"}
                       </Button>
                     </div>
                   </div>
