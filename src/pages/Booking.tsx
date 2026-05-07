@@ -616,7 +616,7 @@ const Booking = () => {
         title: "Booking Submitted! 🎉",
         description: "We'll verify your payment and send confirmation to your email within 15 minutes.",
       });
-      setTimeout(() => navigate("/"), 2000);
+      navigate("/");
     } catch (err: any) {
       console.error("Booking submission failed:", err);
 
@@ -1398,7 +1398,7 @@ const Booking = () => {
                     )}
 
                     <div className="flex gap-3">
-                      <Button variant="outline" className="flex-1" onClick={() => setStep(4)}>Back</Button>
+                      <Button variant="outline" className="flex-1" onClick={() => setStep(4)} disabled={isSubmitting}>Back</Button>
                       <Button variant="hero" className="flex-1" onClick={handleConfirm} disabled={paymentMethod === "creditcard" || isSubmitting}>
                         {isSubmitting ? (
                           <span className="inline-flex items-center gap-2">
