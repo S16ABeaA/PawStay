@@ -17,7 +17,7 @@ const ListPropertyFooter = ({currentStep, establishmentStep, handleNext, handleB
         <Button
           variant="outline"
           onClick={handleBack}
-          disabled={currentStep === 1 && establishmentStep === 1}
+          disabled={(currentStep === 1 && establishmentStep === 1) || isSubmitting}
           className="gap-2"
         >
           <ArrowLeft className="h-4 w-4" />

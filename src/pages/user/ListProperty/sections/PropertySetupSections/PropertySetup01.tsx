@@ -57,7 +57,7 @@ const PropertySetup01 = ({ formData, onChange, hasBoarding, hasGrooming }: Props
                     {isSelected && type.name === "Dogs" && (
                       <div className="bg-secondary/30 rounded-xl p-4 animate-in slide-in-from-top-2">
                         <h4 className="text-sm font-medium mb-3">Dog Sizes Accepted</h4>
-                        <div className="flex gap-2">
+                        <div className="flex flex-wrap gap-x-4 gap-y-2">
                           {type.sizes?.map((size) => (
                             <label key={size} className="flex items-center gap-2 cursor-pointer">
                               <input
